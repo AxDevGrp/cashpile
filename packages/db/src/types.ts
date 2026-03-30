@@ -457,6 +457,128 @@ export interface Database {
         };
         Relationships: never[];
       };
+      // ─── Pulse tables ────────────────────────────────────────────────
+      pulse_events: {
+        Row: {
+          id: string;
+          title: string;
+          summary: string | null;
+          category: "fed" | "macro" | "geopolitical" | "earnings" | "sector" | "commodities";
+          source: string;
+          source_url: string | null;
+          raw_content: string | null;
+          severity: "low" | "medium" | "high" | "critical";
+          affected_instruments: Json;
+          published_at: string;
+          ingested_at: string;
+          dedup_hash: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          title: string;
+          summary?: string | null;
+          category: "fed" | "macro" | "geopolitical" | "earnings" | "sector" | "commodities";
+          source: string;
+          source_url?: string | null;
+          raw_content?: string | null;
+          severity?: "low" | "medium" | "high" | "critical";
+          affected_instruments?: Json;
+          published_at: string;
+          ingested_at?: string;
+          dedup_hash?: string | null;
+        };
+        Update: {
+          summary?: string | null;
+          severity?: "low" | "medium" | "high" | "critical";
+          affected_instruments?: Json;
+        };
+        Relationships: never[];
+      };
+      pulse_predictions: {
+        Row: {
+          id: string;
+          event_id: string;
+          mirofish_job_id: string | null;
+          status: "pending" | "running" | "complete" | "failed";
+          report_json: Json | null;
+          instrument_impacts: Json;
+          error_message: string | null;
+          simulation_duration_ms: number | null;
+          created_at: string;
+          completed_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          event_id: string;
+          mirofish_job_id?: string | null;
+          status?: "pending" | "running" | "complete" | "failed";
+          report_json?: Json | null;
+          instrument_impacts?: Json;
+          error_message?: string | null;
+          simulation_duration_ms?: number | null;
+          completed_at?: string | null;
+        };
+        Update: {
+          mirofish_job_id?: string | null;
+          status?: "pending" | "running" | "complete" | "failed";
+          report_json?: Json | null;
+          instrument_impacts?: Json;
+          error_message?: string | null;
+          simulation_duration_ms?: number | null;
+          completed_at?: string | null;
+        };
+        Relationships: never[];
+      };
+      pulse_watchlist: {
+        Row: {
+          id: string;
+          user_id: string;
+          instrument: string;
+          alert_threshold_pct: number;
+          is_active: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          instrument: string;
+          alert_threshold_pct?: number;
+          is_active?: boolean;
+        };
+        Update: {
+          alert_threshold_pct?: number;
+          is_active?: boolean;
+        };
+        Relationships: never[];
+      };
+      pulse_alerts: {
+        Row: {
+          id: string;
+          user_id: string;
+          event_id: string | null;
+          prediction_id: string | null;
+          instrument: string | null;
+          message: string;
+          severity: "info" | "warning" | "critical";
+          read_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          event_id?: string | null;
+          prediction_id?: string | null;
+          instrument?: string | null;
+          message: string;
+          severity?: "info" | "warning" | "critical";
+          read_at?: string | null;
+        };
+        Update: {
+          read_at?: string | null;
+        };
+        Relationships: never[];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;
