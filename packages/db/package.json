@@ -17,6 +17,10 @@
   },
   "devDependencies": {
     "@cashpile/config": "workspace:*",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "next": "14.2.29"
+  },
+  "peerDependencies": {
+    "next": ">=14.0.0"
   }
 }

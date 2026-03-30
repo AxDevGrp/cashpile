@@ -130,6 +130,9 @@ importers:
       '@cashpile/config':
         specifier: workspace:*
         version: link:../config
+      next:
+        specifier: 14.2.29
+        version: 14.2.29(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       typescript:
         specifier: ^5.3.3
         version: 5.9.3

@@ -11,6 +11,17 @@ export { Input } from "./components/ui/input";
 export type { InputProps } from "./components/ui/input";
 export { Tabs, TabsList, TabsTrigger, TabsContent } from "./components/ui/tabs";
 
+// Overlays & Inputs
+export {
+  Dialog, DialogPortal, DialogOverlay, DialogClose, DialogTrigger,
+  DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription,
+} from "./components/ui/dialog";
+export {
+  Select, SelectGroup, SelectValue, SelectTrigger, SelectContent,
+  SelectLabel, SelectItem, SelectSeparator, SelectScrollUpButton, SelectScrollDownButton,
+} from "./components/ui/select";
+export { Progress } from "./components/ui/progress";
+
 // Layout
 export { Sidebar } from "./components/layout/sidebar";
 export { TopNav } from "./components/layout/topnav";

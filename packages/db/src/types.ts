@@ -60,6 +60,9 @@ export type PredictionStatus = "pending" | "running" | "complete" | "failed";
 // ─── Database interface (will be replaced by supabase gen types) ─────────────
 
 export interface Database {
+  __InternalSupabase: {
+    PostgrestVersion: "12";
+  };
   public: {
     Tables: {
       users: {
@@ -79,6 +82,7 @@ export interface Database {
           email?: string;
           full_name?: string | null;
         };
+        Relationships: never[];
       };
       subscriptions: {
         Row: {
@@ -98,6 +102,7 @@ export interface Database {
           plan?: Plan;
           stripe_subscription_id?: string | null;
         };
+        Relationships: never[];
       };
       module_access: {
         Row: {
@@ -111,6 +116,194 @@ export interface Database {
           module: Module;
         };
         Update: Record<string, never>;
+        Relationships: never[];
+      };
+      // ─── Books tables ────────────────────────────────────────────────
+      books_entities: {
+        Row: {
+          id: string;
+          user_id: string;
+          name: string;
+          type: "individual" | "llc" | "s_corp" | "c_corp" | "partnership" | "sole_prop";
+          tax_id: string | null;
+          fiscal_year_start: number | null;
+          default_currency: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          name: string;
+          type: "individual" | "llc" | "s_corp" | "c_corp" | "partnership" | "sole_prop";
+          tax_id?: string | null;
+          fiscal_year_start?: number | null;
+          default_currency?: string;
+        };
+        Update: {
+          name?: string;
+          type?: "individual" | "llc" | "s_corp" | "c_corp" | "partnership" | "sole_prop";
+          tax_id?: string | null;
+          fiscal_year_start?: number | null;
+          default_currency?: string;
+          updated_at?: string;
+        };
+        Relationships: never[];
+      };
+      books_udas: {
+        Row: {
+          id: string;
+          entity_id: string;
+          user_id: string;
+          name: string;
+          description: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          entity_id: string;
+          user_id: string;
+          name: string;
+          description?: string | null;
+        };
+        Update: {
+          name?: string;
+          description?: string | null;
+        };
+        Relationships: never[];
+      };
+      books_accounts: {
+        Row: {
+          id: string;
+          uda_id: string;
+          user_id: string;
+          name: string;
+          institution: string | null;
+          account_type: "checking" | "savings" | "credit_card" | "loan" | "investment" | "other";
+          currency: string;
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          uda_id: string;
+          user_id: string;
+          name: string;
+          institution?: string | null;
+          account_type: "checking" | "savings" | "credit_card" | "loan" | "investment" | "other";
+          currency?: string;
+          is_active?: boolean;
+        };
+        Update: {
+          name?: string;
+          institution?: string | null;
+          account_type?: "checking" | "savings" | "credit_card" | "loan" | "investment" | "other";
+          currency?: string;
+          is_active?: boolean;
+          updated_at?: string;
+        };
+        Relationships: never[];
+      };
+      books_categories: {
+        Row: {
+          id: string;
+          user_id: string;
+          entity_id: string | null;
+          name: string;
+          parent_id: string | null;
+          type: "income" | "expense" | "transfer";
+          tax_category: string | null;
+          is_active: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          entity_id?: string | null;
+          name: string;
+          parent_id?: string | null;
+          type: "income" | "expense" | "transfer";
+          tax_category?: string | null;
+          is_active?: boolean;
+        };
+        Update: {
+          name?: string;
+          parent_id?: string | null;
+          type?: "income" | "expense" | "transfer";
+          tax_category?: string | null;
+          is_active?: boolean;
+        };
+        Relationships: never[];
+      };
+      books_transactions: {
+        Row: {
+          id: string;
+          user_id: string;
+          entity_id: string | null;
+          account_id: string;
+          category_id: string | null;
+          date: string;
+          description: string;
+          merchant: string | null;
+          amount: number;
+          currency: string;
+          type: "debit" | "credit";
+          is_transfer: boolean;
+          transfer_pair_id: string | null;
+          import_source: string | null;
+          import_batch_id: string | null;
+          notes: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          entity_id?: string | null;
+          account_id: string;
+          category_id?: string | null;
+          date: string;
+          description: string;
+          merchant?: string | null;
+          amount: number;
+          currency?: string;
+          type: "debit" | "credit";
+          is_transfer?: boolean;
+          transfer_pair_id?: string | null;
+          import_source?: string | null;
+          import_batch_id?: string | null;
+          notes?: string | null;
+        };
+        Update: {
+          category_id?: string | null;
+          description?: string;
+          merchant?: string | null;
+          amount?: number;
+          date?: string;
+          type?: "debit" | "credit";
+          is_transfer?: boolean;
+          notes?: string | null;
+          updated_at?: string;
+        };
+        Relationships: never[];
+      };
+      books_duplicate_fingerprints: {
+        Row: {
+          id: string;
+          user_id: string;
+          fingerprint: string;
+          transaction_id: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          fingerprint: string;
+          transaction_id: string;
+        };
+        Update: Record<string, never>;
+        Relationships: never[];
       };
     };
     Views: Record<string, never>;
