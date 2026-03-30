@@ -1,20 +1,28 @@
-import { TopNav, PageHeader } from "@cashpile/ui";
+import { createServerSupabaseClient } from "@cashpile/db";
+import { PageHeader } from "@cashpile/ui";
+import SettingsClient from "./_components/settings-client";
 
-export default function SettingsPage() {
+export const metadata = { title: "Settings | Cashpile" };
+
+export default async function SettingsPage() {
+  const supabase = await createServerSupabaseClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  const profile = {
+    email: user?.email ?? "",
+    display_name: (user?.user_metadata?.display_name as string) ?? "",
+    preferred_currency: (user?.user_metadata?.preferred_currency as string) ?? "USD",
+  };
+
+  const integrations = {
+    mirofish: !!(process.env.MIROFISH_URL),
+    openai: !!(process.env.OPENAI_API_KEY),
+  };
+
   return (
-    <div className="flex flex-col h-full">
-      <TopNav title="Settings" />
-      <div className="p-6 max-w-3xl mx-auto w-full">
-        <PageHeader title="Settings" description="Manage your account and preferences" />
-        <div className="space-y-4">
-          {["Profile", "Notifications", "Billing", "API Keys", "Integrations"].map((section) => (
-            <div key={section} className="bg-background rounded-xl border p-5">
-              <div className="font-medium text-sm mb-1">{section}</div>
-              <div className="text-xs text-muted-foreground">Configure {section.toLowerCase()} settings</div>
-            </div>
-          ))}
-        </div>
-      </div>
+    <div className="p-6 max-w-3xl mx-auto space-y-8">
+      <PageHeader title="Settings" description="Manage your profile, preferences, and integrations" />
+      <SettingsClient profile={profile} integrations={integrations} />
     </div>
   );
 }

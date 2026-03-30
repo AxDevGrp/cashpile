@@ -26,3 +26,4 @@ export { Progress } from "./components/ui/progress";
 export { Sidebar } from "./components/layout/sidebar";
 export { TopNav } from "./components/layout/topnav";
 export { PageHeader } from "./components/layout/page-header";
+export { Skeleton, SkeletonCard, SkeletonRow, SkeletonTable, PageSkeleton } from "./components/ui/skeleton";
