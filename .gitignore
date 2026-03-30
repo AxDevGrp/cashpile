@@ -1,0 +1,43 @@
+# dependencies
+node_modules
+.pnpm-store
+
+# build outputs
+.next
+dist
+build
+out
+
+# env files
+.env
+.env.local
+.env.*.local
+
+# turbo
+.turbo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode
+.idea
+*.swp
+
+# logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# supabase
+supabase/.temp
+supabase/.branches
+
+# python (mirofish)
+__pycache__
+*.pyc
+*.pyo
+.venv
+venv
+apps/mirofish/.env
