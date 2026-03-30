@@ -14,8 +14,9 @@ RUN cp -r apps/web/.next/static apps/web/.next/standalone/apps/web/.next/static
 FROM node:20-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
-COPY --from=builder /app/apps/web/.next/standalone ./
-EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
-CMD ["node", "apps/web/server.js"]
+COPY --from=builder /app/apps/web/.next/standalone/apps/web ./
+COPY --from=builder /app/apps/web/.next/standalone/node_modules ./node_modules
+EXPOSE 3000
+CMD ["node", "server.js"]
