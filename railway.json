@@ -1,11 +1,10 @@
 {
   "$schema": "https://railway.app/railway.schema.json",
   "build": {
-    "builder": "NIXPACKS",
-    "buildCommand": "pnpm install --frozen-lockfile && pnpm turbo build --filter=@cashpile/web && mkdir -p apps/web/.next/standalone/apps/web/public && [ -d apps/web/public ] && cp -r apps/web/public/. apps/web/.next/standalone/apps/web/public/ || true && cp -r apps/web/.next/static apps/web/.next/standalone/apps/web/.next/static"
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "Dockerfile"
   },
   "deploy": {
-    "startCommand": "node apps/web/.next/standalone/apps/web/server.js",
     "healthcheckPath": "/api/health",
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 3
