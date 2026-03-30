@@ -5,7 +5,7 @@ FROM base AS builder
 WORKDIR /app
 COPY . .
 RUN pnpm install --frozen-lockfile
-RUN pnpm turbo build --filter=@cashpile/web
+RUN pnpm turbo build --filter=@cashpile/web --force
 # Copy static assets into standalone output
 RUN cp -r apps/web/.next/static apps/web/.next/standalone/apps/web/.next/static
 RUN mkdir -p apps/web/.next/standalone/apps/web/public
