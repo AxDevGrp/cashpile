@@ -3,3 +3,5 @@ export * from "./books";
 export * from "./trades";
 export * from "./pulse";
 export * from "./cross-module";
+export * from "./orchestrator";
+

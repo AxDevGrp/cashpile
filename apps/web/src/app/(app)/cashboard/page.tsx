@@ -7,6 +7,7 @@ import { PageHeader } from "@cashpile/ui";
 import Link from "next/link";
 import { createServerSupabaseClient } from "@cashpile/db";
 import { formatCurrency } from "@cashpile/ui";
+import { generateCashboardBriefing } from "@cashpile/ai";
 
 // ─── Data helpers ────────────────────────────────────────────────────────────
 
@@ -111,11 +112,12 @@ export default async function CashboardPage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const [books, trades, pulse, activity] = await Promise.all([
+  const [books, trades, pulse, activity, briefing] = await Promise.all([
     getBooksMtd(user.id).catch(() => null),
     getTradesSnapshot(user.id).catch(() => null),
     getPulseSnapshot(user.id).catch(() => ({ unread: 0, recentEvents: [] })),
     getRecentActivity(user.id).catch(() => ({ txns: [], trades: [] })),
+    generateCashboardBriefing(user.id).catch(() => "Set up your modules to get your personalized AI briefing."),
   ]);
 
   const hasBooks = books && books.count > 0;
@@ -137,9 +139,7 @@ export default async function CashboardPage() {
               <Bot className="h-3 w-3" /> AI Briefing
             </div>
             <p className="text-sm text-muted-foreground italic">
-              {!hasBooks && !hasTrades && !hasPulse
-                ? "Set up your modules to get your personalized AI briefing here."
-                : `${pulse.unread > 0 ? `${pulse.unread} new Pulse alert${pulse.unread > 1 ? "s" : ""} require attention. ` : ""}${hasTrades && trades!.breached > 0 ? `${trades!.breached} trade account${trades!.breached > 1 ? "s" : ""} breached rules. ` : ""}${hasBooks ? `Books shows ${books!.net >= 0 ? "+" : ""}${formatCurrency(books!.net)} net cash flow MTD.` : ""}`}
+              {briefing}
             </p>
           </div>
         </div>
