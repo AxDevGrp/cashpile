@@ -22,8 +22,7 @@ RUN if [ -d apps/web/public ]; then cp -r apps/web/public/. apps/web/.next/stand
 FROM node:20-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
-ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 COPY --from=builder /app/apps/web/.next/standalone ./
-EXPOSE 3000
+EXPOSE 8080
 CMD ["node", "apps/web/server.js"]
