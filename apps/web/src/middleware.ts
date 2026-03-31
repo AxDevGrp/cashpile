@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
-const APP_ROUTES = ["/dashboard", "/books", "/trades", "/pulse", "/ai", "/settings"];
+const APP_ROUTES = ["/cashboard", "/books", "/trades", "/pulse", "/ai", "/settings"];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;

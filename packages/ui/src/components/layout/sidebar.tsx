@@ -24,7 +24,7 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { href: "/dashboard",  label: "Dashboard",    icon: LayoutDashboard },
+  { href: "/cashboard",  label: "Cashboard",    icon: LayoutDashboard },
   { href: "/books",      label: "Books",        icon: BookOpen,   moduleColor: "text-emerald-500" },
   { href: "/trades",     label: "Trades",       icon: TrendingUp, moduleColor: "text-blue-500" },
   { href: "/pulse",      label: "Pulse",        icon: Activity,   moduleColor: "text-violet-500" },
@@ -59,7 +59,7 @@ function NavContent({
           </div>
         ) : (
           <Link
-            href="/dashboard"
+            href="/cashboard"
             className="flex items-center gap-2"
             onClick={onMobileClose}
           >

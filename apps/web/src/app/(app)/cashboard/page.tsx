@@ -106,7 +106,7 @@ const CATEGORY_COLORS: Record<string, string> = {
 
 // ─── Page ────────────────────────────────────────────────────────────────────
 
-export default async function DashboardPage() {
+export default async function CashboardPage() {
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
@@ -124,7 +124,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-8">
-      <PageHeader title="Dashboard" description="Your financial overview across all modules" />
+      <PageHeader title="Cashboard" description="Your AI-powered financial command center" />
 
       {/* AI Briefing */}
       <div className="bg-gradient-to-r from-primary/5 to-primary/10 rounded-xl border border-primary/20 p-5">
