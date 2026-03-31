@@ -33,7 +33,12 @@ Use the available tools to check all three modules (Books, Trades, Pulse alerts)
  * Streaming chat — used by POST /api/ai/chat.
  * Returns a streamText result; call `.toDataStreamResponse()` on it in the route.
  */
-export function askCash(userId: string, messages: CoreMessage[]) {
+export function askCash(
+  userId: string,
+  messages: CoreMessage[],
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  options?: { onFinish?: (event: any) => void | Promise<void> }
+) {
   return streamText({
     model: openai("gpt-4o"),
     system: CASH_SYSTEM_PROMPT,
@@ -41,6 +46,7 @@ export function askCash(userId: string, messages: CoreMessage[]) {
     tools: createTools(userId),
     maxSteps: 5,
     temperature: 0.4,
+    onFinish: options?.onFinish,
   });
 }
 

@@ -10,6 +10,23 @@ export type Json =
 
 export type Plan = "free" | "books" | "trades" | "pulse" | "pro";
 export type Module = "books" | "trades" | "pulse";
+export type CreditLedgerType = "subscription_grant" | "topup_grant" | "ai_deduction";
+
+// Credits per plan (micro-dollars: 1 credit = $0.000001)
+export const PLAN_MONTHLY_CREDITS: Record<Plan, number> = {
+  free:   50_000,
+  books:  3_000_000,
+  trades: 3_000_000,
+  pulse:  3_000_000,
+  pro:    12_000_000,
+};
+
+// Topup blocks: USD amount → credits
+export const TOPUP_CREDIT_AMOUNTS: Record<number, number> = {
+  5:  5_000_000,
+  10: 10_000_000,
+  25: 25_000_000,
+};
 
 // ─── Books ───────────────────────────────────────────────────────────────────
 
@@ -90,6 +107,9 @@ export interface Database {
           user_id: string;
           plan: Plan;
           stripe_subscription_id: string | null;
+          stripe_customer_id: string | null;
+          current_period_end: string | null;
+          cancel_at_period_end: boolean;
           created_at: string;
           updated_at: string;
         };
@@ -97,10 +117,16 @@ export interface Database {
           user_id: string;
           plan: Plan;
           stripe_subscription_id?: string | null;
+          stripe_customer_id?: string | null;
+          current_period_end?: string | null;
+          cancel_at_period_end?: boolean;
         };
         Update: {
           plan?: Plan;
           stripe_subscription_id?: string | null;
+          stripe_customer_id?: string | null;
+          current_period_end?: string | null;
+          cancel_at_period_end?: boolean;
         };
         Relationships: never[];
       };
@@ -577,6 +603,45 @@ export interface Database {
         Update: {
           read_at?: string | null;
         };
+        Relationships: never[];
+      };
+      // ─── AI Credit tables ────────────────────────────────────────────
+      ai_credit_balances: {
+        Row: {
+          user_id: string;
+          subscription_credits: number;
+          topup_credits: number;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          subscription_credits?: number;
+          topup_credits?: number;
+        };
+        Update: {
+          subscription_credits?: number;
+          topup_credits?: number;
+          updated_at?: string;
+        };
+        Relationships: never[];
+      };
+      ai_credit_ledger: {
+        Row: {
+          id: string;
+          user_id: string;
+          type: CreditLedgerType;
+          amount: number;
+          metadata: Json;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          type: CreditLedgerType;
+          amount: number;
+          metadata?: Json;
+        };
+        Update: Record<string, never>;
         Relationships: never[];
       };
     };
