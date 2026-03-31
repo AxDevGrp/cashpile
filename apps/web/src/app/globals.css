@@ -25,30 +25,51 @@
     --ring: 221.2 83.2% 53.3%;
     --radius: 0.5rem;
   }
+
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 217.2 91.2% 59.8%;
+    /* Deep slate-blue — not pure black, not navy */
+    --background: 224 20% 7%;
+    --foreground: 210 40% 96%;
+    --card: 224 20% 10%;
+    --card-foreground: 210 40% 96%;
+    --popover: 224 20% 10%;
+    --popover-foreground: 210 40% 96%;
+    --primary: 217.2 91.2% 62%;
     --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
+    --secondary: 224 20% 16%;
+    --secondary-foreground: 210 40% 96%;
+    --muted: 224 20% 14%;
+    --muted-foreground: 215 20.2% 60%;
+    --accent: 224 20% 16%;
+    --accent-foreground: 210 40% 96%;
+    --destructive: 0 62.8% 38%;
     --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 224.3 76.3% 48%;
+    --border: 224 20% 16%;
+    --input: 224 20% 16%;
+    --ring: 217.2 91.2% 62%;
   }
 }
 
 @layer base {
   * { @apply border-border; }
   body { @apply bg-background text-foreground; }
+}
+
+@layer utilities {
+  .glass-card {
+    background: hsl(var(--card) / 0.7);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid hsl(var(--border) / 0.8);
+  }
+  .glass-card-hover {
+    background: hsl(var(--card) / 0.7);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid hsl(var(--border) / 0.8);
+    transition: border-color 0.15s ease;
+  }
+  .glass-card-hover:hover {
+    border-color: hsl(var(--primary) / 0.4);
+  }
 }

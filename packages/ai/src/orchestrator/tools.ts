@@ -249,6 +249,269 @@ export function createTools(userId: string) {
       },
     }),
 
+    // ── Books: duplicates ──────────────────────────────────────────────────
+    get_books_duplicates: tool({
+      description:
+        "Check the user's Books data for potential duplicate transactions. Returns the number of duplicate groups, total affected transactions, and a sample of the top duplicate fingerprints.",
+      parameters: z.object({}),
+      execute: async () => {
+        const supabase = await createServerSupabaseClient();
+
+        const { data: rows } = await supabase
+          .from("books_duplicate_fingerprints")
+          .select("fingerprint")
+          .eq("user_id", userId);
+
+        const counts: Record<string, number> = {};
+        for (const r of rows ?? []) {
+          counts[r.fingerprint] = (counts[r.fingerprint] ?? 0) + 1;
+        }
+
+        const dupeEntries = Object.entries(counts).filter(([, n]) => n > 1);
+        const totalAffected = dupeEntries.reduce((s, [, n]) => s + n, 0);
+        const sample = dupeEntries
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 10)
+          .map(([fingerprint, count]) => ({ fingerprint, count }));
+
+        return {
+          duplicateGroupCount: dupeEntries.length,
+          totalAffectedTransactions: totalAffected,
+          sample,
+        };
+      },
+    }),
+
+    // ── Books: uncategorized ───────────────────────────────────────────────
+    get_books_uncategorized: tool({
+      description:
+        "Return the count of uncategorized Books transactions for a period, plus a sample so the AI can suggest categories. Only non-transfer transactions are included.",
+      parameters: z.object({
+        period: z
+          .enum(["mtd", "ytd", "last30"])
+          .default("mtd")
+          .describe("Time period: mtd = month-to-date, ytd = year-to-date, last30 = last 30 days"),
+      }),
+      execute: async ({ period }) => {
+        const supabase = await createServerSupabaseClient();
+        const since = periodStartDate(period);
+
+        const { data: uncatRows } = await supabase
+          .from("books_transactions")
+          .select("id, date, description, amount")
+          .eq("user_id", userId)
+          .eq("is_transfer", false)
+          .is("category_id", null)
+          .gte("date", since)
+          .order("date", { ascending: false })
+          .limit(20);
+
+        return {
+          period,
+          since,
+          uncategorizedCount: uncatRows?.length ?? 0,
+          sample: (uncatRows ?? []).map((t) => ({
+            id: t.id,
+            date: t.date,
+            description: t.description,
+            amount: t.amount,
+          })),
+        };
+      },
+    }),
+
+    // ── Books: bulk categorize ─────────────────────────────────────────────
+    bulk_categorize_transactions: tool({
+      description:
+        "WRITE OPERATION — only call this after the user has explicitly confirmed. Applies a single category to a list of Books transaction IDs. Updates books_transactions.category_id for all provided IDs belonging to the current user.",
+      parameters: z.object({
+        transactionIds: z
+          .array(z.string().uuid())
+          .min(1)
+          .max(200)
+          .describe("List of books_transactions UUIDs to update (max 200)"),
+        categoryId: z
+          .string()
+          .uuid()
+          .describe("UUID of the books_categories row to assign"),
+      }),
+      execute: async ({ transactionIds, categoryId }) => {
+        const supabase = await createServerSupabaseClient();
+
+        const { data, error } = await supabase
+          .from("books_transactions")
+          .update({ category_id: categoryId })
+          .in("id", transactionIds)
+          .eq("user_id", userId)
+          .select("id");
+
+        if (error) throw new Error(error.message);
+
+        return { updated: (data ?? []).length };
+      },
+    }),
+
+    // ── Books: suggest transfers ───────────────────────────────────────────
+    suggest_transfers: tool({
+      description:
+        "Scan recent Books transactions for cross-account debit/credit pairs that are likely internal transfers (same amount, close dates, opposite signs). Returns candidate pairs the user can review and link.",
+      parameters: z.object({
+        dateRangeDays: z
+          .number()
+          .int()
+          .min(1)
+          .max(30)
+          .default(7)
+          .describe("How many days apart two transactions can be to still be considered a pair (default 7)"),
+        amountTolerance: z
+          .number()
+          .min(0)
+          .max(10)
+          .default(0.01)
+          .describe("Maximum absolute difference in amounts to still consider a match (default 0.01)"),
+      }),
+      execute: async ({ dateRangeDays, amountTolerance }) => {
+        const supabase = await createServerSupabaseClient();
+
+        const since = new Date();
+        since.setDate(since.getDate() - 30);
+        const sinceStr = since.toISOString().slice(0, 10);
+
+        const { data: rows } = await supabase
+          .from("books_transactions")
+          .select("id, date, amount, description, account_id, is_transfer, transfer_pair_id")
+          .eq("user_id", userId)
+          .is("transfer_pair_id", null)
+          .eq("is_transfer", false)
+          .gte("date", sinceStr)
+          .order("date", { ascending: false })
+          .limit(500);
+
+        const txns = rows ?? [];
+        const candidates: Array<{
+          debitId: string;
+          creditId: string;
+          amount: number;
+          dateDiff: number;
+          confidence: number;
+        }> = [];
+        const used = new Set<string>();
+
+        for (let i = 0; i < txns.length; i++) {
+          if (used.has(txns[i].id)) continue;
+          const a = txns[i];
+          const aAmt = Math.abs(a.amount);
+          const aDate = new Date(a.date).getTime();
+
+          for (let j = i + 1; j < txns.length; j++) {
+            if (used.has(txns[j].id)) continue;
+            const b = txns[j];
+            // Must be opposite signs and different accounts
+            if (Math.sign(a.amount) === Math.sign(b.amount)) continue;
+            if (a.account_id === b.account_id) continue;
+
+            const bAmt = Math.abs(b.amount);
+            const bDate = new Date(b.date).getTime();
+            const dateDiff = Math.abs(aDate - bDate) / 86_400_000;
+
+            if (Math.abs(aAmt - bAmt) > amountTolerance) continue;
+            if (dateDiff > dateRangeDays) continue;
+
+            // Confidence: amount match + date proximity
+            let confidence = 0.5; // base: amount matches
+            confidence += Math.max(0, 1 - dateDiff / dateRangeDays) * 0.4;
+            confidence += a.account_id !== b.account_id ? 0.1 : 0;
+
+            const debit = a.amount < 0 ? a : b;
+            const credit = a.amount > 0 ? a : b;
+
+            candidates.push({
+              debitId: debit.id,
+              creditId: credit.id,
+              amount: +aAmt.toFixed(2),
+              dateDiff: +dateDiff.toFixed(1),
+              confidence: +confidence.toFixed(2),
+            });
+            used.add(a.id);
+            used.add(b.id);
+            break;
+          }
+        }
+
+        candidates.sort((a, b) => b.confidence - a.confidence);
+
+        return {
+          candidateCount: candidates.length,
+          candidates: candidates.slice(0, 20),
+        };
+      },
+    }),
+
+    // ── Books: CSV export ──────────────────────────────────────────────────
+    get_books_export: tool({
+      description:
+        "Generate an inline CSV of the user's Books transactions for a given period (max 500 rows). Returns the CSV as a string along with a row count and truncated flag. The AI can offer this to the user as a downloadable report.",
+      parameters: z.object({
+        period: z
+          .enum(["mtd", "ytd", "last30"])
+          .default("mtd")
+          .describe("Time period: mtd = month-to-date, ytd = year-to-date, last30 = last 30 days"),
+      }),
+      execute: async ({ period }) => {
+        const supabase = await createServerSupabaseClient();
+        const since = periodStartDate(period);
+
+        const { data: rawRows } = await supabase
+          .from("books_transactions")
+          .select(`
+            id, date, description, merchant, amount, type, is_transfer, notes,
+            books_categories ( name ),
+            books_accounts ( name )
+          `)
+          .eq("user_id", userId)
+          .gte("date", since)
+          .order("date", { ascending: false })
+          .limit(501); // fetch one extra to detect truncation
+
+        type ExportRow = {
+          id: string; date: string; description: string; merchant: string | null;
+          amount: number; type: string; is_transfer: boolean; notes: string | null;
+          books_categories: { name: string } | null;
+          books_accounts: { name: string } | null;
+        };
+        const all = (rawRows ?? []) as unknown as ExportRow[];
+        const truncated = all.length > 500;
+        const exportRows = truncated ? all.slice(0, 500) : all;
+
+        const escape = (v: unknown) => {
+          const s = v == null ? "" : String(v);
+          return s.includes(",") || s.includes('"') || s.includes("\n")
+            ? `"${s.replace(/"/g, '""')}"`
+            : s;
+        };
+
+        const header = "date,description,merchant,amount,type,category,account,is_transfer,notes";
+        const csvRows = exportRows.map((t) => {
+          const cat = (t as any).books_categories?.name ?? "";
+          const acct = (t as any).books_accounts?.name ?? "";
+          return [
+            t.date, t.description, t.merchant ?? "", t.amount,
+            t.type, cat, acct, t.is_transfer, t.notes ?? "",
+          ]
+            .map(escape)
+            .join(",");
+        });
+
+        return {
+          period,
+          since,
+          rowCount: exportRows.length,
+          truncated,
+          csv: [header, ...csvRows].join("\n"),
+        };
+      },
+    }),
+
     // ── Pulse alerts ───────────────────────────────────────────────────────
     get_pulse_alerts: tool({
       description:
