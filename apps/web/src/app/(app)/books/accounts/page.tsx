@@ -5,9 +5,10 @@ import AccountsClient from "./_components/accounts-client";
 export const metadata = { title: "Accounts — Books | Cashpile" };
 
 export default async function AccountsPage() {
-  const entities = await listEntities();
-  const udas = await Promise.all(entities.map((e) => listUdas(e.id)));
-  const allUdas = udas.flat();
+  const [entities, allUdas] = await Promise.all([
+    listEntities(),
+    listUdas(), // fetch all UDAs for the user, no entity filter
+  ]);
 
   return <AccountsClient entities={entities} udas={allUdas} />;
 }
