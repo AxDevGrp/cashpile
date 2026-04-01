@@ -11,12 +11,15 @@ export async function listUdas(entityId?: string) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthenticated");
 
-  let q = supabase.from("books_udas").select("*, books_financial_accounts(*)").eq("user_id", user.id);
+  let q = (supabase as any)
+    .from("books_udas")
+    .select("*, books_financial_accounts(*)")
+    .eq("user_id", user.id);
   if (entityId) q = q.eq("entity_id", entityId);
 
   const { data, error } = await q.order("name");
   if (error) throw new Error(error.message);
-  return data ?? [];
+  return (data ?? []) as (BooksUda & { books_financial_accounts?: BooksAccount[] })[];
 }
 
 export async function createUda(input: { entityId: string; name: string; description?: string }) {
@@ -54,7 +57,7 @@ export async function createAccount(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthenticated");
 
-  const { data, error } = await supabase
+  const { data, error } = await (supabase as any)
     .from("books_financial_accounts")
     .insert({ ...input, user_id: user.id, is_active: true })
     .select()
@@ -62,7 +65,7 @@ export async function createAccount(
 
   if (error) throw new Error(error.message);
   revalidatePath("/books/accounts");
-  return data;
+  return data as BooksAccount;
 }
 
 export async function updateAccount(id: string, input: Partial<BooksAccount>) {
@@ -70,7 +73,7 @@ export async function updateAccount(id: string, input: Partial<BooksAccount>) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthenticated");
 
-  const { data, error } = await supabase
+  const { data, error } = await (supabase as any)
     .from("books_financial_accounts")
     .update({ ...input, updated_at: new Date().toISOString() })
     .eq("id", id)
@@ -80,7 +83,7 @@ export async function updateAccount(id: string, input: Partial<BooksAccount>) {
 
   if (error) throw new Error(error.message);
   revalidatePath("/books/accounts");
-  return data;
+  return data as BooksAccount;
 }
 
 export async function deleteAccount(id: string) {
@@ -88,7 +91,12 @@ export async function deleteAccount(id: string) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthenticated");
 
-  const { error } = await supabase.from("books_financial_accounts").delete().eq("id", id).eq("user_id", user.id);
+  const { error } = await (supabase as any)
+    .from("books_financial_accounts")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", user.id);
+
   if (error) throw new Error(error.message);
   revalidatePath("/books/accounts");
 }

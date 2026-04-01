@@ -9,14 +9,14 @@ export async function listEntities() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthenticated");
 
-  const { data, error } = await supabase
+  const { data, error } = await (supabase as any)
     .from("books_business_entities")
     .select("*")
     .eq("user_id", user.id)
     .order("name");
 
   if (error) throw new Error(error.message);
-  return data ?? [];
+  return (data ?? []) as BooksEntity[];
 }
 
 export async function createEntity(
@@ -26,7 +26,7 @@ export async function createEntity(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthenticated");
 
-  const { data, error } = await supabase
+  const { data, error } = await (supabase as any)
     .from("books_business_entities")
     .insert({ ...input, user_id: user.id })
     .select()
@@ -34,7 +34,7 @@ export async function createEntity(
 
   if (error) throw new Error(error.message);
   revalidatePath("/books/entities");
-  return data;
+  return data as BooksEntity;
 }
 
 export async function updateEntity(id: string, input: Partial<BooksEntity>) {
@@ -42,7 +42,7 @@ export async function updateEntity(id: string, input: Partial<BooksEntity>) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthenticated");
 
-  const { data, error } = await supabase
+  const { data, error } = await (supabase as any)
     .from("books_business_entities")
     .update({ ...input, updated_at: new Date().toISOString() })
     .eq("id", id)
@@ -52,7 +52,7 @@ export async function updateEntity(id: string, input: Partial<BooksEntity>) {
 
   if (error) throw new Error(error.message);
   revalidatePath("/books/entities");
-  return data;
+  return data as BooksEntity;
 }
 
 export async function deleteEntity(id: string) {
@@ -60,7 +60,12 @@ export async function deleteEntity(id: string) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthenticated");
 
-  const { error } = await supabase.from("books_business_entities").delete().eq("id", id).eq("user_id", user.id);
+  const { error } = await (supabase as any)
+    .from("books_business_entities")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", user.id);
+
   if (error) throw new Error(error.message);
   revalidatePath("/books/entities");
 }
