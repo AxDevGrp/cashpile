@@ -10,7 +10,7 @@ export async function listEntities() {
   if (!user) throw new Error("Unauthenticated");
 
   const { data, error } = await supabase
-    .from("books_entities")
+    .from("books_business_entities")
     .select("*")
     .eq("user_id", user.id)
     .order("name");
@@ -27,7 +27,7 @@ export async function createEntity(
   if (!user) throw new Error("Unauthenticated");
 
   const { data, error } = await supabase
-    .from("books_entities")
+    .from("books_business_entities")
     .insert({ ...input, user_id: user.id })
     .select()
     .single();
@@ -43,7 +43,7 @@ export async function updateEntity(id: string, input: Partial<BooksEntity>) {
   if (!user) throw new Error("Unauthenticated");
 
   const { data, error } = await supabase
-    .from("books_entities")
+    .from("books_business_entities")
     .update({ ...input, updated_at: new Date().toISOString() })
     .eq("id", id)
     .eq("user_id", user.id)
@@ -60,7 +60,7 @@ export async function deleteEntity(id: string) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthenticated");
 
-  const { error } = await supabase.from("books_entities").delete().eq("id", id).eq("user_id", user.id);
+  const { error } = await supabase.from("books_business_entities").delete().eq("id", id).eq("user_id", user.id);
   if (error) throw new Error(error.message);
   revalidatePath("/books/entities");
 }
