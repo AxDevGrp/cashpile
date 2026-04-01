@@ -118,7 +118,7 @@ export class ReportService {
     const properties = await Promise.all(
       (udas ?? []).map(async (uda) => {
         const { data: accounts } = await this.supabase
-          .from("books_accounts")
+          .from("books_financial_accounts")
           .select("id")
           .eq("uda_id", uda.id);
 

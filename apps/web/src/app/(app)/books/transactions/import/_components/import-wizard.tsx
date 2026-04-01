@@ -13,7 +13,7 @@ type Step = 1 | 2 | 3;
 
 interface Props {
   entities: BooksEntity[];
-  initialUdas: (BooksUda & { books_accounts?: { id: string; name: string }[] })[];
+  initialUdas: (BooksUda & { books_financial_accounts?: { id: string; name: string }[] })[];
 }
 
 export default function ImportWizard({ entities, initialUdas }: Props) {
@@ -29,7 +29,7 @@ export default function ImportWizard({ entities, initialUdas }: Props) {
   const [error, setError] = useState("");
   const [result, setResult] = useState<{ imported: number; skipped: number; duplicatesSkipped: number } | null>(null);
 
-  const allAccounts = udas.flatMap((u) => u.books_accounts ?? []);
+  const allAccounts = udas.flatMap((u) => u.books_financial_accounts ?? []);
 
   const handleFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

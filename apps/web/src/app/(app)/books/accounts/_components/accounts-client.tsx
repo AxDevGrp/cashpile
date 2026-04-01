@@ -6,7 +6,7 @@ import type { BooksEntity, BooksUda, BooksAccount } from "@/modules/books/types"
 
 interface Props {
   entities: BooksEntity[];
-  udas: (BooksUda & { books_accounts?: BooksAccount[] })[];
+  udas: (BooksUda & { books_financial_accounts?: BooksAccount[] })[];
 }
 
 const ENTITY_TYPE_LABELS: Record<string, string> = {
@@ -67,11 +67,11 @@ export default function AccountsClient({ entities, udas }: Props) {
                           )}
                         </CardHeader>
                         <CardContent>
-                          {(uda.books_accounts ?? []).length === 0 ? (
+                          {(uda.books_financial_accounts ?? []).length === 0 ? (
                             <p className="text-sm text-muted-foreground">No financial accounts</p>
                           ) : (
                             <ul className="space-y-1">
-                              {(uda.books_accounts ?? []).map((acct) => (
+                              {(uda.books_financial_accounts ?? []).map((acct) => (
                                 <li key={acct.id} className="flex justify-between text-sm">
                                   <span>{acct.name}</span>
                                   <Badge variant="outline" className="text-xs">

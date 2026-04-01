@@ -11,11 +11,11 @@ import { formatCurrency, formatDate } from "@cashpile/ui";
 import type { BooksTransaction, BooksEntity, BooksCategory, BooksUda } from "@/modules/books/types";
 
 interface Props {
-  transactions: (BooksTransaction & { books_categories?: { name: string } | null; books_accounts?: { name: string } | null })[];
+  transactions: (BooksTransaction & { books_categories?: { name: string } | null; books_financial_accounts?: { name: string } | null })[];
   totalCount: number;
   entities: BooksEntity[];
   categories: BooksCategory[];
-  udas: (BooksUda & { books_accounts?: { id: string; name: string }[] })[];
+  udas: (BooksUda & { books_financial_accounts?: { id: string; name: string }[] })[];
   filters: { entityId?: string; accountId?: string; categoryId?: string; from?: string; to?: string };
 }
 
@@ -23,7 +23,7 @@ export default function TransactionsClient({ transactions, totalCount, entities,
   const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
-  const allAccounts = udas.flatMap((u) => u.books_accounts ?? []);
+  const allAccounts = udas.flatMap((u) => u.books_financial_accounts ?? []);
 
   function updateFilter(key: string, value: string) {
     const params = new URLSearchParams(window.location.search);
@@ -127,7 +127,7 @@ export default function TransactionsClient({ transactions, totalCount, entities,
                   </td>
                   <td className="p-3 tabular-nums text-muted-foreground">{formatDate(tx.date)}</td>
                   <td className="p-3 max-w-xs truncate">{tx.description}</td>
-                  <td className="p-3 text-muted-foreground">{tx.books_accounts?.name ?? "—"}</td>
+                  <td className="p-3 text-muted-foreground">{tx.books_financial_accounts?.name ?? "—"}</td>
                   <td className="p-3">
                     {tx.books_categories ? (
                       <Badge variant="secondary">{tx.books_categories.name}</Badge>
