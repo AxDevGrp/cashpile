@@ -11,7 +11,7 @@ export default async function TransactionsPage({
 }: {
   searchParams: { entityId?: string; accountId?: string; categoryId?: string; from?: string; to?: string };
 }) {
-  const [{ data: transactions, count }, entities, categories] = await Promise.all([
+  const [{ data: transactions, count }, entities, categories, udas] = await Promise.all([
     listTransactions({
       entityId: searchParams.entityId,
       accountId: searchParams.accountId,
@@ -22,11 +22,8 @@ export default async function TransactionsPage({
     }),
     listEntities(),
     listCategories(searchParams.entityId),
+    listUdas(), // fetch all UDAs regardless of entity
   ]);
-
-  const udas = entities.length > 0
-    ? await listUdas(searchParams.entityId ?? entities[0]?.id)
-    : [];
 
   return (
     <TransactionsClient
