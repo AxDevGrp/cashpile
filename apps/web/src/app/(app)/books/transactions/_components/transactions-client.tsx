@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { PageHeader } from "@cashpile/ui";
 import { Button } from "@cashpile/ui";
 import { Badge } from "@cashpile/ui";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@cashpile/ui";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@cashpile/ui";
 import { formatCurrency, formatDate } from "@cashpile/ui";
 import type { BooksTransaction, BooksEntity, BooksCategory, BooksUda } from "@/modules/books/types";
 
@@ -16,14 +16,12 @@ interface Props {
   entities: BooksEntity[];
   categories: BooksCategory[];
   udas: (BooksUda & { books_financial_accounts?: { id: string; name: string }[] })[];
-  filters: { entityId?: string; accountId?: string; categoryId?: string; from?: string; to?: string };
+  filters: { udaId?: string; accountId?: string; categoryId?: string; from?: string; to?: string };
 }
 
 export default function TransactionsClient({ transactions, totalCount, entities, categories, udas, filters }: Props) {
   const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(new Set());
-
-  const allAccounts = udas.flatMap((u) => u.books_financial_accounts ?? []);
 
   function updateFilter(key: string, value: string) {
     const params = new URLSearchParams(window.location.search);
@@ -53,26 +51,42 @@ export default function TransactionsClient({ transactions, totalCount, entities,
 
       {/* Filters */}
       <div className="flex flex-wrap gap-3">
-        <Select value={filters.entityId ?? "all"} onValueChange={(v) => updateFilter("entityId", v)}>
-          <SelectTrigger className="w-44">
-            <SelectValue placeholder="All entities" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All entities</SelectItem>
-            {entities.map((e) => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}
-          </SelectContent>
-        </Select>
-
-        <Select value={filters.accountId ?? "all"} onValueChange={(v) => updateFilter("accountId", v)}>
-          <SelectTrigger className="w-44">
+        {/* UDA filter */}
+        <Select value={filters.udaId ?? "all"} onValueChange={(v) => updateFilter("udaId", v)}>
+          <SelectTrigger className="w-52">
             <SelectValue placeholder="All accounts" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All accounts</SelectItem>
-            {allAccounts.map((a) => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
+            {udas.map((u) => (
+              <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+            ))}
           </SelectContent>
         </Select>
 
+        {/* Individual account filter — grouped by UDA */}
+        <Select value={filters.accountId ?? "all"} onValueChange={(v) => updateFilter("accountId", v)}>
+          <SelectTrigger className="w-52">
+            <SelectValue placeholder="All sub-accounts" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All sub-accounts</SelectItem>
+            {udas.map((u) => {
+              const accounts = u.books_financial_accounts ?? [];
+              if (accounts.length === 0) return null;
+              return (
+                <SelectGroup key={u.id}>
+                  <SelectLabel>{u.name}</SelectLabel>
+                  {accounts.map((a) => (
+                    <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                  ))}
+                </SelectGroup>
+              );
+            })}
+          </SelectContent>
+        </Select>
+
+        {/* Category filter */}
         <Select value={filters.categoryId ?? "all"} onValueChange={(v) => updateFilter("categoryId", v)}>
           <SelectTrigger className="w-44">
             <SelectValue placeholder="All categories" />

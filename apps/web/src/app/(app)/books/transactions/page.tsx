@@ -9,11 +9,11 @@ export const metadata = { title: "Transactions — Books | Cashpile" };
 export default async function TransactionsPage({
   searchParams,
 }: {
-  searchParams: { entityId?: string; accountId?: string; categoryId?: string; from?: string; to?: string };
+  searchParams: { udaId?: string; accountId?: string; categoryId?: string; from?: string; to?: string };
 }) {
   const [{ data: transactions, count }, entities, categories, udas] = await Promise.all([
     listTransactions({
-      entityId: searchParams.entityId,
+      udaId: searchParams.udaId,
       accountId: searchParams.accountId,
       categoryId: searchParams.categoryId,
       dateFrom: searchParams.from,
@@ -21,8 +21,8 @@ export default async function TransactionsPage({
       limit: 100,
     }),
     listEntities(),
-    listCategories(searchParams.entityId),
-    listUdas(), // fetch all UDAs regardless of entity
+    listCategories(),
+    listUdas(),
   ]);
 
   return (
