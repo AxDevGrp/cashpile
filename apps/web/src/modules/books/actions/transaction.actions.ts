@@ -23,7 +23,7 @@ export async function listTransactions(params: {
     .eq("user_id", user.id)
     .order("date", { ascending: false });
 
-  if (params.accountId) q = q.eq("financial_account_id", params.accountId);
+  if (params.accountId) q = (q as any).eq("financial_account_id", params.accountId);
   if (params.categoryId) q = q.eq("category_id", params.categoryId);
   if (params.dateFrom) q = q.gte("date", params.dateFrom);
   if (params.dateTo) q = q.lte("date", params.dateTo);
