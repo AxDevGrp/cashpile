@@ -1,4 +1,4 @@
-import { BookOpen, Upload, ArrowUpRight, ArrowDownRight, TrendingUp } from "lucide-react";
+import { BookOpen, Upload, ArrowUpRight, ArrowDownRight, TrendingUp, Receipt } from "lucide-react";
 import { PageHeader, Card, CardContent } from "@cashpile/ui";
 import Link from "next/link";
 
@@ -36,6 +36,7 @@ export default function BooksPage() {
         {[
           { href: "/books/transactions", label: "Transactions", desc: "View and manage all transactions" },
           { href: "/books/accounts", label: "Accounts", desc: "Financial accounts and UDAs" },
+          { href: "/books/tax", label: "Tax", desc: "Assign transactions for tax reporting" },
           { href: "/books/entities", label: "Business Entities", desc: "LLCs, rentals, corporations" },
           { href: "/books/reports", label: "Reports", desc: "P&L, Schedule E, cash flow" },
         ].map(({ href, label, desc }) => (
