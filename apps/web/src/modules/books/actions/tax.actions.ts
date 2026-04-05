@@ -23,7 +23,7 @@ export type TaxView = {
     merchant: string | null;
     amount: number;
     date: string;
-    type: string;
+    transaction_type: string;
   };
   books_categories?: {
     id: number;
@@ -53,7 +53,7 @@ export async function listTaxViews(udaId: string, year?: number): Promise<TaxVie
 
   let q = (supabase as any)
     .from("books_tax_transaction_views")
-    .select(`*, books_transactions(id, description, merchant, amount, date, type), books_categories(id, name, category_type)`)
+    .select(`*, books_transactions(id, description, merchant, amount, date, transaction_type), books_categories(id, name, category_type)`)
     .eq("uda_id", udaId)
     .order("tax_date", { ascending: false });
 
@@ -157,7 +157,7 @@ export async function generateTaxReport(params: {
 
     const catId = v.category_id ?? null;
     const catName = v.books_categories?.name ?? "Uncategorized";
-    const catType = v.books_categories?.category_type ?? (txn.type === "income" ? "income" : "expense");
+    const catType = v.books_categories?.category_type ?? (txn.transaction_type === "credit" ? "income" : "expense");
     const amount = v.tax_amount ?? Math.abs(txn.amount) * (v.business_percentage / 100);
     const key = String(catId ?? "uncategorized");
 
@@ -167,7 +167,7 @@ export async function generateTaxReport(params: {
     byCategory[key].total += amount;
     byCategory[key].count++;
 
-    if (txn.type === "income" || txn.amount > 0) {
+    if (txn.transaction_type === "credit" || txn.amount > 0) {
       totalIncome += amount;
     } else {
       totalExpenses += amount;
@@ -208,7 +208,7 @@ export async function getTaxSummaryForUdas(
   const supabase = await createServerSupabaseClient();
   const { data, error } = await (supabase as any)
     .from("books_tax_transaction_views")
-    .select(`uda_id, tax_amount, business_percentage, books_transactions(amount, type)`)
+    .select(`uda_id, tax_amount, business_percentage, books_transactions(amount, transaction_type)`)
     .in("uda_id", udaIds)
     .gte("tax_date", `${year}-01-01`)
     .lte("tax_date", `${year}-12-31`);
@@ -223,7 +223,7 @@ export async function getTaxSummaryForUdas(
     const txn = row.books_transactions;
     const amount = row.tax_amount ?? Math.abs(txn?.amount ?? 0) * ((row.business_percentage ?? 100) / 100);
     result[row.uda_id].transactionCount++;
-    if (txn?.type === "income" || (txn?.amount ?? 0) > 0) {
+    if (txn?.transaction_type === "credit" || (txn?.amount ?? 0) > 0) {
       result[row.uda_id].totalIncome += amount;
     } else {
       result[row.uda_id].totalExpenses += amount;
