@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { syncPlaidItem } from "../../plaid/sync/route";
+import { syncPlaidItem } from "@/lib/plaid-sync";
 
 export async function GET(req: NextRequest) {
   // Protect with cron secret
