@@ -36,19 +36,12 @@ export function createTools(userId: string) {
         const supabase = await createServerSupabaseClient();
         const since = periodStartDate(period);
 
-        const [{ data: txns }, { data: accounts }] = await Promise.all([
-          supabase
-            .from("books_transactions")
-            .select("id, amount, type, category_id, description, date")
-            .eq("user_id", userId)
-            .eq("is_transfer", false)
-            .gte("date", since),
-          supabase
-            .from("books_financial_accounts")
-            .select("name, currency, account_type")
-            .eq("user_id", userId)
-            .eq("is_active", true),
-        ]);
+        const { data: txns } = await supabase
+          .from("books_transactions")
+          .select("id, amount, type, category_id, description, date")
+          .eq("user_id", userId)
+          .eq("is_transfer", false)
+          .gte("date", since);
 
         const rows = txns ?? [];
         const income = rows
@@ -77,11 +70,7 @@ export function createTools(userId: string) {
           expenses: +expenses.toFixed(2),
           netCashFlow: +(income - expenses).toFixed(2),
           topExpenseCategories: topCategories,
-          accounts: (accounts ?? []).map((a) => ({
-            name: a.name,
-            currency: a.currency,
-            type: a.account_type,
-          })),
+          accounts: [],
         };
       },
     }),
