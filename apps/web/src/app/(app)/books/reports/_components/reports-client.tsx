@@ -4,10 +4,10 @@ import { useRouter } from "next/navigation";
 import { PageHeader, Badge, Card, CardHeader, CardTitle, CardContent } from "@cashpile/ui";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@cashpile/ui";
 import { formatCurrency } from "@cashpile/ui";
-import type { BooksEntity, PnLReport, CashFlowReport, ScheduleEReport } from "@/modules/books/types";
+import type { TaxEntity, PnLReport, CashFlowReport, ScheduleEReport } from "@/modules/books/types";
 
 interface Props {
-  entities: BooksEntity[];
+  entities: TaxEntity[];
   selectedEntityId: string;
   year: number;
   pnl: PnLReport | null;
