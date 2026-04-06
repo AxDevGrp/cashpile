@@ -29,9 +29,9 @@ export default async function TransactionsPage({
     <TransactionsClient
       transactions={transactions}
       totalCount={count}
-      taxEntities={taxEntities}
+      entities={taxEntities}
       categories={categories}
-      accounts={accounts}
+      udas={[]}
       filters={searchParams}
     />
   );

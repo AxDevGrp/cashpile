@@ -8,12 +8,12 @@ import { Button } from "@cashpile/ui";
 import { Badge } from "@cashpile/ui";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@cashpile/ui";
 import { formatCurrency, formatDate } from "@cashpile/ui";
-import type { BooksTransaction, BooksEntity, BooksCategory, BooksUda } from "@/modules/books/types";
+import type { BooksTransaction, TaxEntity, BooksCategory, BooksUda } from "@/modules/books/types";
 
 interface Props {
   transactions: (BooksTransaction & { books_categories?: { name: string } | null; books_financial_accounts?: { name: string } | null })[];
   totalCount: number;
-  entities: BooksEntity[];
+  entities: TaxEntity[];
   categories: BooksCategory[];
   udas: (BooksUda & { books_financial_accounts?: { id: string; name: string }[] })[];
   filters: { udaId?: string; accountId?: string; categoryId?: string; from?: string; to?: string };
