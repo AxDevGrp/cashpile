@@ -44,7 +44,7 @@ export function createTools(userId: string) {
             .eq("is_transfer", false)
             .gte("date", since),
           supabase
-            .from("books_accounts")
+            .from("books_financial_accounts")
             .select("name, currency, account_type")
             .eq("user_id", userId)
             .eq("is_active", true),

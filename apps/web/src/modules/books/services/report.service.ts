@@ -124,7 +124,7 @@ export class ReportService {
 
         const accountIds = (accounts ?? []).map((a) => a.id);
         if (accountIds.length === 0) {
-          return { udaId: uda.id, udaName: uda.name, income: 0, expenses: {}, netIncome: 0 };
+          return { taxEntityId: uda.id, taxEntityName: uda.name, income: 0, expenses: {}, netIncome: 0 };
         }
 
         const { data: txns } = await this.supabase
