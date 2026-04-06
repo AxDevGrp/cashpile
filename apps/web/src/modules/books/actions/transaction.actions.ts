@@ -5,7 +5,8 @@ import { revalidatePath } from "next/cache";
 import type { BooksTransaction } from "../types";
 
 export async function listTransactions(params: {
-  udaId?: string;
+  taxEntityId?: string; // NEW: Filter by Tax Entity
+  udaId?: string; // DEPRECATED: Use taxEntityId instead
   accountId?: string;
   categoryId?: string;
   dateFrom?: string;
@@ -17,20 +18,23 @@ export async function listTransactions(params: {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthenticated");
 
-  // If filtering by UDA, resolve its account IDs first
+  // Support both new taxEntityId and deprecated udaId
+  const entityId = params.taxEntityId ?? params.udaId;
+
+  // If filtering by Tax Entity, resolve its account IDs first
   let accountIds: string[] | undefined;
-  if (params.udaId) {
+  if (entityId) {
     const { data: accounts } = await (supabase as any)
       .from("books_financial_accounts")
       .select("id")
-      .eq("uda_id", params.udaId);
+      .eq("tax_entity_id", entityId);
     accountIds = (accounts ?? []).map((a: any) => a.id);
     if (accountIds!.length === 0) return { data: [], count: 0 };
   }
 
   let q = supabase
     .from("books_transactions")
-    .select(`*, books_categories(id, name, category_type), books_financial_accounts(id, name)`, { count: "exact" })
+    .select(`*, books_categories(id, name, category_type), books_financial_accounts(id, name, tax_entity_id)`, { count: "exact" })
     .eq("user_id", user.id)
     .order("date", { ascending: false });
 

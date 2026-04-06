@@ -144,88 +144,102 @@ export interface Database {
         Update: Record<string, never>;
         Relationships: never[];
       };
-      // ─── Books tables ────────────────────────────────────────────────
-      books_entities: {
+      // ─── Books tables ─n      // Note: books_business_entities is the Tax Entity table
+      // Financial accounts can optionally belong to a Tax Entity via tax_entity_id
+      books_business_entities: {
         Row: {
           id: string;
           user_id: string;
           name: string;
-          type: "individual" | "llc" | "s_corp" | "c_corp" | "partnership" | "sole_prop";
+          entity_type: "llc" | "s_corp" | "c_corp" | "partnership" | "sole_proprietorship" | "rental_property";
           tax_id: string | null;
-          fiscal_year_start: number | null;
-          default_currency: string;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          user_id: string;
-          name: string;
-          type: "individual" | "llc" | "s_corp" | "c_corp" | "partnership" | "sole_prop";
-          tax_id?: string | null;
-          fiscal_year_start?: number | null;
-          default_currency?: string;
-        };
-        Update: {
-          name?: string;
-          type?: "individual" | "llc" | "s_corp" | "c_corp" | "partnership" | "sole_prop";
-          tax_id?: string | null;
-          fiscal_year_start?: number | null;
-          default_currency?: string;
-          updated_at?: string;
-        };
-        Relationships: never[];
-      };
-      books_udas: {
-        Row: {
-          id: string;
-          entity_id: string;
-          user_id: string;
-          name: string;
+          address: Json | null;
           description: string | null;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          entity_id: string;
-          user_id: string;
-          name: string;
-          description?: string | null;
-        };
-        Update: {
-          name?: string;
-          description?: string | null;
-        };
-        Relationships: never[];
-      };
-      books_accounts: {
-        Row: {
-          id: string;
-          uda_id: string;
-          user_id: string;
-          name: string;
-          institution: string | null;
-          account_type: "checking" | "savings" | "credit_card" | "loan" | "investment" | "other";
-          currency: string;
           is_active: boolean;
           created_at: string;
           updated_at: string;
         };
         Insert: {
           id?: string;
-          uda_id: string;
           user_id: string;
           name: string;
-          institution?: string | null;
-          account_type: "checking" | "savings" | "credit_card" | "loan" | "investment" | "other";
-          currency?: string;
+          entity_type: "llc" | "s_corp" | "c_corp" | "partnership" | "sole_proprietorship" | "rental_property";
+          tax_id?: string | null;
+          address?: Json | null;
+          description?: string | null;
           is_active?: boolean;
         };
         Update: {
           name?: string;
-          institution?: string | null;
+          entity_type?: "llc" | "s_corp" | "c_corp" | "partnership" | "sole_proprietorship" | "rental_property";
+          tax_id?: string | null;
+          address?: Json | null;
+          description?: string | null;
+          is_active?: boolean;
+          updated_at?: string;
+        };
+        Relationships: never[];
+      };
+      // DEPRECATED: books_udas is being replaced by books_business_entities
+      // Keeping for backward compatibility during migration
+      books_udas: {
+        Row: {
+          id: string;
+          user_id: string;
+          name: string;
+          description: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          name: string;
+          description?: string | null;
+        };
+        Update: {
+          name?: string;
+          description?: string | null;
+        };
+        Relationships: never[];
+      };
+      // Financial accounts can optionally belong to a Tax Entity
+      books_financial_accounts: {
+        Row: {
+          id: string;
+          uda_id: string | null; // DEPRECATED: use tax_entity_id
+          tax_entity_id: string | null; // NEW: links to books_business_entities
+          name: string;
+          account_type: "checking" | "savings" | "credit_card" | "loan" | "investment" | "other";
+          institution_name: string | null;
+          last_four_digits: string | null;
+          account_identifier: string | null;
+          current_balance: number;
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          uda_id?: string | null;
+          tax_entity_id?: string | null;
+          name: string;
+          account_type: "checking" | "savings" | "credit_card" | "loan" | "investment" | "other";
+          institution_name?: string | null;
+          last_four_digits?: string | null;
+          account_identifier?: string | null;
+          current_balance?: number;
+          is_active?: boolean;
+        };
+        Update: {
+          uda_id?: string | null;
+          tax_entity_id?: string | null;
+          name?: string;
           account_type?: "checking" | "savings" | "credit_card" | "loan" | "investment" | "other";
-          currency?: string;
+          institution_name?: string | null;
+          last_four_digits?: string | null;
+          account_identifier?: string | null;
+          current_balance?: number;
           is_active?: boolean;
           updated_at?: string;
         };
@@ -329,6 +343,51 @@ export interface Database {
           transaction_id: string;
         };
         Update: Record<string, never>;
+        Relationships: never[];
+      };
+      // Tax transaction assignments - links transactions to Tax Entities
+      books_tax_transaction_views: {
+        Row: {
+          id: string;
+          user_id: string;
+          tax_entity_id: string; // Links to books_business_entities
+          transaction_id: string;
+          tax_amount: number | null;
+          tax_description: string | null;
+          tax_date: string | null;
+          is_tax_deductible: boolean;
+          business_percentage: number;
+          deduction_percentage: number;
+          tax_notes: string | null;
+          category_id: number | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          tax_entity_id: string;
+          transaction_id: string;
+          tax_amount?: number | null;
+          tax_description?: string | null;
+          tax_date?: string | null;
+          is_tax_deductible?: boolean;
+          business_percentage?: number;
+          deduction_percentage?: number;
+          tax_notes?: string | null;
+          category_id?: number | null;
+        };
+        Update: {
+          tax_amount?: number | null;
+          tax_description?: string | null;
+          tax_date?: string | null;
+          is_tax_deductible?: boolean;
+          business_percentage?: number;
+          deduction_percentage?: number;
+          tax_notes?: string | null;
+          category_id?: number | null;
+          updated_at?: string;
+        };
         Relationships: never[];
       };
       // ─── Trades tables ───────────────────────────────────────────────

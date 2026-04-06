@@ -4,12 +4,14 @@ import * as XLSX from "xlsx";
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { udaId, year, format = "csv" } = body;
+  // Support both new taxEntityId and deprecated udaId
+  const taxEntityId = body.taxEntityId ?? body.udaId;
+  const { year, format = "csv" } = body;
 
-  if (!udaId) return NextResponse.json({ error: "udaId required" }, { status: 400 });
+  if (!taxEntityId) return NextResponse.json({ error: "taxEntityId required" }, { status: 400 });
 
   try {
-    const report = await generateTaxReport({ udaId, year: year ?? new Date().getFullYear() });
+    const report = await generateTaxReport({ taxEntityId, year: year ?? new Date().getFullYear() });
 
     const rows = report.transactions.map((v) => ({
       Date: v.tax_date ?? v.books_transactions?.date ?? "",

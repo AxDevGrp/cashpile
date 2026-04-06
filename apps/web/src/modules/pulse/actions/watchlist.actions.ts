@@ -85,3 +85,19 @@ export async function toggleWatchlistItem(
   if (error) throw new Error(error.message);
   revalidatePath("/pulse/watchlist");
 }
+
+export async function getUserInstruments(): Promise<string[]> {
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data: watchlist } = await supabase
+    .from("pulse_watchlist")
+    .select("instrument")
+    .eq("user_id", user.id)
+    .eq("is_active", true);
+
+  return watchlist?.map((w) => w.instrument) || [];
+}

@@ -151,7 +151,7 @@ export class ReportService {
         }
 
         const totalExpenses = Object.values(expenses).reduce((s, v) => s + v, 0);
-        return { udaId: uda.id, udaName: uda.name, income, expenses, netIncome: income - totalExpenses };
+        return { taxEntityId: uda.id, taxEntityName: uda.name, income, expenses, netIncome: income - totalExpenses };
       })
     );
 

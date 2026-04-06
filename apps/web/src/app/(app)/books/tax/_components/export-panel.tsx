@@ -1,16 +1,15 @@
 "use client";
 
 import { useState } from "react";
-
-type Uda = { id: string; name: string };
+import type { TaxEntity } from "@/modules/books/types";
 
 interface Props {
-  uda: Uda;
+  taxEntity: TaxEntity;
   year: number;
   onClose: () => void;
 }
 
-export function ExportPanel({ uda, year, onClose }: Props) {
+export function ExportPanel({ taxEntity, year, onClose }: Props) {
   const [format, setFormat] = useState<"csv" | "excel">("csv");
   const [exportYear, setExportYear] = useState(year);
   const [loading, setLoading] = useState(false);
@@ -22,14 +21,14 @@ export function ExportPanel({ uda, year, onClose }: Props) {
     const res = await fetch("/api/tax/export", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ udaId: uda.id, year: exportYear, format }),
+      body: JSON.stringify({ taxEntityId: taxEntity.id, year: exportYear, format }),
     });
     if (res.ok) {
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `tax-report-${uda.name}-${exportYear}.${format === "csv" ? "csv" : "xlsx"}`;
+      a.download = `tax-report-${taxEntity.name}-${exportYear}.${format === "csv" ? "csv" : "xlsx"}`;
       a.click();
       URL.revokeObjectURL(url);
     }
@@ -46,7 +45,7 @@ export function ExportPanel({ uda, year, onClose }: Props) {
         </div>
 
         <div className="p-4 space-y-4">
-          <div className="text-sm text-muted-foreground">{uda.name}</div>
+          <div className="text-sm text-muted-foreground">{taxEntity.name}</div>
 
           <label className="block text-sm space-y-1">
             <span className="text-muted-foreground">Tax Year</span>

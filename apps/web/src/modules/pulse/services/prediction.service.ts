@@ -1,21 +1,113 @@
 /**
- * Prediction Service — manages MiroFish job lifecycle and correlation data.
+ * Direct Prediction Service — uses OpenAI GPT-4o to predict market impact
+ * Replaces MiroFish multi-agent simulation with direct analysis
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import {
-  formatEventAsMiroFishSeed,
-  submitJob,
-  parseImpactReport,
-  generateAlertMessage,
-} from "@cashpile/ai/pulse";
-import type { EventWithPrediction, CorrelationCell, EventCategory } from "../types";
+import { getOpenAIClient, DEFAULT_MODEL } from "@cashpile/ai";
+import type { EventWithPrediction, CorrelationCell, EventCategory, PulseEvent } from "../types";
 import type { InstrumentImpact } from "@cashpile/ai/pulse";
+import { generateAlertMessage } from "@cashpile/ai/pulse";
+
+const IMPACT_SYSTEM_PROMPT = `You are a senior macro analyst at a hedge fund.
+Given a financial event, predict the directional impact on specified instruments.
+
+Respond ONLY with valid JSON — no markdown, no commentary.
+
+Schema:
+{
+  "summary": "2-3 sentence analysis of the event and expected market reaction",
+  "analyst_consensus": "One sentence consensus view",
+  "risk_factors": ["risk 1", "risk 2", "risk 3"],
+  "instrument_impacts": [
+    {
+      "instrument": "ES",
+      "direction": "bullish" | "bearish" | "neutral",
+      "magnitude_pct": 1.5,
+      "confidence": 0.75,
+      "time_horizon": "1d" | "1w" | "1m",
+      "rationale": "Why this instrument moves this way"
+    }
+  ]
+}
+
+Instruments you may analyze: ES, NQ, YM, RTY, CL, GC, SI, DXY, TLT, VIX, XLK, XLE, XLF, XLB, XLV
+
+Direction guide:
+- bullish: Expect 0.5-3% upward move
+- bearish: Expect 0.5-3% downward move  
+- neutral: Minimal impact expected
+
+Confidence guide:
+- 0.8-1.0: High confidence (direct causal link, historical precedent)
+- 0.5-0.8: Moderate confidence (some uncertainty, mixed signals)
+- 0.2-0.5: Low confidence (indirect impact, many variables)`;
+
+interface DirectPredictionResult {
+  summary: string;
+  analyst_consensus: string;
+  risk_factors: string[];
+  instrument_impacts: InstrumentImpact[];
+}
+
+async function analyzeWithOpenAI(
+  event: PulseEvent
+): Promise<DirectPredictionResult> {
+  const client = getOpenAIClient();
+
+  const instrumentList = event.affected_instruments.join(", ");
+
+  const userPrompt = `Event: ${event.title}
+Category: ${event.category}
+Severity: ${event.severity}
+Summary: ${event.summary || "N/A"}
+Source: ${event.source}
+Published: ${event.published_at}
+
+Predict market impact for these instruments: ${instrumentList}`;
+
+  const response = await client.chat.completions.create({
+    model: DEFAULT_MODEL,
+    temperature: 0.2,
+    response_format: { type: "json_object" },
+    messages: [
+      { role: "system", content: IMPACT_SYSTEM_PROMPT },
+      { role: "user", content: userPrompt },
+    ],
+  });
+
+  const content = response.choices[0]?.message?.content ?? "{}";
+  const parsed = JSON.parse(content) as Partial<DirectPredictionResult>;
+
+  // Validate and normalize impacts
+  const impacts: InstrumentImpact[] = (parsed.instrument_impacts ?? [])
+    .filter((i) => event.affected_instruments.includes(i.instrument))
+    .map((i) => ({
+      instrument: i.instrument,
+      direction: ["bullish", "bearish", "neutral"].includes(i.direction)
+        ? i.direction
+        : "neutral",
+      magnitude_pct: Math.max(0, Math.min(10, Number(i.magnitude_pct) || 0)),
+      confidence: Math.max(0, Math.min(1, Number(i.confidence) || 0.5)),
+      time_horizon: ["1d", "1w", "1m"].includes(i.time_horizon)
+        ? i.time_horizon
+        : "1d",
+      rationale: i.rationale || "No rationale provided",
+    }));
+
+  return {
+    summary: parsed.summary || `Analysis of ${event.title}`,
+    analyst_consensus: parsed.analyst_consensus || "Mixed signals",
+    risk_factors: Array.isArray(parsed.risk_factors)
+      ? parsed.risk_factors.slice(0, 5)
+      : [],
+    instrument_impacts: impacts,
+  };
+}
 
 export async function triggerPrediction(
   supabase: SupabaseClient,
-  eventId: string,
-  callbackBaseUrl: string
+  eventId: string
 ): Promise<string> {
   // Fetch event
   const { data: event, error } = await supabase
@@ -23,88 +115,91 @@ export async function triggerPrediction(
     .select("*")
     .eq("id", eventId)
     .single();
-  if (error) throw new Error(error.message);
 
-  // Format seed
-  const seed = formatEventAsMiroFishSeed({
-    id: event.id,
-    title: event.title,
-    summary: event.summary ?? "",
-    category: event.category,
-    severity: event.severity,
-    affected_instruments: (event.affected_instruments as string[]) ?? [],
-    published_at: event.published_at,
-    source: event.source,
-  });
+  if (error || !event) throw new Error(`Event not found: ${eventId}`);
 
-  const callbackUrl = `${callbackBaseUrl}/api/pulse/mirofish-webhook`;
-
-  // Submit to MiroFish
-  const { job_id } = await submitJob(seed, callbackUrl);
-
-  // Insert pending prediction row
+  // Create pending prediction
   const { data: pred, error: predErr } = await supabase
     .from("pulse_predictions")
     .insert({
       event_id: eventId,
-      mirofish_job_id: job_id,
-      status: "pending",
+      status: "running",
     })
     .select("id")
     .single();
+
   if (predErr) throw new Error(predErr.message);
+
+  // Run analysis asynchronously (don't block)
+  analyzeAndStore(supabase, pred.id, event as PulseEvent).catch(console.error);
 
   return pred.id;
 }
 
-export async function handleWebhookResult(
+async function analyzeAndStore(
   supabase: SupabaseClient,
-  jobId: string,
-  rawReport: unknown
+  predictionId: string,
+  event: PulseEvent
 ): Promise<void> {
-  // Find prediction row
-  const { data: pred, error } = await supabase
-    .from("pulse_predictions")
-    .select("id, event_id")
-    .eq("mirofish_job_id", jobId)
-    .maybeSingle();
-  if (error || !pred) throw new Error(`Prediction not found for job ${jobId}`);
+  const startTime = Date.now();
 
-  const report = parseImpactReport(rawReport);
-  const impactsMap: Record<string, InstrumentImpact> = {};
-  for (const impact of report.instrument_impacts) {
-    impactsMap[impact.instrument] = impact;
+  try {
+    const result = await analyzeWithOpenAI(event);
+    const duration = Date.now() - startTime;
+
+    const impactsMap: Record<string, InstrumentImpact> = {};
+    for (const impact of result.instrument_impacts) {
+      impactsMap[impact.instrument] = impact;
+    }
+
+    const reportJson = {
+      summary: result.summary,
+      analyst_consensus: result.analyst_consensus,
+      risk_factors: result.risk_factors,
+      instrument_impacts: result.instrument_impacts,
+      simulation_rounds: 1, // Direct analysis, not multi-agent
+      generated_at: new Date().toISOString(),
+    };
+
+    // Update prediction as complete
+    await supabase
+      .from("pulse_predictions")
+      .update({
+        status: "complete",
+        report_json: reportJson as unknown as Record<string, unknown>,
+        instrument_impacts: impactsMap as unknown as Record<string, unknown>,
+        completed_at: new Date().toISOString(),
+        simulation_duration_ms: duration,
+      })
+      .eq("id", predictionId);
+
+    // Generate alerts for watchlisted users
+    await generateAlerts(supabase, event, predictionId, impactsMap);
+  } catch (err) {
+    console.error("Prediction analysis failed:", err);
+    await supabase
+      .from("pulse_predictions")
+      .update({
+        status: "failed",
+        error_message: err instanceof Error ? err.message : "Unknown error",
+      })
+      .eq("id", predictionId);
   }
+}
 
-  const now = new Date().toISOString();
-
-  // Update prediction to complete
-  await supabase
-    .from("pulse_predictions")
-    .update({
-      status: "complete",
-      report_json: report as unknown as Record<string, unknown>,
-      instrument_impacts: impactsMap as unknown as Record<string, unknown>,
-      completed_at: now,
-    })
-    .eq("id", pred.id);
-
-  // Get event title for alert messages
-  const { data: event } = await supabase
-    .from("pulse_events")
-    .select("title, affected_instruments")
-    .eq("id", pred.event_id)
-    .single();
-
-  if (!event) return;
-
-  // Generate alerts for all watchlisted users watching affected instruments
-  const affectedInstruments = (event.affected_instruments as string[]) ?? [];
+async function generateAlerts(
+  supabase: SupabaseClient,
+  event: PulseEvent,
+  predictionId: string,
+  impactsMap: Record<string, InstrumentImpact>
+): Promise<void> {
+  const affectedInstruments = Object.keys(impactsMap);
   if (affectedInstruments.length === 0) return;
 
+  // Find users watching these instruments
   const { data: watchlistItems } = await supabase
     .from("pulse_watchlist")
-    .select("user_id, instrument")
+    .select("user_id, instrument, alert_threshold_pct")
     .in("instrument", affectedInstruments)
     .eq("is_active", true);
 
@@ -114,6 +209,12 @@ export async function handleWebhookResult(
     .map((w) => {
       const impact = impactsMap[w.instrument];
       if (!impact) return null;
+
+      // Only alert if magnitude exceeds threshold
+      if (impact.magnitude_pct < (w.alert_threshold_pct || 1.0)) {
+        return null;
+      }
+
       const message = generateAlertMessage(
         event.title,
         w.instrument,
@@ -121,10 +222,11 @@ export async function handleWebhookResult(
         impact.magnitude_pct,
         impact.confidence
       );
+
       return {
         user_id: w.user_id,
-        event_id: pred.event_id,
-        prediction_id: pred.id,
+        event_id: event.id,
+        prediction_id: predictionId,
         instrument: w.instrument,
         message,
         severity:
@@ -151,6 +253,7 @@ export async function getEventWithPrediction(
     .select("*")
     .eq("id", eventId)
     .single();
+
   if (error || !event) return null;
 
   const { data: pred } = await supabase
@@ -167,7 +270,8 @@ export async function getEventWithPrediction(
     prediction: pred
       ? {
           ...pred,
-          instrument_impacts: (pred.instrument_impacts as Record<string, InstrumentImpact>) ?? {},
+          instrument_impacts:
+            (pred.instrument_impacts as Record<string, InstrumentImpact>) ?? {},
         }
       : null,
   };
@@ -189,7 +293,6 @@ export async function getCorrelationGrid(
 ): Promise<CorrelationCell[]> {
   const since = new Date(Date.now() - days * 86400_000).toISOString();
 
-  // Fetch completed predictions with their events in the time window
   const { data: preds, error } = await supabase
     .from("pulse_predictions")
     .select("instrument_impacts, event_id")
@@ -198,7 +301,6 @@ export async function getCorrelationGrid(
 
   if (error || !preds?.length) return [];
 
-  // Fetch event categories for those prediction event IDs
   const eventIds = [...new Set(preds.map((p) => p.event_id))];
   const { data: events } = await supabase
     .from("pulse_events")
@@ -209,19 +311,20 @@ export async function getCorrelationGrid(
     (events ?? []).map((e) => [e.id, e.category as EventCategory])
   );
 
-  // Build grid
   const grid = new Map<string, CorrelationCell>();
 
   for (const pred of preds) {
     const category = categoryMap.get(pred.event_id);
     if (!category) continue;
-    const impacts = (pred.instrument_impacts as Record<string, InstrumentImpact>) ?? {};
+
+    const impacts =
+      (pred.instrument_impacts as Record<string, InstrumentImpact>) ?? {};
 
     for (const instrument of instruments) {
       const impact = impacts[instrument];
       if (!impact) continue;
-      const key = `${instrument}::${category}`;
 
+      const key = `${instrument}::${category}`;
       const existing = grid.get(key) ?? {
         instrument,
         category,
@@ -240,7 +343,6 @@ export async function getCorrelationGrid(
     }
   }
 
-  // Return all cells for all combinations (even empty ones)
   const cells: CorrelationCell[] = [];
   for (const instrument of instruments) {
     for (const category of EVENT_CATEGORIES) {

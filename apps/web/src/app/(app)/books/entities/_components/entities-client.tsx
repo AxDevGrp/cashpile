@@ -2,57 +2,57 @@
 
 import Link from "next/link";
 import { PageHeader, Button, Badge, Card, CardHeader, CardTitle, CardContent, CardDescription } from "@cashpile/ui";
-import type { BooksEntity } from "@/modules/books/types";
+import type { TaxEntity } from "@/modules/books/types";
 
 interface Props {
-  entities: BooksEntity[];
+  taxEntities: TaxEntity[];
   categoryCounts: Record<string, number>;
 }
 
 const ENTITY_TYPE_LABELS: Record<string, string> = {
-  individual: "Individual",
   llc: "LLC",
-  s_corp: "S Corp",
-  c_corp: "C Corp",
+  s_corp: "S-Corp",
+  c_corp: "C-Corp",
   partnership: "Partnership",
-  sole_prop: "Sole Proprietor",
+  sole_proprietorship: "Sole Proprietorship",
+  rental_property: "Rental Property",
 };
 
 const ENTITY_TYPE_COLORS: Record<string, string> = {
-  individual: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
   llc: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300",
   s_corp: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
   c_corp: "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300",
   partnership: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300",
-  sole_prop: "bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-300",
+  sole_proprietorship: "bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-300",
+  rental_property: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
 };
 
-export default function EntitiesClient({ entities, categoryCounts }: Props) {
+export default function EntitiesClient({ taxEntities, categoryCounts }: Props) {
   return (
-    <div className="space-y-6">
-      <PageHeader title="Entities" description="Business entities and tax profiles" actions={
+    <div className="space-y-6 p-6">
+      <PageHeader title="Tax Entities" description="Manage your business entities for tax reporting" actions={
         <Link href="/books/entities/new">
-          <Button>New Entity</Button>
+          <Button>New Tax Entity</Button>
         </Link>
       } />
 
-      {entities.length === 0 ? (
+      {taxEntities.length === 0 ? (
         <div className="rounded-lg border p-12 text-center text-muted-foreground">
-          <p className="font-medium">No entities yet</p>
-          <p className="text-sm mt-1">Create an entity to start organizing your books.</p>
+          <p className="font-medium">No Tax Entities yet</p>
+          <p className="text-sm mt-1">Create a Tax Entity to start organizing your business accounts and transactions.</p>
           <Link href="/books/entities/new">
-            <Button className="mt-4">Create Entity</Button>
+            <Button className="mt-4">Create Tax Entity</Button>
           </Link>
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {entities.map((entity) => (
+          {taxEntities.map((entity) => (
             <Card key={entity.id} className="hover:shadow-md transition-shadow">
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <CardTitle className="text-base">{entity.name}</CardTitle>
-                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${ENTITY_TYPE_COLORS[entity.type] ?? "bg-gray-100 text-gray-800"}`}>
-                    {ENTITY_TYPE_LABELS[entity.type] ?? entity.type}
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${ENTITY_TYPE_COLORS[entity.entity_type] ?? "bg-gray-100 text-gray-800"}`}>
+                    {ENTITY_TYPE_LABELS[entity.entity_type] ?? entity.entity_type}
                   </span>
                 </div>
                 {entity.tax_id && (
@@ -62,16 +62,13 @@ export default function EntitiesClient({ entities, categoryCounts }: Props) {
               <CardContent>
                 <div className="flex gap-4 text-sm text-muted-foreground">
                   <span>{categoryCounts[entity.id] ?? 0} categories</span>
-                  {entity.fiscal_year_start && (
-                    <span>FY starts month {entity.fiscal_year_start}</span>
-                  )}
                 </div>
                 <div className="flex gap-2 mt-3">
-                  <Link href={`/books/transactions?entityId=${entity.id}`}>
+                  <Link href={`/books/transactions?taxEntityId=${entity.id}`}>
                     <Button variant="outline" size="sm">Transactions</Button>
                   </Link>
-                  <Link href={`/books/reports?entityId=${entity.id}`}>
-                    <Button variant="outline" size="sm">Reports</Button>
+                  <Link href={`/books/tax`}>
+                    <Button variant="outline" size="sm">Tax Report</Button>
                   </Link>
                 </div>
               </CardContent>

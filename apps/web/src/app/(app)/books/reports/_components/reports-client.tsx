@@ -151,8 +151,8 @@ export default function ReportsClient({ entities, selectedEntityId, year, pnl, c
             ) : (
               <div className="space-y-4">
                 {scheduleE.properties.map((prop) => (
-                  <div key={prop.udaId} className="border rounded-lg p-4 space-y-3">
-                    <h3 className="font-medium">{prop.udaName}</h3>
+                  <div key={prop.taxEntityId} className="border rounded-lg p-4 space-y-3">
+                    <h3 className="font-medium">{prop.taxEntityName}</h3>
                     <div className="grid grid-cols-3 gap-4 text-sm">
                       <div>
                         <p className="text-muted-foreground text-xs">Rental Income</p>

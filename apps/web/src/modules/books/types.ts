@@ -3,40 +3,68 @@
  * All DB types mirror the books_* tables in packages/db/migrations/002_books.sql
  */
 
-// ─── Database row types ────────────────────────────────────────────────────
+// ─── Tax Entity (formerly UDA) ─────────────────────────────────────────────
+// A Tax Entity represents a business, LLC, rental property, or other entity
+// for tax reporting purposes. Financial accounts can be linked to Tax Entities.
 
+export interface TaxEntity {
+  id: string;
+  user_id: string;
+  name: string;
+  entity_type: "llc" | "s_corp" | "c_corp" | "partnership" | "sole_proprietorship" | "rental_property";
+  tax_id?: string | null;
+  address?: Record<string, string> | null;
+  description?: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+// DEPRECATED: BooksUda is being replaced by TaxEntity
+// Keeping for backward compatibility during migration
+export interface BooksUda {
+  id: string;
+  user_id: string;
+  name: string;
+  description?: string | null;
+  created_at: string;
+  updated_at?: string;
+}
+
+// DEPRECATED: BooksEntity is being consolidated into TaxEntity
 export interface BooksEntity {
   id: string;
   user_id: string;
   name: string;
   type: "individual" | "llc" | "s_corp" | "c_corp" | "partnership" | "sole_prop";
   tax_id?: string | null;
-  fiscal_year_start?: number | null; // 1-12
+  fiscal_year_start?: number | null;
   default_currency: string;
   created_at: string;
   updated_at: string;
 }
 
-export interface BooksUda {
-  id: string;
-  entity_id: string;
-  user_id: string;
-  name: string;
-  description?: string | null;
-  created_at: string;
-}
+// ─── Financial Account ─────────────────────────────────────────────────────
+// An actual bank account, credit card, or other financial institution account.
+// Can optionally be linked to a Tax Entity for grouping purposes.
 
 export interface BooksAccount {
   id: string;
-  uda_id: string;
+  uda_id?: string | null; // DEPRECATED: use tax_entity_id instead
+  tax_entity_id?: string | null; // Links to TaxEntity
   user_id: string;
   name: string;
   institution?: string | null;
+  institution_name?: string | null; // Alias for institution
+  last_four_digits?: string | null;
   account_type: "checking" | "savings" | "credit_card" | "loan" | "investment" | "other";
   currency: string;
+  current_balance?: number;
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  // Joined data
+  tax_entity?: TaxEntity | null;
 }
 
 export interface BooksCategory {
@@ -175,8 +203,8 @@ export interface CashFlowReport {
 }
 
 export interface ScheduleEProperty {
-  udaId: string;
-  udaName: string;
+  taxEntityId: string;
+  taxEntityName: string;
   income: number;
   expenses: Record<string, number>; // categoryName -> total
   netIncome: number;

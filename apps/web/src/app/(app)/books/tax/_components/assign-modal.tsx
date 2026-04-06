@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import type { TaxEntity } from "@/modules/books/types";
 
-type Uda = { id: string; name: string };
 type Transaction = {
   id: string;
   description: string | null;
@@ -10,10 +10,15 @@ type Transaction = {
   amount: number;
   date: string;
   type: string;
+  financial_account_id?: string;
+  books_financial_accounts?: {
+    name: string;
+    institution_name?: string;
+  };
 };
 
 interface Props {
-  uda: Uda;
+  taxEntity: TaxEntity;
   year: number;
   onClose: () => void;
 }
@@ -22,7 +27,7 @@ function fmt(n: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Math.abs(n));
 }
 
-export function AssignModal({ uda, year, onClose }: Props) {
+export function AssignModal({ taxEntity, year, onClose }: Props) {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [assignedIds, setAssignedIds] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -39,7 +44,7 @@ export function AssignModal({ uda, year, onClose }: Props) {
     try {
       const [txRes, reportRes] = await Promise.all([
         fetch(`/api/books/transactions?dateFrom=${year}-01-01&dateTo=${year}-12-31`),
-        fetch(`/api/tax/report?udaId=${uda.id}&year=${year}`),
+        fetch(`/api/tax/report?taxEntityId=${taxEntity.id}&year=${year}`),
       ]);
       const txData = txRes.ok ? await txRes.json() : { transactions: [] };
       const reportData = reportRes.ok ? await reportRes.json() : { transactions: [] };
@@ -49,7 +54,7 @@ export function AssignModal({ uda, year, onClose }: Props) {
     } finally {
       setLoading(false);
     }
-  }, [uda.id, year]);
+  }, [taxEntity.id, year]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -70,7 +75,7 @@ export function AssignModal({ uda, year, onClose }: Props) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         transactionIds: Array.from(selected),
-        udaId: uda.id,
+        taxEntityId: taxEntity.id,
         businessPct,
         deductionPct,
         isDeductible,
@@ -88,13 +93,13 @@ export function AssignModal({ uda, year, onClose }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-      <div className="bg-card border border-border rounded-xl w-full max-w-2xl max-h-[85vh] flex flex-col shadow-xl">
+      <div className="bg-card border border-border rounded-xl w-full max-w-3xl max-h-[85vh] flex flex-col shadow-xl">
         <div className="flex items-center justify-between p-4 border-b border-border">
           <div>
             <div className="font-semibold">Assign Transactions</div>
-            <div className="text-xs text-muted-foreground">{uda.name} · {year}</div>
+            <div className="text-xs text-muted-foreground">{taxEntity.name} · {year}</div>
           </div>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground text-xl leading-none">&times;</button>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground text-xl leading-none">×</button>
         </div>
 
         <div className="p-4 border-b border-border space-y-3">
@@ -139,6 +144,7 @@ export function AssignModal({ uda, year, onClose }: Props) {
                 <tr>
                   <th className="w-8 p-2"></th>
                   <th className="text-left p-2 text-muted-foreground font-medium">Date</th>
+                  <th className="text-left p-2 text-muted-foreground font-medium">Account</th>
                   <th className="text-left p-2 text-muted-foreground font-medium">Description</th>
                   <th className="text-right p-2 text-muted-foreground font-medium">Amount</th>
                 </tr>
@@ -147,14 +153,16 @@ export function AssignModal({ uda, year, onClose }: Props) {
                 {filtered.map(t => {
                   const isAssigned = assignedIds.has(t.id);
                   const isSelected = selected.has(t.id);
+                  const accountName = t.books_financial_accounts?.name ?? "Unknown Account";
                   return (
                     <tr key={t.id} onClick={() => toggle(t.id)} className={`border-b border-border/50 cursor-pointer hover:bg-muted/20 ${isAssigned ? "opacity-50" : ""}`}>
                       <td className="p-2 text-center">
                         {isAssigned ? <span className="text-green-500">✓</span> : <input type="checkbox" checked={isSelected} readOnly />}
                       </td>
-                      <td className="p-2 text-muted-foreground">{t.date}</td>
+                      <td className="p-2 text-muted-foreground whitespace-nowrap">{t.date}</td>
+                      <td className="p-2 text-muted-foreground text-xs">{accountName}</td>
                       <td className="p-2">{t.merchant || t.description || "—"}</td>
-                      <td className={`p-2 text-right ${t.amount < 0 ? "text-red-400" : "text-green-500"}`}>
+                      <td className={`p-2 text-right whitespace-nowrap ${t.amount < 0 ? "text-red-400" : "text-green-500"}`}>
                         {t.amount < 0 ? "-" : "+"}{fmt(t.amount)}
                       </td>
                     </tr>

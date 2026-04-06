@@ -50,13 +50,8 @@ export async function fetchEventWithPrediction(
 
 export async function triggerPredictionForEvent(eventId: string): Promise<string> {
   const supabase = await createServerSupabaseClient();
-  const baseUrl =
-    process.env.NEXT_PUBLIC_APP_URL ??
-    process.env.VERCEL_URL
-      ? `https://${process.env.VERCEL_URL}`
-      : "http://localhost:3000";
 
-  const predictionId = await triggerPrediction(supabase, eventId, baseUrl);
+  const predictionId = await triggerPrediction(supabase, eventId);
   revalidatePath("/pulse/events");
   revalidatePath(`/pulse/events/${eventId}`);
   return predictionId;

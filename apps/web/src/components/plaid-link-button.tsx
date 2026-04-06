@@ -5,13 +5,17 @@ import { usePlaidLink } from "react-plaid-link";
 import { Button } from "@cashpile/ui";
 
 interface Props {
-  udaId?: string;
+  taxEntityId?: string; // NEW: Use tax_entity_id instead of udaId
+  udaId?: string; // DEPRECATED: For backward compatibility
   onSuccess?: (institution: string) => void;
 }
 
-export default function PlaidLinkButton({ udaId, onSuccess }: Props) {
+export default function PlaidLinkButton({ taxEntityId, udaId, onSuccess }: Props) {
   const [linkToken, setLinkToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // Use the new taxEntityId if provided, fall back to deprecated udaId
+  const entityId = taxEntityId ?? udaId;
 
   const fetchLinkToken = useCallback(async () => {
     setLoading(true);
@@ -34,7 +38,7 @@ export default function PlaidLinkButton({ udaId, onSuccess }: Props) {
         const res = await fetch("/api/plaid/exchange-token", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ public_token, uda_id: udaId }),
+          body: JSON.stringify({ public_token, tax_entity_id: entityId, uda_id: entityId }),
         });
         const data = await res.json();
         if (data.institution) {

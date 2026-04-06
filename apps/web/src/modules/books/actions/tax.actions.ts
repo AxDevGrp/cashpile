@@ -2,10 +2,13 @@
 
 import { createServerSupabaseClient } from "@cashpile/db";
 
+// ─── Tax View Types ────────────────────────────────────────────────────────
+// Tax views link transactions to Tax Entities for tax reporting purposes.
+
 export type TaxView = {
   id: string;
   user_id: string;
-  uda_id: string;
+  tax_entity_id: string; // Links to books_business_entities
   transaction_id: string;
   tax_amount: number | null;
   tax_description: string | null;
@@ -24,6 +27,7 @@ export type TaxView = {
     amount: number;
     date: string;
     transaction_type: string;
+    financial_account_id?: string;
   };
   books_categories?: {
     id: number;
@@ -48,13 +52,15 @@ export type TaxReport = {
   transactions: TaxView[];
 };
 
-export async function listTaxViews(udaId: string, year?: number): Promise<TaxView[]> {
+// ─── Tax View CRUD ─────────────────────────────────────────────────────────
+
+export async function listTaxViews(taxEntityId: string, year?: number): Promise<TaxView[]> {
   const supabase = await createServerSupabaseClient();
 
   let q = (supabase as any)
     .from("books_tax_transaction_views")
-    .select(`*, books_transactions(id, description, merchant, amount, date, transaction_type), books_categories(id, name, category_type)`)
-    .eq("uda_id", udaId)
+    .select(`*, books_transactions(id, description, merchant, amount, date, transaction_type, financial_account_id), books_categories(id, name, category_type)`)
+    .eq("tax_entity_id", taxEntityId)
     .order("tax_date", { ascending: false });
 
   if (year) {
@@ -66,9 +72,13 @@ export async function listTaxViews(udaId: string, year?: number): Promise<TaxVie
   return (data ?? []) as TaxView[];
 }
 
+// ─── Transaction Assignment ────────────────────────────────────────────────
+// Assign transactions to Tax Entities for tax reporting.
+// Any transaction can be assigned to any Tax Entity, regardless of source account.
+
 export async function assignTransactions(params: {
   transactionIds: string[];
-  udaId: string;
+  taxEntityId: string;
   businessPct?: number;
   deductionPct?: number;
   isDeductible?: boolean;
@@ -90,7 +100,7 @@ export async function assignTransactions(params: {
 
   const rows = (txns ?? []).map((t: any) => ({
     user_id: user.id,
-    uda_id: params.udaId,
+    tax_entity_id: params.taxEntityId,
     transaction_id: t.id,
     tax_amount: Math.abs(t.amount) * (businessPct / 100),
     tax_date: t.date,
@@ -107,7 +117,7 @@ export async function assignTransactions(params: {
   for (const row of rows) {
     const { error } = await (supabase as any)
       .from("books_tax_transaction_views")
-      .upsert(row, { onConflict: "uda_id,transaction_id", ignoreDuplicates: true });
+      .upsert(row, { onConflict: "tax_entity_id,transaction_id", ignoreDuplicates: true });
     if (error && error.code === "23505") {
       skipped++;
     } else if (error) {
@@ -123,22 +133,24 @@ export async function assignTransactions(params: {
 
 export async function unassignTransactions(params: {
   transactionIds: string[];
-  udaId: string;
+  taxEntityId: string;
 }): Promise<void> {
   const supabase = await createServerSupabaseClient();
   const { error } = await (supabase as any)
     .from("books_tax_transaction_views")
     .delete()
-    .eq("uda_id", params.udaId)
+    .eq("tax_entity_id", params.taxEntityId)
     .in("transaction_id", params.transactionIds);
   if (error) throw new Error(error.message);
 }
 
+// ─── Tax Reporting ─────────────────────────────────────────────────────────
+
 export async function generateTaxReport(params: {
-  udaId: string;
+  taxEntityId: string;
   year: number;
 }): Promise<TaxReport> {
-  const views = await listTaxViews(params.udaId, params.year);
+  const views = await listTaxViews(params.taxEntityId, params.year);
 
   const byCategory: Record<string, {
     categoryId: number | null;
@@ -199,17 +211,17 @@ export async function generateTaxReport(params: {
   };
 }
 
-export async function getTaxSummaryForUdas(
-  udaIds: string[],
+export async function getTaxSummaryForEntities(
+  taxEntityIds: string[],
   year: number
 ): Promise<Record<string, { totalIncome: number; totalExpenses: number; transactionCount: number }>> {
-  if (!udaIds.length) return {};
+  if (!taxEntityIds.length) return {};
 
   const supabase = await createServerSupabaseClient();
   const { data, error } = await (supabase as any)
     .from("books_tax_transaction_views")
-    .select(`uda_id, tax_amount, business_percentage, books_transactions(amount, transaction_type)`)
-    .in("uda_id", udaIds)
+    .select(`tax_entity_id, tax_amount, business_percentage, books_transactions(amount, transaction_type)`)
+    .in("tax_entity_id", taxEntityIds)
     .gte("tax_date", `${year}-01-01`)
     .lte("tax_date", `${year}-12-31`);
 
@@ -217,17 +229,47 @@ export async function getTaxSummaryForUdas(
 
   const result: Record<string, { totalIncome: number; totalExpenses: number; transactionCount: number }> = {};
   for (const row of (data ?? [])) {
-    if (!result[row.uda_id]) {
-      result[row.uda_id] = { totalIncome: 0, totalExpenses: 0, transactionCount: 0 };
+    if (!result[row.tax_entity_id]) {
+      result[row.tax_entity_id] = { totalIncome: 0, totalExpenses: 0, transactionCount: 0 };
     }
     const txn = row.books_transactions;
     const amount = row.tax_amount ?? Math.abs(txn?.amount ?? 0) * ((row.business_percentage ?? 100) / 100);
-    result[row.uda_id].transactionCount++;
+    result[row.tax_entity_id].transactionCount++;
     if (txn?.transaction_type === "credit" || (txn?.amount ?? 0) > 0) {
-      result[row.uda_id].totalIncome += amount;
+      result[row.tax_entity_id].totalIncome += amount;
     } else {
-      result[row.uda_id].totalExpenses += amount;
+      result[row.tax_entity_id].totalExpenses += amount;
     }
   }
   return result;
+}
+
+// ─── Backward Compatibility ─────────────────────────────────────────────────
+// DEPRECATED: These functions use old 'uda' terminology
+// Use the TaxEntity functions above instead
+
+export async function listTaxViewsByUda(udaId: string, year?: number): Promise<TaxView[]> {
+  return listTaxViews(udaId, year);
+}
+
+export async function assignTransactionsByUda(params: {
+  transactionIds: string[];
+  udaId: string;
+  businessPct?: number;
+  deductionPct?: number;
+  isDeductible?: boolean;
+  notes?: string;
+  categoryId?: number;
+}): Promise<{ assigned: number; skipped: number }> {
+  return assignTransactions({
+    ...params,
+    taxEntityId: params.udaId,
+  });
+}
+
+export async function getTaxSummaryForUdas(
+  udaIds: string[],
+  year: number
+): Promise<Record<string, { totalIncome: number; totalExpenses: number; transactionCount: number }>> {
+  return getTaxSummaryForEntities(udaIds, year);
 }

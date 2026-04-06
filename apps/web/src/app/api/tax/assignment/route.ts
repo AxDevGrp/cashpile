@@ -3,16 +3,18 @@ import { assignTransactions, unassignTransactions } from "@/modules/books/action
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { transactionIds, udaId, businessPct, deductionPct, isDeductible, notes, categoryId } = body;
+  // Support both new taxEntityId and deprecated udaId
+  const taxEntityId = body.taxEntityId ?? body.udaId;
+  const { transactionIds, businessPct, deductionPct, isDeductible, notes, categoryId } = body;
 
-  if (!transactionIds?.length || !udaId) {
-    return NextResponse.json({ error: "transactionIds and udaId required" }, { status: 400 });
+  if (!transactionIds?.length || !taxEntityId) {
+    return NextResponse.json({ error: "transactionIds and taxEntityId required" }, { status: 400 });
   }
 
   try {
     const result = await assignTransactions({
       transactionIds,
-      udaId,
+      taxEntityId,
       businessPct,
       deductionPct,
       isDeductible,
@@ -27,14 +29,16 @@ export async function POST(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   const body = await req.json();
-  const { transactionIds, udaId } = body;
+  // Support both new taxEntityId and deprecated udaId
+  const taxEntityId = body.taxEntityId ?? body.udaId;
+  const { transactionIds } = body;
 
-  if (!transactionIds?.length || !udaId) {
-    return NextResponse.json({ error: "transactionIds and udaId required" }, { status: 400 });
+  if (!transactionIds?.length || !taxEntityId) {
+    return NextResponse.json({ error: "transactionIds and taxEntityId required" }, { status: 400 });
   }
 
   try {
-    await unassignTransactions({ transactionIds, udaId });
+    await unassignTransactions({ transactionIds, taxEntityId });
     return NextResponse.json({ success: true });
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 });

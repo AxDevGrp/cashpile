@@ -3,19 +3,21 @@
 import { useState } from "react";
 import { PageHeader, Button, Badge, Card, CardHeader, CardTitle, CardContent } from "@cashpile/ui";
 import PlaidLinkButton from "@/components/plaid-link-button";
-import type { BooksEntity, BooksUda, BooksAccount } from "@/modules/books/types";
+import type { TaxEntity, BooksAccount } from "@/modules/books/types";
+import { assignAccountToTaxEntity } from "@/modules/books/actions/account.actions";
 
 interface PlaidItem {
   id: string;
-  uda_id: string | null;
+  tax_entity_id?: string | null;
+  uda_id?: string | null; // DEPRECATED
   institution_name: string | null;
   status: string;
   last_synced_at: string | null;
 }
 
 interface Props {
-  entities: BooksEntity[];
-  udas: (BooksUda & { books_financial_accounts?: BooksAccount[] })[];
+  taxEntities: TaxEntity[];
+  accounts: BooksAccount[];
   plaidItems: PlaidItem[];
 }
 
@@ -28,14 +30,28 @@ const ACCOUNT_TYPE_LABELS: Record<string, string> = {
   other:       "Other",
 };
 
-function UdaCard({
-  uda,
+const ENTITY_TYPE_LABELS: Record<string, string> = {
+  llc: "LLC",
+  s_corp: "S-Corp",
+  c_corp: "C-Corp",
+  partnership: "Partnership",
+  sole_proprietorship: "Sole Proprietorship",
+  rental_property: "Rental Property",
+};
+
+function AccountCard({
+  account,
   plaidItem,
+  taxEntities,
+  onAssign,
 }: {
-  uda: BooksUda & { books_financial_accounts?: BooksAccount[] };
+  account: BooksAccount;
   plaidItem?: PlaidItem;
+  taxEntities: TaxEntity[];
+  onAssign: (accountId: string, taxEntityId: string | null) => void;
 }) {
   const [syncing, setSyncing] = useState(false);
+  const [isAssigning, setIsAssigning] = useState(false);
 
   async function handleRefresh() {
     if (!plaidItem) return;
@@ -49,14 +65,16 @@ function UdaCard({
     window.location.reload();
   }
 
+  const assignedEntity = taxEntities.find(e => e.id === account.tax_entity_id);
+
   return (
     <Card>
       <CardHeader className="pb-2">
         <div className="flex items-start justify-between gap-2">
-          <div>
-            <CardTitle className="text-base">{uda.name}</CardTitle>
-            {uda.description && (
-              <p className="text-xs text-muted-foreground mt-0.5">{uda.description}</p>
+          <div className="flex-1">
+            <CardTitle className="text-base">{account.name}</CardTitle>
+            {account.institution_name && (
+              <p className="text-xs text-muted-foreground mt-0.5">{account.institution_name}</p>
             )}
           </div>
           <div className="flex gap-2 shrink-0">
@@ -70,7 +88,7 @@ function UdaCard({
                 </Button>
               </>
             ) : (
-              <PlaidLinkButton udaId={uda.id} />
+              <PlaidLinkButton taxEntityId={account.tax_entity_id ?? undefined} />
             )}
           </div>
         </div>
@@ -80,56 +98,112 @@ function UdaCard({
           </p>
         )}
       </CardHeader>
-      <CardContent>
-        {(uda.books_financial_accounts ?? []).length === 0 ? (
-          <p className="text-sm text-muted-foreground">No financial accounts</p>
-        ) : (
-          <ul className="space-y-1">
-            {(uda.books_financial_accounts ?? []).map((acct) => (
-              <li key={acct.id} className="flex justify-between text-sm">
-                <span>{acct.name}</span>
+      <CardContent className="space-y-3">
+        <div className="flex items-center justify-between">
+          <Badge variant="outline" className="text-xs">
+            {ACCOUNT_TYPE_LABELS[account.account_type] ?? account.account_type}
+          </Badge>
+          {account.current_balance != null && (
+            <span className="text-muted-foreground text-sm">
+              ${Number(account.current_balance).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+            </span>
+          )}
+        </div>
+
+        {/* Tax Entity Assignment */}
+        <div className="pt-2 border-t border-border">
+          <div className="flex items-center justify-between">
+            <div className="text-sm">
+              {assignedEntity ? (
                 <div className="flex items-center gap-2">
-                  {(acct as any).current_balance != null && (
-                    <span className="text-muted-foreground text-xs">
-                      ${Number((acct as any).current_balance).toLocaleString("en-US", { minimumFractionDigits: 2 })}
-                    </span>
-                  )}
-                  <Badge variant="outline" className="text-xs">
-                    {ACCOUNT_TYPE_LABELS[acct.account_type] ?? acct.account_type}
-                  </Badge>
+                  <span className="text-muted-foreground">Tax Entity:</span>
+                  <Badge variant="secondary" className="text-xs">{assignedEntity.name}</Badge>
                 </div>
-              </li>
-            ))}
-          </ul>
-        )}
+              ) : (
+                <span className="text-muted-foreground">Not assigned to a Tax Entity</span>
+              )}
+            </div>
+            <Button 
+              size="sm" 
+              variant="ghost" 
+              className="h-6 px-2 text-xs"
+              onClick={() => setIsAssigning(!isAssigning)}
+            >
+              {isAssigning ? "Cancel" : assignedEntity ? "Change" : "Assign"}
+            </Button>
+          </div>
+          
+          {isAssigning && (
+            <div className="mt-2 space-y-2">
+              <select
+                className="w-full bg-background border border-border rounded-md px-3 py-1.5 text-sm"
+                value={account.tax_entity_id ?? ""}
+                onChange={(e) => {
+                  const newEntityId = e.target.value || null;
+                  onAssign(account.id, newEntityId);
+                  setIsAssigning(false);
+                }}
+              >
+                <option value="">-- Not Assigned --</option>
+                {taxEntities.map((entity) => (
+                  <option key={entity.id} value={entity.id}>
+                    {entity.name} ({ENTITY_TYPE_LABELS[entity.entity_type] ?? entity.entity_type})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
       </CardContent>
     </Card>
   );
 }
 
-export default function AccountsClient({ entities, udas, plaidItems }: Props) {
-  const getPlaidItem = (udaId: string) => plaidItems.find((p) => p.uda_id === udaId);
+export default function AccountsClient({ taxEntities, accounts, plaidItems }: Props) {
+  const [localAccounts, setLocalAccounts] = useState(accounts);
 
-  if (entities.length === 0) {
+  const getPlaidItem = (accountId: string) => 
+    plaidItems.find((p) => p.tax_entity_id === localAccounts.find(a => a.id === accountId)?.tax_entity_id);
+
+  async function handleAssign(accountId: string, taxEntityId: string | null) {
+    try {
+      await assignAccountToTaxEntity(accountId, taxEntityId);
+      // Update local state
+      setLocalAccounts(prev => 
+        prev.map(a => a.id === accountId ? { ...a, tax_entity_id: taxEntityId } : a)
+      );
+    } catch (err) {
+      console.error("Failed to assign account:", err);
+      alert("Failed to assign account to Tax Entity");
+    }
+  }
+
+  // Group accounts by tax entity
+  const accountsByEntity = new Map<string | null, BooksAccount[]>();
+  accountsByEntity.set(null, []); // Unassigned
+  taxEntities.forEach(e => accountsByEntity.set(e.id, []));
+  
+  localAccounts.forEach(account => {
+    const entityId = account.tax_entity_id ?? null;
+    const list = accountsByEntity.get(entityId) ?? [];
+    list.push(account);
+    accountsByEntity.set(entityId, list);
+  });
+
+  const unassignedAccounts = accountsByEntity.get(null) ?? [];
+
+  if (taxEntities.length === 0 && accounts.length === 0) {
     return (
       <div className="space-y-6 p-6">
         <PageHeader
           title="Accounts"
-          description="Connect your financial accounts or manage account groups"
+          description="Connect your financial accounts and assign them to Tax Entities"
           actions={<PlaidLinkButton />}
         />
-        {udas.length === 0 ? (
-          <div className="rounded-lg border p-12 text-center text-muted-foreground">
-            <p className="mb-4">No accounts yet.</p>
-            <PlaidLinkButton />
-          </div>
-        ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {udas.map((uda) => (
-              <UdaCard key={uda.id} uda={uda} plaidItem={getPlaidItem(uda.id)} />
-            ))}
-          </div>
-        )}
+        <div className="rounded-lg border p-12 text-center text-muted-foreground">
+          <p className="mb-4">No accounts yet.</p>
+          <PlaidLinkButton />
+        </div>
       </div>
     );
   }
@@ -138,37 +212,55 @@ export default function AccountsClient({ entities, udas, plaidItems }: Props) {
     <div className="space-y-6 p-6">
       <PageHeader
         title="Accounts"
-        description="Manage your entities and financial accounts"
+        description="Manage your financial accounts and their Tax Entity assignments"
         actions={<PlaidLinkButton />}
       />
+
+      {/* Tax Entities with Accounts */}
       <div className="space-y-8">
-        {entities.map((entity) => {
-          const entityUdas = udas.filter((u) => (u as any).entity_id === entity.id);
+        {taxEntities.map((entity) => {
+          const entityAccounts = accountsByEntity.get(entity.id) ?? [];
           return (
             <div key={entity.id} className="space-y-3">
               <div className="flex items-center gap-2">
                 <h2 className="text-lg font-semibold">{entity.name}</h2>
-                <Badge variant="secondary">{entity.type}</Badge>
-              </div>
-              {entityUdas.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No accounts for this entity.</p>
+                <Badge variant="secondary">{ENTITY_TYPE_LABELS[entity.entity_type] ?? entity.entity_type}</Badge>
+              </div>              
+              {entityAccounts.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No accounts assigned to this Tax Entity.</p>
               ) : (
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  {entityUdas.map((uda) => (
-                    <UdaCard key={uda.id} uda={uda} plaidItem={getPlaidItem(uda.id)} />
+                  {entityAccounts.map((account) => (
+                    <AccountCard 
+                      key={account.id} 
+                      account={account} 
+                      plaidItem={getPlaidItem(account.id)}
+                      taxEntities={taxEntities}
+                      onAssign={handleAssign}
+                    />
                   ))}
                 </div>
               )}
             </div>
           );
         })}
-        {/* Unassigned UDAs */}
-        {udas.filter((u) => !(u as any).entity_id).length > 0 && (
+
+        {/* Unassigned Accounts */}
+        {unassignedAccounts.length > 0 && (
           <div className="space-y-3">
-            <h2 className="text-lg font-semibold text-muted-foreground">Unassigned</h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-lg font-semibold text-muted-foreground">Unassigned Accounts</h2>
+              <Badge variant="outline">Personal</Badge>
+            </div>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {udas.filter((u) => !(u as any).entity_id).map((uda) => (
-                <UdaCard key={uda.id} uda={uda} plaidItem={getPlaidItem(uda.id)} />
+              {unassignedAccounts.map((account) => (
+                <AccountCard 
+                  key={account.id} 
+                  account={account} 
+                  plaidItem={getPlaidItem(account.id)}
+                  taxEntities={taxEntities}
+                  onAssign={handleAssign}
+                />
               ))}
             </div>
           </div>

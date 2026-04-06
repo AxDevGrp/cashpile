@@ -1,5 +1,5 @@
 import { createServerSupabaseClient } from "@cashpile/db";
-import { listEntities } from "@/modules/books/actions/entity.actions";
+import { listTaxEntities } from "@/modules/books/actions/entity.actions";
 import { ReportService } from "@/modules/books/services/report.service";
 import ReportsClient from "./_components/reports-client";
 
@@ -18,14 +18,14 @@ export default async function ReportsPage({
 }: {
   searchParams: { entityId?: string; year?: string };
 }) {
-  const entities = await listEntities();
-  const entityId = searchParams.entityId ?? entities[0]?.id;
+  const taxEntities = await listTaxEntities();
+  const entityId = searchParams.entityId ?? taxEntities[0]?.id;
   const year = parseInt(searchParams.year ?? String(getCurrentYear()));
 
   if (!entityId) {
     return (
       <div className="p-8 text-center text-muted-foreground">
-        <p>No entities found. <a href="/books/entities/new" className="underline">Create one</a> to see reports.</p>
+        <p>No Tax Entities found. <a href="/books/entities/new" className="underline">Create one</a> to see reports.</p>
       </div>
     );
   }
@@ -42,7 +42,7 @@ export default async function ReportsPage({
 
   return (
     <ReportsClient
-      entities={entities}
+      entities={taxEntities}
       selectedEntityId={entityId}
       year={year}
       pnl={pnl}

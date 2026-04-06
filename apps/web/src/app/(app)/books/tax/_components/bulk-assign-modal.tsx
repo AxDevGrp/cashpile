@@ -1,16 +1,15 @@
 "use client";
 
 import { useState } from "react";
-
-type Uda = { id: string; name: string };
+import type { TaxEntity } from "@/modules/books/types";
 
 interface Props {
-  udas: Uda[];
+  taxEntities: TaxEntity[];
   onClose: () => void;
 }
 
-export function BulkAssignModal({ udas, onClose }: Props) {
-  const [udaId, setUdaId] = useState(udas[0]?.id ?? "");
+export function BulkAssignModal({ taxEntities, onClose }: Props) {
+  const [taxEntityId, setTaxEntityId] = useState(taxEntities[0]?.id ?? "");
   const [businessPct, setBusinessPct] = useState(100);
   const [deductionPct, setDeductionPct] = useState(100);
   const [isDeductible, setIsDeductible] = useState(false);
@@ -52,7 +51,7 @@ export function BulkAssignModal({ udas, onClose }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           transactionIds: batch,
-          udaId,
+          taxEntityId,
           businessPct,
           deductionPct,
           isDeductible,
@@ -81,14 +80,14 @@ export function BulkAssignModal({ udas, onClose }: Props) {
 
         <div className="p-4 space-y-4">
           <label className="block text-sm space-y-1">
-            <span className="text-muted-foreground">Entity (UDA)</span>
+            <span className="text-muted-foreground">Tax Entity</span>
             <select
-              value={udaId}
-              onChange={e => setUdaId(e.target.value)}
+              value={taxEntityId}
+              onChange={e => setTaxEntityId(e.target.value)}
               className="w-full bg-background border border-border rounded-md px-3 py-1.5 text-sm"
             >
-              {udas.map(u => (
-                <option key={u.id} value={u.id}>{u.name}</option>
+              {taxEntities.map(e => (
+                <option key={e.id} value={e.id}>{e.name}</option>
               ))}
             </select>
           </label>
@@ -185,7 +184,7 @@ export function BulkAssignModal({ udas, onClose }: Props) {
           {!result && (
             <button
               onClick={handleSubmit}
-              disabled={saving || !udaId}
+              disabled={saving || !taxEntityId}
               className="px-4 py-1.5 rounded-md text-sm bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
             >
               {saving ? "Processing..." : "Bulk Assign"}
