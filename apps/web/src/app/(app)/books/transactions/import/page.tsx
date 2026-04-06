@@ -8,5 +8,5 @@ export default async function ImportPage() {
   const taxEntities = await listTaxEntities();
   const accounts = await listAccounts();
 
-  return <ImportWizard taxEntities={taxEntities} initialAccounts={accounts} />;
+  return <ImportWizard entities={taxEntities} initialUdas={[]} />;
 }

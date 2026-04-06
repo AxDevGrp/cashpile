@@ -7,12 +7,12 @@ import { Button, Progress, Badge, Dialog, DialogContent, DialogHeader, DialogTit
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@cashpile/ui";
 import { formatCurrency } from "@cashpile/ui";
 import { getImportPreview, executeImport } from "@/modules/books/actions/import.actions";
-import type { BooksEntity, BooksUda, ImportPreview } from "@/modules/books/types";
+import type { TaxEntity, BooksUda, ImportPreview } from "@/modules/books/types";
 
 type Step = 1 | 2 | 3;
 
 interface Props {
-  entities: BooksEntity[];
+  entities: TaxEntity[];
   initialUdas: (BooksUda & { books_financial_accounts?: { id: string; name: string }[] })[];
 }
 
