@@ -15,7 +15,8 @@ import {
   Minus,
   Globe,
   AlertTriangle,
-  Newspaper
+  Newspaper,
+  CheckCircle
 } from "lucide-react";
 import { PageHeader } from "@cashpile/ui";
 import Link from "next/link";
@@ -79,6 +80,9 @@ export default function PulseDashboard({
   const [isPending, startTransition] = useTransition();
   const [lastIngestResult, setLastIngestResult] = useState<{
     total_ingested?: number;
+    rss?: { ingested: number; skipped: number; errors: number };
+    x?: { ingested: number; skipped: number; errors: number };
+    error?: string;
   } | null>(null);
 
   const planLimits = PULSE_INSTRUMENT_LIMITS[userPlan];
@@ -92,16 +96,24 @@ export default function PulseDashboard({
   function handleManualIngest() {
     startTransition(async () => {
       try {
+        console.log("Starting feed ingestion...");
         const result = await ingestFeeds();
+        console.log("Ingest complete:", result);
         setLastIngestResult(result);
+        
+        // Refresh events and unread count
         const [newEvents, newUnread] = await Promise.all([
           listEvents({ limit: 10 }),
           getUnreadCount().catch(() => 0),
         ]);
         setRecentEvents(newEvents);
         setUnreadCount(newUnread);
+        
+        // Clear the notification after 5 seconds
+        setTimeout(() => setLastIngestResult(null), 5000);
       } catch (err) {
         console.error("Manual ingest failed:", err);
+        setLastIngestResult({ error: err instanceof Error ? err.message : "Unknown error" });
       }
     });
   }
@@ -155,10 +167,43 @@ export default function PulseDashboard({
 
       {/* Pull Result */}
       {lastIngestResult && (
-        <div className="rounded-lg border border-green-200 bg-green-50 p-3">
-          <p className="text-sm text-green-800">
-            Pulled {lastIngestResult.total_ingested} new events
-          </p>
+        <div className={`rounded-lg border p-4 ${
+          'error' in lastIngestResult 
+            ? "border-red-200 bg-red-50" 
+            : lastIngestResult.total_ingested === 0
+            ? "border-yellow-200 bg-yellow-50"
+            : "border-green-200 bg-green-50"
+        }`}>
+          <div className="flex items-center gap-2">
+            {'error' in lastIngestResult ? (
+              <>
+                <AlertTriangle className="h-5 w-5 text-red-600" />
+                <div>
+                  <p className="text-sm font-medium text-red-800">Pull failed</p>
+                  <p className="text-xs text-red-600">{lastIngestResult.error}</p>
+                </div>
+              </>
+            ) : lastIngestResult.total_ingested === 0 ? (
+              <>
+                <Minus className="h-5 w-5 text-yellow-600" />
+                <p className="text-sm text-yellow-800">No new events found</p>
+              </>
+            ) : (
+              <>
+                <CheckCircle className="h-5 w-5 text-green-600" />
+                <div>
+                  <p className="text-sm font-medium text-green-800">
+                    Pulled {lastIngestResult.total_ingested} new events
+                  </p>
+                  {(lastIngestResult as any).rss && (lastIngestResult as any).x && (
+                    <p className="text-xs text-green-600">
+                      RSS: {(lastIngestResult as any).rss.ingested} | X: {(lastIngestResult as any).x.ingested}
+                    </p>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
         </div>
       )}
 
