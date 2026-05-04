@@ -40,6 +40,10 @@ const ENTITY_TYPE_LABELS: Record<string, string> = {
   rental_property: "Rental Property",
 };
 
+function isInstitutionalAccount(account: BooksAccount) {
+  return Boolean(account.plaid_account_id || account.plaid_item_id);
+}
+
 function AccountCard({
   account,
   plaidItem,
@@ -89,7 +93,9 @@ function AccountCard({
                 </Button>
               </>
             ) : (
-              <PlaidLinkButton taxEntityId={account.tax_entity_id ?? undefined} />
+              <Badge variant="outline" className="text-xs">
+                UDA
+              </Badge>
             )}
           </div>
         </div>
@@ -165,11 +171,7 @@ export default function AccountsClient({ taxEntities, accounts, plaidItems }: Pr
 
   const getPlaidItem = (accountId: string) => {
     const account = localAccounts.find(a => a.id === accountId);
-    const plaidItemId = (account as any)?.plaid_item_id;
-    return (
-      plaidItems.find((p) => p.id === plaidItemId) ??
-      plaidItems.find((p) => p.tax_entity_id === account?.tax_entity_id)
-    );
+    return plaidItems.find((p) => p.id === account?.plaid_item_id);
   };
 
   async function handleAssign(accountId: string, taxEntityId: string | null) {
@@ -204,7 +206,7 @@ export default function AccountsClient({ taxEntities, accounts, plaidItems }: Pr
       <div className="space-y-6 p-6">
         <PageHeader
           title="Accounts"
-          description="Connect your financial accounts and assign them to Tax Entities"
+          description="Connect bank and credit card accounts. UDAs are logical groupings and do not connect through Plaid."
           actions={<PlaidLinkButton />}
         />
         <div className="rounded-lg border p-12 text-center text-muted-foreground">
@@ -219,7 +221,7 @@ export default function AccountsClient({ taxEntities, accounts, plaidItems }: Pr
     <div className="space-y-6 p-6">
       <PageHeader
         title="Accounts"
-        description="Manage your financial accounts and their Tax Entity assignments"
+        description="Manage connected bank/credit card accounts separately from logical User Defined Accounts."
         actions={<PlaidLinkButton />}
       />
 
@@ -227,6 +229,8 @@ export default function AccountsClient({ taxEntities, accounts, plaidItems }: Pr
       <div className="space-y-8">
         {taxEntities.map((entity) => {
           const entityAccounts = accountsByEntity.get(entity.id) ?? [];
+          const institutionalAccounts = entityAccounts.filter(isInstitutionalAccount);
+          const logicalAccounts = entityAccounts.filter((account) => !isInstitutionalAccount(account));
           return (
             <div key={entity.id} className="space-y-3">
               <div className="flex items-center gap-2">
@@ -236,16 +240,39 @@ export default function AccountsClient({ taxEntities, accounts, plaidItems }: Pr
               {entityAccounts.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No accounts assigned to this Tax Entity.</p>
               ) : (
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  {entityAccounts.map((account) => (
-                    <AccountCard 
-                      key={account.id} 
-                      account={account} 
-                      plaidItem={getPlaidItem(account.id)}
-                      taxEntities={taxEntities}
-                      onAssign={handleAssign}
-                    />
-                  ))}
+                <div className="space-y-4">
+                  {institutionalAccounts.length > 0 && (
+                    <div className="space-y-2">
+                      <h3 className="text-sm font-medium text-muted-foreground">Connected bank & credit card accounts</h3>
+                      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                        {institutionalAccounts.map((account) => (
+                          <AccountCard 
+                            key={account.id} 
+                            account={account} 
+                            plaidItem={getPlaidItem(account.id)}
+                            taxEntities={taxEntities}
+                            onAssign={handleAssign}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {logicalAccounts.length > 0 && (
+                    <div className="space-y-2">
+                      <h3 className="text-sm font-medium text-muted-foreground">Logical User Defined Accounts</h3>
+                      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                        {logicalAccounts.map((account) => (
+                          <AccountCard 
+                            key={account.id} 
+                            account={account} 
+                            plaidItem={undefined}
+                            taxEntities={taxEntities}
+                            onAssign={handleAssign}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -259,16 +286,39 @@ export default function AccountsClient({ taxEntities, accounts, plaidItems }: Pr
               <h2 className="text-lg font-semibold text-muted-foreground">Unassigned Accounts</h2>
               <Badge variant="outline">Personal</Badge>
             </div>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {unassignedAccounts.map((account) => (
-                <AccountCard 
-                  key={account.id} 
-                  account={account} 
-                  plaidItem={getPlaidItem(account.id)}
-                  taxEntities={taxEntities}
-                  onAssign={handleAssign}
-                />
-              ))}
+            <div className="space-y-4">
+              {unassignedAccounts.filter(isInstitutionalAccount).length > 0 && (
+                <div className="space-y-2">
+                  <h3 className="text-sm font-medium text-muted-foreground">Connected bank & credit card accounts</h3>
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    {unassignedAccounts.filter(isInstitutionalAccount).map((account) => (
+                      <AccountCard 
+                        key={account.id} 
+                        account={account} 
+                        plaidItem={getPlaidItem(account.id)}
+                        taxEntities={taxEntities}
+                        onAssign={handleAssign}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+              {unassignedAccounts.filter((account) => !isInstitutionalAccount(account)).length > 0 && (
+                <div className="space-y-2">
+                  <h3 className="text-sm font-medium text-muted-foreground">Logical User Defined Accounts</h3>
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    {unassignedAccounts.filter((account) => !isInstitutionalAccount(account)).map((account) => (
+                      <AccountCard 
+                        key={account.id} 
+                        account={account} 
+                        plaidItem={undefined}
+                        taxEntities={taxEntities}
+                        onAssign={handleAssign}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}

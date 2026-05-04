@@ -57,6 +57,8 @@ export interface BooksAccount {
   institution?: string | null;
   institution_name?: string | null; // Alias for institution
   last_four_digits?: string | null;
+  plaid_account_id?: string | null;
+  plaid_item_id?: string | null;
   account_type: "checking" | "savings" | "credit_card" | "loan" | "investment" | "other";
   currency: string;
   current_balance?: number;
