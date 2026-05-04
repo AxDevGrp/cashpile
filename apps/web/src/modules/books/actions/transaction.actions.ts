@@ -82,14 +82,24 @@ export async function listTransactions(params: {
       .in("transaction_id", transactionIds),
   ]);
 
-  if (categoriesRes.error) throw new Error(categoriesRes.error.message);
-  if (accountsRes.error) throw new Error(accountsRes.error.message);
-  if (taxViewsRes.error) throw new Error(taxViewsRes.error.message);
+  if (categoriesRes.error) {
+    console.error("[books/transactions] category hydration failed:", categoriesRes.error.message);
+  }
+  if (accountsRes.error) {
+    console.error("[books/transactions] account hydration failed:", accountsRes.error.message);
+  }
+  if (taxViewsRes.error) {
+    console.error("[books/transactions] tax view hydration failed:", taxViewsRes.error.message);
+  }
 
-  const categoriesById = new Map((categoriesRes.data ?? []).map((category: any) => [category.id, category]));
-  const accountsById = new Map((accountsRes.data ?? []).map((account: any) => [account.id, account]));
+  const categoriesById = new Map(
+    (categoriesRes.error ? [] : categoriesRes.data ?? []).map((category: any) => [category.id, category])
+  );
+  const accountsById = new Map(
+    (accountsRes.error ? [] : accountsRes.data ?? []).map((account: any) => [account.id, account])
+  );
   const taxViewsByTransactionId = new Map<string, any[]>();
-  for (const view of taxViewsRes.data ?? []) {
+  for (const view of taxViewsRes.error ? [] : taxViewsRes.data ?? []) {
     const list = taxViewsByTransactionId.get(view.transaction_id) ?? [];
     list.push(view);
     taxViewsByTransactionId.set(view.transaction_id, list);

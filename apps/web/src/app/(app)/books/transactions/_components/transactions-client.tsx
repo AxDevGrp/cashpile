@@ -21,9 +21,10 @@ interface Props {
   categories: BooksCategory[];
   udas: (BooksUda & { books_financial_accounts?: { id: string; name: string }[] })[];
   filters: { udaId?: string; accountId?: string; categoryId?: string; from?: string; to?: string };
+  loadError?: string;
 }
 
-export default function TransactionsClient({ transactions, totalCount, entities, categories, udas, filters }: Props) {
+export default function TransactionsClient({ transactions, totalCount, entities, categories, udas, filters, loadError }: Props) {
   const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
@@ -66,6 +67,12 @@ export default function TransactionsClient({ transactions, totalCount, entities,
           <Button>Import CSV</Button>
         </Link>
       } />
+
+      {loadError && (
+        <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {loadError} Check Railway logs for the detailed database error.
+        </div>
+      )}
 
       {/* Filters */}
       <div className="flex flex-wrap gap-3">
