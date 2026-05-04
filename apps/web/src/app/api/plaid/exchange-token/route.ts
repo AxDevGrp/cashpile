@@ -13,6 +13,30 @@ function mapAccountType(type: string, subtype: string | null | undefined): strin
   return "other";
 }
 
+async function upsertPlaidAccount(serviceClient: any, account: Record<string, any>) {
+  const { data: existing, error: lookupErr } = await serviceClient
+    .from("books_financial_accounts")
+    .select("id")
+    .eq("plaid_account_id", account.plaid_account_id)
+    .maybeSingle();
+
+  if (lookupErr) throw new Error(lookupErr.message);
+
+  if (existing?.id) {
+    const { error } = await serviceClient
+      .from("books_financial_accounts")
+      .update(account)
+      .eq("id", existing.id);
+    if (error) throw new Error(error.message);
+    return;
+  }
+
+  const { error } = await serviceClient
+    .from("books_financial_accounts")
+    .insert(account);
+  if (error) throw new Error(error.message);
+}
+
 export async function POST(req: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();
@@ -64,23 +88,20 @@ export async function POST(req: NextRequest) {
     // Get and create financial accounts
     const accountsRes = await plaidClient.accountsGet({ access_token });
     for (const acct of accountsRes.data.accounts) {
-      const { error: accountErr } = await serviceClient
-        .from("books_financial_accounts")
-        .upsert({
-          user_id:          user.id,
-          uda_id:           taxEntityId,
-          tax_entity_id:    taxEntityId,
-          plaid_account_id: acct.account_id,
-          plaid_item_id:    plaidItem.id,
-          name:             acct.name,
-          account_type:     mapAccountType(acct.type, acct.subtype),
-          institution_name: institutionName,
-          last_four_digits: acct.mask,
-          current_balance:  acct.balances.current ?? 0,
-          is_active:        true,
-          updated_at:       new Date().toISOString(),
-        }, { onConflict: "plaid_account_id", ignoreDuplicates: false });
-      if (accountErr) throw new Error(accountErr.message);
+      await upsertPlaidAccount(serviceClient, {
+        user_id:          user.id,
+        uda_id:           taxEntityId,
+        tax_entity_id:    taxEntityId,
+        plaid_account_id: acct.account_id,
+        plaid_item_id:    plaidItem.id,
+        name:             acct.name,
+        account_type:     mapAccountType(acct.type, acct.subtype),
+        institution_name: institutionName,
+        last_four_digits: acct.mask,
+        current_balance:  acct.balances.current ?? 0,
+        is_active:        true,
+        updated_at:       new Date().toISOString(),
+      });
     }
 
     // Trigger initial sync directly so the user's auth cookies are not required
