@@ -64,5 +64,10 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  return result.toDataStreamResponse();
+  return result.toDataStreamResponse({
+    getErrorMessage: (error) => {
+      console.error("[ai/chat] stream failed:", error);
+      return "Cash could not complete that request. Please try again.";
+    },
+  });
 }

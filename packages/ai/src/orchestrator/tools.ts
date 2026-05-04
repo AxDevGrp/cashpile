@@ -1,6 +1,6 @@
 import { tool } from "ai";
 import { z } from "zod";
-import { createServerSupabaseClient } from "@cashpile/db";
+import { createServiceRoleClient } from "@cashpile/db";
 
 // ─── Period helpers ───────────────────────────────────────────────────────────
 
@@ -33,7 +33,7 @@ export function createTools(userId: string) {
           .describe("Time period: mtd = month-to-date, ytd = year-to-date, last30 = last 30 days"),
       }),
       execute: async ({ period }) => {
-        const supabase = (await createServerSupabaseClient()) as any;
+        const supabase = (createServiceRoleClient()) as any;
         const since = periodStartDate(period);
 
         const { data: txns } = await supabase
@@ -85,7 +85,7 @@ export function createTools(userId: string) {
         "Fetch the user's prop trading accounts status: P&L, drawdown percentage, breach status, win rate, and recent closed trades.",
       parameters: z.object({}),
       execute: async () => {
-        const supabase = await createServerSupabaseClient();
+        const supabase = createServiceRoleClient();
 
         const { data: accounts } = await supabase
           .from("trades_prop_accounts")
@@ -176,7 +176,7 @@ export function createTools(userId: string) {
           .describe("Number of events to return (default 10)"),
       }),
       execute: async ({ instruments, limit }) => {
-        const supabase = await createServerSupabaseClient();
+        const supabase = createServiceRoleClient();
 
         // pulse_events.affected_instruments is Json; cast via select string
         let query = supabase
@@ -248,7 +248,7 @@ export function createTools(userId: string) {
         "Check the user's Books data for potential duplicate transactions. Returns the number of duplicate groups, total affected transactions, and a sample of the top duplicate fingerprints.",
       parameters: z.object({}),
       execute: async () => {
-        const supabase = await createServerSupabaseClient();
+        const supabase = createServiceRoleClient();
 
         const { data: rows } = await supabase
           .from("books_duplicate_fingerprints")
@@ -286,7 +286,7 @@ export function createTools(userId: string) {
           .describe("Time period: mtd = month-to-date, ytd = year-to-date, last30 = last 30 days"),
       }),
       execute: async ({ period }) => {
-        const supabase = (await createServerSupabaseClient()) as any;
+        const supabase = (createServiceRoleClient()) as any;
         const since = periodStartDate(period);
 
         const { data: uncatRows } = await supabase
@@ -329,7 +329,7 @@ export function createTools(userId: string) {
           .describe("UUID of the books_categories row to assign"),
       }),
       execute: async ({ transactionIds, categoryId }) => {
-        const supabase = (await createServerSupabaseClient()) as any;
+        const supabase = (createServiceRoleClient()) as any;
 
         const { data, error } = await supabase
           .from("books_transactions")
@@ -364,7 +364,7 @@ export function createTools(userId: string) {
           .describe("Maximum absolute difference in amounts to still consider a match (default 0.01)"),
       }),
       execute: async ({ dateRangeDays, amountTolerance }) => {
-        const supabase = await createServerSupabaseClient();
+        const supabase = createServiceRoleClient();
 
         const since = new Date();
         since.setDate(since.getDate() - 30);
@@ -451,7 +451,7 @@ export function createTools(userId: string) {
           .describe("Time period: mtd = month-to-date, ytd = year-to-date, last30 = last 30 days"),
       }),
       execute: async ({ period }) => {
-        const supabase = await createServerSupabaseClient();
+        const supabase = createServiceRoleClient();
         const since = periodStartDate(period);
 
         const { data: rawRows } = await supabase
@@ -511,7 +511,7 @@ export function createTools(userId: string) {
         "Fetch the user's unread Pulse market alerts — personalized notifications based on their watchlist and active market events.",
       parameters: z.object({}),
       execute: async () => {
-        const supabase = await createServerSupabaseClient();
+        const supabase = createServiceRoleClient();
 
         const { data: alerts } = await supabase
           .from("pulse_alerts")
