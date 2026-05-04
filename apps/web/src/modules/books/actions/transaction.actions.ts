@@ -34,7 +34,7 @@ export async function listTransactions(params: {
 
   let q = supabase
     .from("books_transactions")
-    .select(`*, books_categories(id, name, category_type), books_financial_accounts(id, name, tax_entity_id), books_tax_transaction_views(tax_entity_id, tax_notes, business_percentage)`, { count: "exact" })
+    .select("*", { count: "exact" })
     .eq("user_id", user.id)
     .order("date", { ascending: false });
 
@@ -48,7 +48,66 @@ export async function listTransactions(params: {
 
   const { data, error, count } = await q;
   if (error) throw new Error(error.message);
-  return { data: data ?? [], count: count ?? 0 };
+
+  const rows = data ?? [];
+  if (rows.length === 0) return { data: [], count: count ?? 0 };
+
+  const categoryIds = Array.from(
+    new Set(rows.map((row: any) => row.category_id).filter(Boolean))
+  );
+  const financialAccountIds = Array.from(
+    new Set(rows.map((row: any) => row.financial_account_id).filter(Boolean))
+  );
+  const transactionIds = rows.map((row: any) => row.id);
+
+  const [categoriesRes, accountsRes, taxViewsRes] = await Promise.all([
+    categoryIds.length > 0
+      ? supabase
+          .from("books_categories")
+          .select("id, name, category_type")
+          .eq("user_id", user.id)
+          .in("id", categoryIds as any)
+      : Promise.resolve({ data: [], error: null }),
+    financialAccountIds.length > 0
+      ? (supabase as any)
+          .from("books_financial_accounts")
+          .select("id, name, tax_entity_id")
+          .eq("user_id", user.id)
+          .in("id", financialAccountIds)
+      : Promise.resolve({ data: [], error: null }),
+    (supabase as any)
+      .from("books_tax_transaction_views")
+      .select("transaction_id, tax_entity_id, tax_notes, business_percentage")
+      .eq("user_id", user.id)
+      .in("transaction_id", transactionIds),
+  ]);
+
+  if (categoriesRes.error) throw new Error(categoriesRes.error.message);
+  if (accountsRes.error) throw new Error(accountsRes.error.message);
+  if (taxViewsRes.error) throw new Error(taxViewsRes.error.message);
+
+  const categoriesById = new Map((categoriesRes.data ?? []).map((category: any) => [category.id, category]));
+  const accountsById = new Map((accountsRes.data ?? []).map((account: any) => [account.id, account]));
+  const taxViewsByTransactionId = new Map<string, any[]>();
+  for (const view of taxViewsRes.data ?? []) {
+    const list = taxViewsByTransactionId.get(view.transaction_id) ?? [];
+    list.push(view);
+    taxViewsByTransactionId.set(view.transaction_id, list);
+  }
+
+  return {
+    data: rows.map((row: any) => ({
+      ...row,
+      type: row.type ?? row.transaction_type,
+      account_id: row.account_id ?? row.financial_account_id,
+      books_categories: row.category_id ? categoriesById.get(row.category_id) ?? null : null,
+      books_financial_accounts: row.financial_account_id
+        ? accountsById.get(row.financial_account_id) ?? null
+        : null,
+      books_tax_transaction_views: taxViewsByTransactionId.get(row.id) ?? [],
+    })),
+    count: count ?? 0,
+  };
 }
 
 export async function createTransaction(input: Omit<BooksTransaction, "id" | "user_id" | "created_at" | "updated_at">) {
