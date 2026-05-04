@@ -17,7 +17,8 @@ export function CashInputStrip() {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    open(value.trim() || undefined);
+    const question = value.trim();
+    open(question || undefined, Boolean(question));
     setValue("");
   }
 
@@ -63,7 +64,7 @@ export function CashInputStrip() {
         {CHIPS.map((chip) => (
           <button
             key={chip}
-            onClick={() => open(chip)}
+            onClick={() => open(chip, true)}
             className="flex items-center gap-1.5 text-[11px] text-muted-foreground border border-border/60 rounded-full px-3 py-1 hover:border-primary/40 hover:text-foreground hover:bg-accent/40 transition-colors"
           >
             <Sparkles className="h-2.5 w-2.5 text-primary" />

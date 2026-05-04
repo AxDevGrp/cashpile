@@ -33,27 +33,31 @@ export function createTools(userId: string) {
           .describe("Time period: mtd = month-to-date, ytd = year-to-date, last30 = last 30 days"),
       }),
       execute: async ({ period }) => {
-        const supabase = await createServerSupabaseClient();
+        const supabase = (await createServerSupabaseClient()) as any;
         const since = periodStartDate(period);
 
         const { data: txns } = await supabase
           .from("books_transactions")
-          .select("id, amount, type, category_id, description, date")
+          .select("id, amount, transaction_type, category_id, description, date")
           .eq("user_id", userId)
           .eq("is_transfer", false)
           .gte("date", since);
 
-        const rows = txns ?? [];
+        const rows = (txns ?? []) as Array<{
+          amount: number;
+          transaction_type: "debit" | "credit";
+          category_id: string | null;
+        }>;
         const income = rows
-          .filter((t) => t.type === "credit")
+          .filter((t) => t.transaction_type === "credit")
           .reduce((s, t) => s + Math.abs(t.amount), 0);
         const expenses = rows
-          .filter((t) => t.type === "debit")
+          .filter((t) => t.transaction_type === "debit")
           .reduce((s, t) => s + Math.abs(t.amount), 0);
 
         // Tally by category_id
         const byCategory: Record<string, number> = {};
-        for (const t of rows.filter((r) => r.type === "debit")) {
+        for (const t of rows.filter((r) => r.transaction_type === "debit")) {
           const key = String(t.category_id ?? "uncategorized");
           byCategory[key] = (byCategory[key] ?? 0) + Math.abs(t.amount);
         }
@@ -282,7 +286,7 @@ export function createTools(userId: string) {
           .describe("Time period: mtd = month-to-date, ytd = year-to-date, last30 = last 30 days"),
       }),
       execute: async ({ period }) => {
-        const supabase = await createServerSupabaseClient();
+        const supabase = (await createServerSupabaseClient()) as any;
         const since = periodStartDate(period);
 
         const { data: uncatRows } = await supabase
@@ -299,7 +303,7 @@ export function createTools(userId: string) {
           period,
           since,
           uncategorizedCount: uncatRows?.length ?? 0,
-          sample: (uncatRows ?? []).map((t) => ({
+          sample: ((uncatRows ?? []) as Array<{ id: string; date: string; description: string; amount: number }>).map((t) => ({
             id: t.id,
             date: t.date,
             description: t.description,
@@ -325,7 +329,7 @@ export function createTools(userId: string) {
           .describe("UUID of the books_categories row to assign"),
       }),
       execute: async ({ transactionIds, categoryId }) => {
-        const supabase = await createServerSupabaseClient();
+        const supabase = (await createServerSupabaseClient()) as any;
 
         const { data, error } = await supabase
           .from("books_transactions")
@@ -453,9 +457,9 @@ export function createTools(userId: string) {
         const { data: rawRows } = await supabase
           .from("books_transactions")
           .select(`
-            id, date, description, merchant, amount, type, is_transfer, notes,
+            id, date, description, merchant, amount, transaction_type, is_transfer, notes,
             books_categories ( name ),
-            books_accounts ( name )
+            books_financial_accounts ( name )
           `)
           .eq("user_id", userId)
           .gte("date", since)
@@ -464,9 +468,9 @@ export function createTools(userId: string) {
 
         type ExportRow = {
           id: string; date: string; description: string; merchant: string | null;
-          amount: number; type: string; is_transfer: boolean; notes: string | null;
+          amount: number; transaction_type: string; is_transfer: boolean; notes: string | null;
           books_categories: { name: string } | null;
-          books_accounts: { name: string } | null;
+          books_financial_accounts: { name: string } | null;
         };
         const all = (rawRows ?? []) as unknown as ExportRow[];
         const truncated = all.length > 500;
@@ -482,10 +486,10 @@ export function createTools(userId: string) {
         const header = "date,description,merchant,amount,type,category,account,is_transfer,notes";
         const csvRows = exportRows.map((t) => {
           const cat = (t as any).books_categories?.name ?? "";
-          const acct = (t as any).books_accounts?.name ?? "";
+          const acct = (t as any).books_financial_accounts?.name ?? "";
           return [
             t.date, t.description, t.merchant ?? "", t.amount,
-            t.type, cat, acct, t.is_transfer, t.notes ?? "",
+            t.transaction_type, cat, acct, t.is_transfer, t.notes ?? "",
           ]
             .map(escape)
             .join(",");

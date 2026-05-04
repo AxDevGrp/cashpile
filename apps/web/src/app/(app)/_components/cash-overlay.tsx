@@ -9,7 +9,7 @@ import { TopupModal } from "@/components/ai/TopupModal";
 // ─── Context ──────────────────────────────────────────────────────────────────
 
 interface CashOverlayContextValue {
-  open: (prefill?: string) => void;
+  open: (prefill?: string, submitImmediately?: boolean) => void;
   close: () => void;
   isOpen: boolean;
 }
@@ -116,36 +116,53 @@ const SUGGESTED = [
 function CashOverlayModal({
   isOpen,
   prefill,
+  submitImmediately,
+  submitRequestId,
   onClose,
 }: {
   isOpen: boolean;
   prefill: string;
+  submitImmediately: boolean;
+  submitRequestId: number;
   onClose: () => void;
 }) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const submittedRequestRef = useRef(0);
   const [noCredits, setNoCredits] = useState(false);
   const [topupOpen, setTopupOpen] = useState(false);
+  const [chatError, setChatError] = useState<string | null>(null);
 
-  const { messages, input, setInput, handleSubmit, status, setMessages } = useChat({
+  const { messages, input, setInput, handleSubmit, status, setMessages, append } = useChat({
     api: "/api/ai/chat",
     onError: (error) => {
       if (error.message?.includes("402") || error.message?.includes("insufficient_credits")) {
         setNoCredits(true);
+        setChatError("No AI credits remaining. Top up to continue chatting with Cash.");
+        return;
       }
+      setChatError("Cash could not complete that request. Please try again.");
     },
   });
   const isLoading = status === "streaming" || status === "submitted";
 
   useEffect(() => {
+    if (isOpen && prefill && submitImmediately && submittedRequestRef.current !== submitRequestId) {
+      submittedRequestRef.current = submitRequestId;
+      setChatError(null);
+      setInput("");
+      append({ role: "user", content: prefill });
+      return;
+    }
     if (isOpen && prefill) setInput(prefill);
     if (isOpen) setTimeout(() => inputRef.current?.focus(), 50);
-  }, [isOpen, prefill, setInput]);
+  }, [append, isOpen, prefill, setInput, submitImmediately, submitRequestId]);
 
   useEffect(() => {
     if (!isOpen) {
       setMessages([]);
       setNoCredits(false);
+      setChatError(null);
     }
   }, [isOpen, setMessages]);
 
@@ -165,6 +182,7 @@ function CashOverlayModal({
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!input.trim() || isLoading || noCredits) return;
+    setChatError(null);
     handleSubmit(e);
   }
 
@@ -263,6 +281,11 @@ function CashOverlayModal({
                     </div>
                   </div>
                 )}
+                {chatError && (
+                  <div className="ml-9 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                    {chatError}
+                  </div>
+                )}
                 <div ref={bottomRef} />
               </>
             )}
@@ -308,15 +331,20 @@ function CashOverlayModal({
 export function CashOverlayProvider({ children }: { children: React.ReactNode }) {
   const [isOpen, setIsOpen] = useState(false);
   const [prefill, setPrefill] = useState("");
+  const [submitImmediately, setSubmitImmediately] = useState(false);
+  const [submitRequestId, setSubmitRequestId] = useState(0);
 
-  const open = useCallback((text?: string) => {
+  const open = useCallback((text?: string, shouldSubmit = false) => {
     setPrefill(text ?? "");
+    setSubmitImmediately(Boolean(text?.trim()) && shouldSubmit);
+    if (text?.trim() && shouldSubmit) setSubmitRequestId((id) => id + 1);
     setIsOpen(true);
   }, []);
 
   const close = useCallback(() => {
     setIsOpen(false);
     setPrefill("");
+    setSubmitImmediately(false);
   }, []);
 
   useEffect(() => {
@@ -333,7 +361,13 @@ export function CashOverlayProvider({ children }: { children: React.ReactNode })
   return (
     <CashOverlayContext.Provider value={{ open, close, isOpen }}>
       {children}
-      <CashOverlayModal isOpen={isOpen} prefill={prefill} onClose={close} />
+      <CashOverlayModal
+        isOpen={isOpen}
+        prefill={prefill}
+        submitImmediately={submitImmediately}
+        submitRequestId={submitRequestId}
+        onClose={close}
+      />
     </CashOverlayContext.Provider>
   );
 }
