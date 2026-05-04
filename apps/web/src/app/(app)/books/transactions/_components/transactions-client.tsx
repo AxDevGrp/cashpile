@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PageHeader } from "@cashpile/ui";
@@ -26,7 +26,49 @@ interface Props {
 
 export default function TransactionsClient({ transactions, totalCount, entities, categories, udas, filters, loadError }: Props) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const [rows, setRows] = useState(transactions);
+  const [count, setCount] = useState(totalCount);
+  const [isLoading, setIsLoading] = useState(true);
+  const [clientError, setClientError] = useState<string | undefined>(loadError);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadTransactions() {
+      setIsLoading(true);
+      setClientError(undefined);
+      try {
+        const params = new URLSearchParams(searchParams.toString());
+        params.set("limit", "100");
+        const res = await fetch(`/api/books/transactions?${params.toString()}`, {
+          headers: { Accept: "application/json" },
+          cache: "no-store",
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error ?? "Unable to load transactions");
+        }
+        if (!cancelled) {
+          setRows(data.transactions ?? []);
+          setCount(data.count ?? 0);
+        }
+      } catch (error) {
+        console.error("[books/transactions] client load failed:", error);
+        if (!cancelled) {
+          setRows([]);
+          setCount(0);
+          setClientError(error instanceof Error ? error.message : "Unable to load transactions");
+        }
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    }
+    loadTransactions();
+    return () => {
+      cancelled = true;
+    };
+  }, [searchParams]);
 
   function updateFilter(key: string, value: string) {
     const params = new URLSearchParams(window.location.search);
@@ -62,15 +104,15 @@ export default function TransactionsClient({ transactions, totalCount, entities,
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Transactions" description={`${totalCount} transactions`} actions={
+      <PageHeader title="Transactions" description={isLoading ? "Loading transactions…" : `${count} transactions`} actions={
         <Link href="/books/transactions/import">
           <Button>Import CSV</Button>
         </Link>
       } />
 
-      {loadError && (
+      {clientError && (
         <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          {loadError} Check Railway logs for the detailed database error.
+          {clientError}
         </div>
       )}
 
@@ -132,7 +174,7 @@ export default function TransactionsClient({ transactions, totalCount, entities,
                 <input
                   type="checkbox"
                   className="rounded"
-                  onChange={(e) => setSelected(e.target.checked ? new Set(transactions.map((t) => t.id)) : new Set())}
+                  onChange={(e) => setSelected(e.target.checked ? new Set(rows.map((t) => t.id)) : new Set())}
                 />
               </th>
               <th className="p-3 text-left font-medium">Date</th>
@@ -144,7 +186,13 @@ export default function TransactionsClient({ transactions, totalCount, entities,
             </tr>
           </thead>
           <tbody>
-            {transactions.length === 0 ? (
+            {isLoading ? (
+              <tr>
+                <td colSpan={7} className="p-8 text-center text-muted-foreground">
+                  Loading transactions…
+                </td>
+              </tr>
+            ) : rows.length === 0 ? (
               <tr>
                 <td colSpan={7} className="p-8 text-center text-muted-foreground">
                   No transactions yet.{" "}
@@ -154,7 +202,7 @@ export default function TransactionsClient({ transactions, totalCount, entities,
                 </td>
               </tr>
             ) : (
-              transactions.map((tx) => (
+              rows.map((tx) => (
                 <tr key={tx.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
                   <td className="p-3">
                     <input
