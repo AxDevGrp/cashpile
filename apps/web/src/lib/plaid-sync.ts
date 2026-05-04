@@ -43,8 +43,10 @@ export async function syncPlaidItem(itemId: string, serviceClient?: any) {
 
     const accountMap = new Map((accounts ?? []).map((a: any) => [a.plaid_account_id, a.id]));
 
+    const importOptions = item.import_options ?? {};
+
     // Upsert added + modified transactions
-    const toUpsert = [...newTxns, ...modTxns].map((t) => ({
+    let toUpsert = [...newTxns, ...modTxns].map((t) => ({
       user_id,
       financial_account_id: accountMap.get(t.account_id) ?? null,
       description:          t.name,
@@ -61,9 +63,36 @@ export async function syncPlaidItem(itemId: string, serviceClient?: any) {
         pending: t.pending,
         category: t.personal_finance_category?.primary,
         detailed_category: t.personal_finance_category?.detailed,
+        duplicate_mode: importOptions.duplicate_mode ?? "flag_review",
       },
       updated_at:            new Date().toISOString(),
     }));
+
+    if (importOptions.duplicate_mode !== "keep_all" && toUpsert.length > 0) {
+      const dates = toUpsert.map((t) => t.date).sort();
+      const { data: existingTransactions } = await client
+        .from("books_transactions")
+        .select("date, amount")
+        .eq("user_id", user_id)
+        .is("plaid_transaction_id", null)
+        .gte("date", dates[0])
+        .lte("date", dates[dates.length - 1]);
+
+      const existingKeys = new Set(
+        (existingTransactions ?? []).map((t: any) => `${t.date}|${Number(t.amount).toFixed(2)}`)
+      );
+
+      toUpsert = toUpsert.map((t) => {
+        const possibleDuplicate = existingKeys.has(`${t.date}|${Number(t.amount).toFixed(2)}`);
+        return {
+          ...t,
+          metadata: {
+            ...t.metadata,
+            possible_duplicate: possibleDuplicate,
+          },
+        };
+      });
+    }
 
     if (toUpsert.length > 0) {
       const { error: upsertError } = await client

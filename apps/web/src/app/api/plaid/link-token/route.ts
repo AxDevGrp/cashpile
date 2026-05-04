@@ -3,7 +3,13 @@ import { createServerSupabaseClient } from "@cashpile/db";
 import { assertPlaidConfigured, plaidClient, PLAID_PRODUCTS, PLAID_COUNTRY_CODES } from "@/lib/plaid";
 import { Products, CountryCode } from "plaid";
 
-export async function POST(_req: NextRequest) {
+function clampDaysRequested(value: unknown) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return 90;
+  return Math.max(30, Math.min(730, Math.floor(parsed)));
+}
+
+export async function POST(req: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();
     const { data: { user } } = await supabase.auth.getUser();
@@ -11,7 +17,10 @@ export async function POST(_req: NextRequest) {
 
     assertPlaidConfigured();
 
-    const request = {
+    const body = await req.json().catch(() => ({}));
+    const daysRequested = clampDaysRequested(body.days_requested);
+
+    const request: any = {
       user: { client_user_id: user.id },
       client_name: "Cashpile",
       products: PLAID_PRODUCTS as unknown as Products[],
@@ -20,9 +29,13 @@ export async function POST(_req: NextRequest) {
       webhook: process.env.PLAID_WEBHOOK_URL || undefined,
     };
 
+    if (PLAID_PRODUCTS.includes("transactions")) {
+      request.transactions = { days_requested: daysRequested };
+    }
+
     const response = await plaidClient.linkTokenCreate(request);
 
-    return NextResponse.json({ link_token: response.data.link_token });
+    return NextResponse.json({ link_token: response.data.link_token, days_requested: daysRequested });
   } catch (err: any) {
     console.error("[plaid/link-token]", err?.response?.data ?? err);
     return NextResponse.json(

@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
 
     assertPlaidConfigured();
 
-    const { public_token, tax_entity_id, uda_id } = await req.json();
+    const { public_token, tax_entity_id, uda_id, import_options } = await req.json();
     if (!public_token) return NextResponse.json({ error: "Missing public_token" }, { status: 400 });
     const taxEntityId = tax_entity_id ?? uda_id ?? null;
     const serviceClient = createServiceRoleClient() as any;
@@ -77,6 +77,7 @@ export async function POST(req: NextRequest) {
         item_id,
         institution_name: institutionName,
         institution_id:   institutionId,
+        import_options:   import_options ?? {},
         status:           "active",
         error_code:       null,
         updated_at:       new Date().toISOString(),
