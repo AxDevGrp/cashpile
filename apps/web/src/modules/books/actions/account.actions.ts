@@ -56,7 +56,8 @@ export async function listAccounts(taxEntityId?: string): Promise<BooksAccount[]
 
   let q = (supabase as any)
     .from("books_financial_accounts")
-    .select("*");
+    .select("*")
+    .eq("user_id", user.id);
   
   if (taxEntityId) {
     q = q.eq("tax_entity_id", taxEntityId);
