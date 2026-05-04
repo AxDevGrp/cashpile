@@ -14,9 +14,8 @@ export async function getAccountsByTaxEntity(taxEntityId: string): Promise<Books
 
   const { data, error } = await (supabase as any)
     .from("books_financial_accounts")
-    .select(`*, tax_entity:books_business_entities(*)`)
+    .select("*")
     .eq("tax_entity_id", taxEntityId)
-    .eq("user_id", user.id)
     .order("name");
 
   if (error) throw new Error(error.message);
@@ -57,8 +56,7 @@ export async function listAccounts(taxEntityId?: string): Promise<BooksAccount[]
 
   let q = (supabase as any)
     .from("books_financial_accounts")
-    .select(`*, tax_entity:books_business_entities(*)`)
-    .eq("user_id", user.id);
+    .select("*");
   
   if (taxEntityId) {
     q = q.eq("tax_entity_id", taxEntityId);

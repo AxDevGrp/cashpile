@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { plaidClient } from "@/lib/plaid";
+import { autoAssignTaxEntities } from "@/modules/books/services/tax-rule-engine";
 
 // Service-role client for sync (bypasses RLS — used internally only)
 function getServiceClient() {
@@ -51,21 +52,24 @@ export async function syncPlaidItem(itemId: string, serviceClient?: any) {
       amount:               -t.amount, // Plaid: positive = debit; Cashpile: positive = credit
       date:                 t.date,
       transaction_type:     t.amount > 0 ? "debit" : "credit",
+      plaid_transaction_id:  t.transaction_id,
       import_source:        "plaid",
       import_batch_id:      null,
-      metadata:             { plaid_transaction_id: t.transaction_id, category: t.personal_finance_category?.primary },
+      metadata:             {
+        plaid_transaction_id: t.transaction_id,
+        plaid_account_id: t.account_id,
+        pending: t.pending,
+        category: t.personal_finance_category?.primary,
+        detailed_category: t.personal_finance_category?.detailed,
+      },
+      updated_at:            new Date().toISOString(),
     }));
 
     if (toUpsert.length > 0) {
-      await client
+      const { error: upsertError } = await client
         .from("books_transactions")
-        .upsert(toUpsert, { onConflict: "import_source,metadata->plaid_transaction_id", ignoreDuplicates: false })
-        .catch(() => {
-          // Fallback: insert one by one if upsert on jsonb key fails
-          return Promise.all(toUpsert.map((tx) =>
-            client.from("books_transactions").upsert(tx, { ignoreDuplicates: true })
-          ));
-        });
+        .upsert(toUpsert, { onConflict: "user_id,plaid_transaction_id", ignoreDuplicates: false });
+      if (upsertError) throw new Error(upsertError.message);
     }
 
     // Remove deleted transactions
@@ -73,6 +77,14 @@ export async function syncPlaidItem(itemId: string, serviceClient?: any) {
       await client
         .from("books_transactions")
         .delete()
+        .eq("user_id", user_id)
+        .eq("plaid_transaction_id", t.transaction_id);
+
+      // Backward compatibility for transactions imported before plaid_transaction_id existed.
+      await client
+        .from("books_transactions")
+        .delete()
+        .eq("user_id", user_id)
         .contains("metadata", { plaid_transaction_id: t.transaction_id });
     }
 
@@ -83,6 +95,22 @@ export async function syncPlaidItem(itemId: string, serviceClient?: any) {
     hasMore   = has_more;
   }
 
+  // Apply tax assignment rules to newly added transactions
+  if (added > 0) {
+    const { data: newTransactions } = await client
+      .from("books_transactions")
+      .select("id, description, merchant, amount")
+      .eq("user_id", user_id)
+      .eq("import_source", "plaid")
+      .order("created_at", { ascending: false })
+      .limit(added * 2); // Safety buffer
+
+    if (newTransactions && newTransactions.length > 0) {
+      const assignedCount = await autoAssignTaxEntities(client, user_id, newTransactions);
+      console.log(`[plaid-sync] Auto-assigned ${assignedCount} transactions to tax entities via rules`);
+    }
+  }
+
   // Update account balances
   const balancesRes = await plaidClient.accountsGet({ access_token });
   for (const acct of balancesRes.data.accounts) {
@@ -90,6 +118,7 @@ export async function syncPlaidItem(itemId: string, serviceClient?: any) {
       .from("books_financial_accounts")
       .select("id")
       .eq("plaid_account_id", acct.account_id)
+      .eq("plaid_item_id", item.id)
       .single())?.data?.id;
     if (accountId) {
       await client

@@ -11,7 +11,7 @@ async function listPlaidItems() {
   if (!user) return [];
   const { data } = await (supabase as any)
     .from("books_plaid_items")
-    .select("id, uda_id, tax_entity_id, institution_name, status, last_synced_at")
+    .select("id, item_id, uda_id, tax_entity_id, institution_name, status, last_synced_at")
     .eq("user_id", user.id);
   return data ?? [];
 }

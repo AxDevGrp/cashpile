@@ -24,7 +24,17 @@ export async function getUserCreditBalance(userId: string): Promise<CreditBalanc
     .eq("user_id", userId)
     .single();
 
-  if (error || !data) {
+  if (error) {
+    // PGRST116 = "The result contains 0 rows" — row simply doesn't exist yet
+    if ((error as { code?: string }).code === "PGRST116") {
+      await supabase.from("ai_credit_balances").insert({
+        user_id: userId,
+        subscription_credits: 50_000,
+        topup_credits: 0,
+      });
+      return { subscriptionCredits: 50_000, topupCredits: 0, total: 50_000 };
+    }
+    console.error("[credits] getUserCreditBalance error:", (error as { message?: string }).message);
     return { subscriptionCredits: 0, topupCredits: 0, total: 0 };
   }
 

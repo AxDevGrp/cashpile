@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
 const APP_ROUTES = ["/cashboard", "/books", "/trades", "/pulse", "/ai", "/settings"];
+const AGENT_RATE_LIMIT = { requests: 120, windowMs: 60_000 };
+const agentRateLimit = new Map<string, { count: number; resetAt: number }>();
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -13,6 +15,30 @@ export async function middleware(request: NextRequest) {
 
   // Rate limiting for API routes
   if (pathname.startsWith("/api/")) {
+    if (pathname.startsWith("/api/agent/")) {
+      const key =
+        request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+        request.headers.get("x-real-ip") ??
+        "unknown";
+      const now = Date.now();
+      const current = agentRateLimit.get(key);
+      if (!current || current.resetAt <= now) {
+        agentRateLimit.set(key, { count: 1, resetAt: now + AGENT_RATE_LIMIT.windowMs });
+      } else {
+        current.count++;
+        if (current.count > AGENT_RATE_LIMIT.requests) {
+          return NextResponse.json(
+            { error: "Rate limit exceeded" },
+            {
+              status: 429,
+              headers: {
+                "Retry-After": String(Math.ceil((current.resetAt - now) / 1000)),
+              },
+            }
+          );
+        }
+      }
+    }
     // TODO: wire up Redis-based rate limiting in production
     return NextResponse.next();
   }

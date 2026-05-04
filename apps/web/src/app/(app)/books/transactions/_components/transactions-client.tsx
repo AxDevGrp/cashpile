@@ -11,7 +11,11 @@ import { formatCurrency, formatDate } from "@cashpile/ui";
 import type { BooksTransaction, TaxEntity, BooksCategory, BooksUda } from "@/modules/books/types";
 
 interface Props {
-  transactions: (BooksTransaction & { books_categories?: { name: string } | null; books_financial_accounts?: { name: string } | null })[];
+  transactions: (BooksTransaction & { 
+    books_categories?: { name: string } | null; 
+    books_financial_accounts?: { name: string } | null;
+    books_tax_transaction_views?: Array<{ tax_entity_id: string; tax_notes: string | null; business_percentage: number }>;
+  })[];
   totalCount: number;
   entities: TaxEntity[];
   categories: BooksCategory[];
@@ -39,6 +43,20 @@ export default function TransactionsClient({ transactions, totalCount, entities,
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
+  }
+
+  // Helper to check if transaction was auto-assigned by rule
+  function getRuleAssignment(tx: Props["transactions"][0]) {
+    const taxViews = tx.books_tax_transaction_views ?? [];
+    const ruleAssigned = taxViews.find(v => v.tax_notes?.includes("Auto-assigned by rule"));
+    if (ruleAssigned) {
+      const entity = entities.find(e => e.id === ruleAssigned.tax_entity_id);
+      return {
+        entityName: entity?.name ?? "Unknown",
+        percentage: ruleAssigned.business_percentage,
+      };
+    }
+    return null;
   }
 
   return (
@@ -152,8 +170,23 @@ export default function TransactionsClient({ transactions, totalCount, entities,
                   <td className={`p-3 text-right tabular-nums font-medium ${tx.amount < 0 ? "text-red-600" : "text-green-600"}`}>
                     {formatCurrency(tx.amount)}
                   </td>
-                  <td className="p-3 flex gap-1">
+                  <td className="p-3 flex gap-1 flex-wrap">
                     {tx.is_transfer && <Badge variant="outline" className="text-xs">Transfer</Badge>}
+                    {(() => {
+                      const ruleAssignment = getRuleAssignment(tx);
+                      if (ruleAssignment) {
+                        return (
+                          <Badge 
+                            variant="secondary" 
+                            className="text-xs bg-blue-100 text-blue-700 hover:bg-blue-200 cursor-help"
+                            title={`Auto-assigned to ${ruleAssignment.entityName} @ ${ruleAssignment.percentage}%`}
+                          >
+                            {ruleAssignment.entityName} ({ruleAssignment.percentage}%)
+                          </Badge>
+                        );
+                      }
+                      return null;
+                    })()}
                   </td>
                 </tr>
               ))

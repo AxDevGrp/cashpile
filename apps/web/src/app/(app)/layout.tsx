@@ -55,7 +55,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             </div>
           </div>
 
-          <main className="flex-1 overflow-y-auto">{children}</main>
+          <main
+            className="flex-1 overflow-y-auto"
+            data-agent-surface="cashpile-app"
+            data-agent-modules="books,trades,pulse,ai,settings"
+            data-agent-capabilities-url="/api/agent/capabilities"
+            data-agent-discovery-url="/.well-known/cashpile-agent.json"
+          >
+            {children}
+          </main>
         </div>
 
         <Toaster richColors position="top-right" />

@@ -1,6 +1,6 @@
 /**
  * Transaction Import Orchestrator — Books module
- * Pipeline: parse → dedup check → transfer flag → bulk insert → fingerprint store
+ * Pipeline: parse → dedup check → transfer flag → bulk insert → fingerprint store → tax rule assignment
  * AI categorization is triggered async after insert (non-blocking).
  */
 
@@ -11,6 +11,7 @@ import { randomUUID } from "crypto";
 import { CSVParser } from "./csv-parser";
 import { buildFingerprint, annotateWithDuplicateFlags } from "./duplicate-detection";
 import { annotateWithTransferFlags } from "./transfer-detection";
+import { autoAssignTaxEntities } from "./tax-rule-engine";
 import type { ConfirmImportPayload, ImportPreview, ImportResult } from "../types";
 
 // ─── Preview (parse + annotate, no DB writes) ─────────────────────────────
@@ -127,6 +128,17 @@ export async function confirmImport(payload: ConfirmImportPayload): Promise<Impo
   }));
 
   await supabase.from("books_duplicate_fingerprints").insert(fingerprintRows);
+
+  // Apply tax assignment rules to newly imported transactions
+  const transactionsForRules = rows.map((row) => ({
+    id: row.id,
+    description: row.description,
+    merchant: row.merchant,
+    amount: row.amount,
+  }));
+
+  const assignedCount = await autoAssignTaxEntities(supabase, user.id, transactionsForRules);
+  console.log(`[import] Auto-assigned ${assignedCount} transactions to tax entities via rules`);
 
   return result;
 }

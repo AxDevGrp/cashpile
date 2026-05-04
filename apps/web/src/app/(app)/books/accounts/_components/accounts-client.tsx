@@ -8,6 +8,7 @@ import { assignAccountToTaxEntity } from "@/modules/books/actions/account.action
 
 interface PlaidItem {
   id: string;
+  item_id: string;
   tax_entity_id?: string | null;
   uda_id?: string | null; // DEPRECATED
   institution_name: string | null;
@@ -59,7 +60,7 @@ function AccountCard({
     await fetch("/api/plaid/sync", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ item_id: plaidItem.id }),
+      body: JSON.stringify({ item_id: plaidItem.item_id }),
     });
     setSyncing(false);
     window.location.reload();
@@ -162,8 +163,14 @@ function AccountCard({
 export default function AccountsClient({ taxEntities, accounts, plaidItems }: Props) {
   const [localAccounts, setLocalAccounts] = useState(accounts);
 
-  const getPlaidItem = (accountId: string) => 
-    plaidItems.find((p) => p.tax_entity_id === localAccounts.find(a => a.id === accountId)?.tax_entity_id);
+  const getPlaidItem = (accountId: string) => {
+    const account = localAccounts.find(a => a.id === accountId);
+    const plaidItemId = (account as any)?.plaid_item_id;
+    return (
+      plaidItems.find((p) => p.id === plaidItemId) ??
+      plaidItems.find((p) => p.tax_entity_id === account?.tax_entity_id)
+    );
+  };
 
   async function handleAssign(accountId: string, taxEntityId: string | null) {
     try {

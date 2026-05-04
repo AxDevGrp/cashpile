@@ -1,7 +1,13 @@
 import { streamText, generateText } from "ai";
-import { openai } from "@ai-sdk/openai";
+import { createOpenAI } from "@ai-sdk/openai";
 import type { CoreMessage } from "ai";
 import { createTools } from "./tools";
+
+// Create DeepSeek-compatible provider using OpenAI SDK
+const deepseek = createOpenAI({
+  apiKey: process.env.DEEPSEEK_API_KEY ?? "",
+  baseURL: "https://api.deepseek.com",
+});
 
 // ─── Persona ──────────────────────────────────────────────────────────────────
 
@@ -40,7 +46,7 @@ export function askCash(
   options?: { onFinish?: (event: any) => void | Promise<void> }
 ) {
   return streamText({
-    model: openai("gpt-4o"),
+    model: deepseek("deepseek-chat"),
     system: CASH_SYSTEM_PROMPT,
     messages,
     tools: createTools(userId),
@@ -56,7 +62,7 @@ export function askCash(
 export async function generateCashboardBriefing(userId: string): Promise<string> {
   try {
     const result = await generateText({
-      model: openai("gpt-4o"),
+      model: deepseek("deepseek-chat"),
       system: BRIEFING_SYSTEM_PROMPT,
       prompt: "Generate my daily financial briefing.",
       tools: createTools(userId),

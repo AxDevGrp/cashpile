@@ -104,7 +104,12 @@ export default function AIPage() {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] lg:h-screen">
+    <div
+      className="flex flex-col h-[calc(100vh-4rem)] lg:h-screen"
+      data-agent-page="cashpile-ai"
+      data-agent-primary-action="chat-with-cash"
+      data-agent-tool-endpoint="/api/ai/chat"
+    >
       {/* Header */}
       <div className="px-6 py-4 border-b shrink-0">
         <PageHeader
@@ -194,6 +199,8 @@ export default function AIPage() {
               />
               <button
                 type="submit"
+                aria-label="Send message to Cash"
+                data-agent-action="send-ai-message"
                 disabled={!input.trim() || isLoading}
                 className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-lg bg-primary flex items-center justify-center hover:bg-primary/90 disabled:opacity-40 transition-colors"
               >

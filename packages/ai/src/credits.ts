@@ -3,16 +3,17 @@
  *
  * 1 credit = $0.000001 (1 micro-dollar)
  *
- * gpt-4o pricing (as of 2025):
- *   Input:  $2.50  / 1M tokens  →  2.5  credits / token
- *   Output: $10.00 / 1M tokens  → 10.0  credits / token
+ * DeepSeek V3.2 pricing (as of 2025):
+ *   Input (cache miss):  $0.28 / 1M tokens → 0.28 credits / token
+ *   Input (cache hit):   $0.028 / 1M tokens → 0.028 credits / token
+ *   Output:              $0.42 / 1M tokens → 0.42 credits / token
  *
  * We use integer arithmetic to avoid floating-point drift.
  * All values are stored and compared as whole credits (bigint-safe).
  */
 
-const INPUT_CREDITS_PER_TOKEN = 2.5;   // $2.50/1M = 2.5 micro-$ per token
-const OUTPUT_CREDITS_PER_TOKEN = 10.0;  // $10.00/1M = 10 micro-$ per token
+const INPUT_CREDITS_PER_TOKEN = 0.28;   // $0.28/1M = 0.28 micro-$ per token
+const OUTPUT_CREDITS_PER_TOKEN = 0.42;  // $0.42/1M = 0.42 micro-$ per token
 
 export interface TokenUsage {
   promptTokens: number;

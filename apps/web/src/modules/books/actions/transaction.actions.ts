@@ -34,7 +34,7 @@ export async function listTransactions(params: {
 
   let q = supabase
     .from("books_transactions")
-    .select(`*, books_categories(id, name, category_type), books_financial_accounts(id, name, tax_entity_id)`, { count: "exact" })
+    .select(`*, books_categories(id, name, category_type), books_financial_accounts(id, name, tax_entity_id), books_tax_transaction_views(tax_entity_id, tax_notes, business_percentage)`, { count: "exact" })
     .eq("user_id", user.id)
     .order("date", { ascending: false });
 

@@ -34,16 +34,26 @@ export async function POST(req: NextRequest) {
       if (!user) return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
 
       const body = await req.json().catch(() => ({}));
-      if (body.item_id) {
+      const requestedItemId = body.item_id ?? body.plaid_item_id;
+      if (requestedItemId) {
         // Verify ownership
-        const { data: item } = await serviceClient
+        let { data: item } = await serviceClient
           .from("books_plaid_items")
           .select("item_id")
-          .eq("item_id", body.item_id)
+          .eq("item_id", requestedItemId)
           .eq("user_id", user.id)
-          .single();
+          .maybeSingle();
+        if (!item) {
+          const byId = await serviceClient
+            .from("books_plaid_items")
+            .select("item_id")
+            .eq("id", requestedItemId)
+            .eq("user_id", user.id)
+            .maybeSingle();
+          item = byId.data;
+        }
         if (!item) return NextResponse.json({ error: "Not found" }, { status: 404 });
-        itemIds = [body.item_id];
+        itemIds = [item.item_id];
       } else {
         // Sync all user's items
         const { data: items } = await serviceClient

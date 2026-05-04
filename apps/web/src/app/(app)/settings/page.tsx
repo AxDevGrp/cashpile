@@ -16,7 +16,7 @@ export default async function SettingsPage() {
 
   const integrations = {
     mirofish: !!(process.env.MIROFISH_URL),
-    openai: !!(process.env.OPENAI_API_KEY),
+    deepseek: !!(process.env.DEEPSEEK_API_KEY),
   };
 
   return (

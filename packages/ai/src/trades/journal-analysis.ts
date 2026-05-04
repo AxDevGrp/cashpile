@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { getOpenAIClient, DEFAULT_MODEL } from "../client";
 
 export interface TradeEntry {
@@ -18,6 +19,21 @@ export interface JournalInsight {
   severity: "info" | "warning" | "critical";
   data?: Record<string, unknown>;
 }
+
+// ─── Structured Output Schema ────────────────────────────────────────────────
+
+const JournalInsightSchema = z.object({
+  type: z.enum(["pattern", "risk_alert", "performance", "suggestion"]),
+  title: z.string().min(1).max(100),
+  description: z.string().min(10).max(500),
+  severity: z.enum(["info", "warning", "critical"]),
+});
+
+const JournalAnalysisResponseSchema = z.object({
+  insights: z.array(JournalInsightSchema).min(1).max(5),
+});
+
+// ─── Main Analysis Function ──────────────────────────────────────────────────
 
 export async function analyzeTradeJournal(
   trades: TradeEntry[],
@@ -68,11 +84,11 @@ async function generateAIInsights(trades: TradeEntry[]): Promise<JournalInsight[
     messages: [
       {
         role: "system",
-        content: "You are a professional trading coach analyzing a trader's journal. Identify specific, actionable patterns in win/loss data.",
+        content: "You are a professional trading coach analyzing a trader's journal. Identify specific, actionable patterns in win/loss data. Return 2-5 insights.",
       },
       {
         role: "user",
-        content: `Analyze these trades and return 2-3 key insights as JSON array with { type, title, description, severity }:\n${JSON.stringify(tradeSummary)}`,
+        content: `Analyze these trades and return a JSON object with an "insights" array containing objects with: type (pattern|risk_alert|performance|suggestion), title (string), description (string), severity (info|warning|critical):\n${JSON.stringify(tradeSummary)}`,
       },
     ],
     response_format: { type: "json_object" },
@@ -82,5 +98,13 @@ async function generateAIInsights(trades: TradeEntry[]): Promise<JournalInsight[
 
   const content = response.choices[0]?.message?.content ?? "{}";
   const parsed = JSON.parse(content);
-  return Array.isArray(parsed) ? parsed : parsed.insights ?? [];
+
+  // Validate with Zod schema
+  const validated = JournalAnalysisResponseSchema.safeParse(parsed);
+  if (!validated.success) {
+    console.error("Journal analysis validation failed:", validated.error);
+    return [];
+  }
+
+  return validated.data.insights;
 }

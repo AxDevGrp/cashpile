@@ -13,7 +13,7 @@ interface Props {
   };
   integrations: {
     mirofish: boolean;
-    openai: boolean;
+    deepseek: boolean;
   };
 }
 
@@ -102,12 +102,12 @@ export default function SettingsClient({ profile, integrations }: Props) {
         <div className="space-y-3">
           {[
             {
-              name: "OpenAI",
-              key: "openai",
-              desc: "Powers Pulse event analysis and Books categorization",
-              active: integrations.openai,
-              docsUrl: "https://platform.openai.com/api-keys",
-              envKey: "OPENAI_API_KEY",
+              name: "DeepSeek",
+              key: "deepseek",
+              desc: "Powers Cash AI chat, Pulse event analysis, Books categorization, and trade journal insights",
+              active: integrations.deepseek,
+              docsUrl: "https://platform.deepseek.com/api_keys",
+              envKey: "DEEPSEEK_API_KEY",
             },
             {
               name: "MiroFish",

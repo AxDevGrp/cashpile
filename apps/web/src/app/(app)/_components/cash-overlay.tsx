@@ -176,7 +176,12 @@ function CashOverlayModal({
       >
         <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
 
-        <div className="relative w-full max-w-2xl h-[70vh] flex flex-col rounded-2xl glass-card shadow-2xl shadow-black/40 overflow-hidden">
+        <div
+          className="relative w-full max-w-2xl h-[70vh] flex flex-col rounded-2xl glass-card shadow-2xl shadow-black/40 overflow-hidden"
+          data-agent-surface="cash-overlay"
+          data-agent-primary-action="chat-with-cash"
+          data-agent-tool-endpoint="/api/ai/chat"
+        >
           {/* Header */}
           <div className="flex items-center gap-3 px-5 py-4 border-b shrink-0">
             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-500 via-blue-500 to-violet-500 flex items-center justify-center text-white text-sm font-bold">
@@ -277,6 +282,8 @@ function CashOverlayModal({
               />
               <button
                 type="submit"
+                aria-label="Send message to Cash"
+                data-agent-action="send-overlay-message"
                 disabled={!input.trim() || isLoading || noCredits}
                 className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center hover:bg-primary/90 disabled:opacity-40 transition-colors shrink-0"
               >

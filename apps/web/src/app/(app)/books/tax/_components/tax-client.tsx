@@ -5,6 +5,7 @@ import { Badge } from "@cashpile/ui";
 import { AssignModal } from "./assign-modal";
 import { BulkAssignModal } from "./bulk-assign-modal";
 import { ExportPanel } from "./export-panel";
+import { RulesModal } from "./rules-modal";
 import type { TaxEntity } from "@/modules/books/types";
 
 type Summary = { totalIncome: number; totalExpenses: number; transactionCount: number };
@@ -33,6 +34,7 @@ export function TaxClient({ taxEntities, summaries, defaultYear }: Props) {
   const [assignEntity, setAssignEntity] = useState<TaxEntity | null>(null);
   const [bulkOpen, setBulkOpen] = useState(false);
   const [exportEntity, setExportEntity] = useState<TaxEntity | null>(null);
+  const [rulesOpen, setRulesOpen] = useState(false);
 
   const years = Array.from({ length: 6 }, (_, i) => defaultYear - i);
 
@@ -55,6 +57,12 @@ export function TaxClient({ taxEntities, summaries, defaultYear }: Props) {
               <option key={y} value={y}>{y}</option>
             ))}
           </select>
+          <button
+            onClick={() => setRulesOpen(true)}
+            className="bg-secondary text-secondary-foreground px-4 py-1.5 rounded-md text-sm hover:bg-secondary/80"
+          >
+            Auto-Assignment Rules
+          </button>
           <button
             onClick={() => setBulkOpen(true)}
             className="bg-secondary text-secondary-foreground px-4 py-1.5 rounded-md text-sm hover:bg-secondary/80"
@@ -134,6 +142,9 @@ export function TaxClient({ taxEntities, summaries, defaultYear }: Props) {
       )}
       {exportEntity && (
         <ExportPanel taxEntity={exportEntity} year={year} onClose={() => setExportEntity(null)} />
+      )}
+      {rulesOpen && (
+        <RulesModal taxEntities={taxEntities} onClose={() => setRulesOpen(false)} />
       )}
     </div>
   );

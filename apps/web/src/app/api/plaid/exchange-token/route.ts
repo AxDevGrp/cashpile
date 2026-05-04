@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createServerSupabaseClient } from "@cashpile/db";
-import { plaidClient } from "@/lib/plaid";
-import { AccountType } from "plaid";
+import { createServerSupabaseClient, createServiceRoleClient } from "@cashpile/db";
+import { assertPlaidConfigured, plaidClient } from "@/lib/plaid";
+import { syncPlaidItem } from "@/lib/plaid-sync";
 
 // Map Plaid account types to Cashpile account types
 function mapAccountType(type: string, subtype: string | null | undefined): string {
@@ -19,8 +19,12 @@ export async function POST(req: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
 
-    const { public_token, uda_id } = await req.json();
+    assertPlaidConfigured();
+
+    const { public_token, tax_entity_id, uda_id } = await req.json();
     if (!public_token) return NextResponse.json({ error: "Missing public_token" }, { status: 400 });
+    const taxEntityId = tax_entity_id ?? uda_id ?? null;
+    const serviceClient = createServiceRoleClient() as any;
 
     // Exchange public token for access token
     const exchangeRes = await plaidClient.itemPublicTokenExchange({ public_token });
@@ -39,17 +43,20 @@ export async function POST(req: NextRequest) {
     }
 
     // Store Plaid item
-    const { data: plaidItem, error: itemErr } = await (supabase as any)
+    const { data: plaidItem, error: itemErr } = await serviceClient
       .from("books_plaid_items")
-      .insert({
+      .upsert({
         user_id:          user.id,
-        uda_id:           uda_id ?? null,
+        uda_id:           taxEntityId,
+        tax_entity_id:    taxEntityId,
         access_token,
         item_id,
         institution_name: institutionName,
         institution_id:   institutionId,
         status:           "active",
-      })
+        error_code:       null,
+        updated_at:       new Date().toISOString(),
+      }, { onConflict: "item_id" })
       .select()
       .single();
     if (itemErr) throw new Error(itemErr.message);
@@ -57,10 +64,12 @@ export async function POST(req: NextRequest) {
     // Get and create financial accounts
     const accountsRes = await plaidClient.accountsGet({ access_token });
     for (const acct of accountsRes.data.accounts) {
-      await (supabase as any)
+      const { error: accountErr } = await serviceClient
         .from("books_financial_accounts")
         .upsert({
-          uda_id:           uda_id ?? null,
+          user_id:          user.id,
+          uda_id:           taxEntityId,
+          tax_entity_id:    taxEntityId,
           plaid_account_id: acct.account_id,
           plaid_item_id:    plaidItem.id,
           name:             acct.name,
@@ -69,19 +78,20 @@ export async function POST(req: NextRequest) {
           last_four_digits: acct.mask,
           current_balance:  acct.balances.current ?? 0,
           is_active:        true,
+          updated_at:       new Date().toISOString(),
         }, { onConflict: "plaid_account_id", ignoreDuplicates: false });
+      if (accountErr) throw new Error(accountErr.message);
     }
 
-    // Trigger initial sync
-    await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/plaid/sync`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ item_id }),
-    });
+    // Trigger initial sync directly so the user's auth cookies are not required
+    const syncResult = await syncPlaidItem(item_id, serviceClient);
 
-    return NextResponse.json({ success: true, institution: institutionName });
+    return NextResponse.json({ success: true, institution: institutionName, sync: syncResult });
   } catch (err: any) {
     console.error("[plaid/exchange-token]", err?.response?.data ?? err);
-    return NextResponse.json({ error: "Failed to connect account" }, { status: 500 });
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Failed to connect account" },
+      { status: 500 }
+    );
   }
 }

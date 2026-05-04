@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { getOpenAIClient, DEFAULT_MODEL } from "../client";
 
 export interface TransactionForCategorization {
@@ -19,6 +20,18 @@ export interface Category {
   id: number;
   name: string;
 }
+
+// ─── Structured Output Schema ────────────────────────────────────────────────
+
+const CategorizationItemSchema = z.object({
+  transactionId: z.string().describe("The transaction ID"),
+  categoryName: z.string().describe("The exact category name from the provided list"),
+  confidence: z.number().min(0).max(1).describe("Confidence score between 0 and 1"),
+});
+
+const CategorizationResponseSchema = z.object({
+  results: z.array(CategorizationItemSchema).describe("Array of categorization results"),
+});
 
 // ─── Rule-based categorization (fast path, no API call) ──────────────────────
 
@@ -94,7 +107,9 @@ function ruleBasedCategorize(tx: TransactionForCategorization, categories: Categ
   return null;
 }
 
-// ─── AI categorization (batch, OpenAI) ───────────────────────────────────────
+// ─── AI categorization (batch with structured output) ────────────────────────
+
+const BATCH_SIZE = 20; // Process up to 20 transactions per API call
 
 export async function categorizeTransactions(
   transactions: TransactionForCategorization[],
@@ -113,11 +128,15 @@ export async function categorizeTransactions(
     }
   }
 
-  // Second pass: AI for unmatched transactions
+  // Second pass: AI for unmatched transactions (in batches)
   if (needsAI.length > 0) {
     try {
-      const aiResults = await categorizeWithAI(needsAI, categories);
-      results.push(...aiResults);
+      // Process in batches
+      for (let i = 0; i < needsAI.length; i += BATCH_SIZE) {
+        const batch = needsAI.slice(i, i + BATCH_SIZE);
+        const aiResults = await categorizeWithAI(batch, categories);
+        results.push(...aiResults);
+      }
     } catch {
       // Fallback to "Other" if AI fails
       const otherCategory = categories.find((c) => c.name.toLowerCase() === "other");
@@ -147,8 +166,7 @@ async function categorizeWithAI(
 Transactions to categorize (JSON array):
 ${JSON.stringify(transactions.map((t) => ({ id: t.id, description: t.description, amount: t.amount, merchant: t.merchant })))}
 
-Return a JSON array with objects: { "transactionId": "...", "categoryName": "...", "confidence": 0.0-1.0 }
-Only return valid JSON, no explanation.`;
+Return a JSON object with a "results" array containing objects with: transactionId (string), categoryName (string, must be from the provided list), confidence (number 0-1).`;
 
   const response = await client.chat.completions.create({
     model: DEFAULT_MODEL,
@@ -159,12 +177,24 @@ Only return valid JSON, no explanation.`;
 
   const content = response.choices[0]?.message?.content ?? "{}";
   const parsed = JSON.parse(content);
-  const items = Array.isArray(parsed) ? parsed : parsed.results ?? [];
+  
+  // Validate with Zod schema
+  const validated = CategorizationResponseSchema.safeParse(parsed);
+  if (!validated.success) {
+    console.error("Categorization validation failed:", validated.error);
+    // Return fallback results
+    return transactions.map((tx) => ({
+      transactionId: tx.id,
+      categoryName: categories.find((c) => c.name.toLowerCase() === "other")?.name ?? "Other",
+      confidence: 0.3,
+      method: "fallback" as const,
+    }));
+  }
 
-  return items.map((item: { transactionId: string; categoryName: string; confidence: number }) => ({
+  return validated.data.results.map((item) => ({
     transactionId: item.transactionId,
     categoryName: item.categoryName,
-    confidence: item.confidence ?? 0.7,
+    confidence: item.confidence,
     method: "ai" as const,
   }));
 }

@@ -273,3 +273,186 @@ export async function getTaxSummaryForUdas(
 ): Promise<Record<string, { totalIncome: number; totalExpenses: number; transactionCount: number }>> {
   return getTaxSummaryForEntities(udaIds, year);
 }
+
+// ─── Tax Assignment Rules CRUD ─────────────────────────────────────────────
+
+export type TaxAssignmentRule = {
+  id: string;
+  user_id: string;
+  pattern: string;
+  match_type: "contains" | "equals";
+  tax_entity_id: string;
+  business_percentage: number;
+  deduction_percentage: number;
+  is_active: boolean;
+  priority: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CreateRuleInput = {
+  pattern: string;
+  match_type: "contains" | "equals";
+  tax_entity_id: string;
+  business_percentage?: number;
+  deduction_percentage?: number;
+  priority?: number;
+};
+
+export type UpdateRuleInput = Partial<CreateRuleInput> & {
+  is_active?: boolean;
+};
+
+/**
+ * Fetch all rules for the current user
+ */
+export async function getTaxAssignmentRules(): Promise<TaxAssignmentRule[]> {
+  const supabase = await createServerSupabaseClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Unauthenticated");
+
+  const { data, error } = await supabase
+    .from("books_tax_assignment_rules")
+    .select("*")
+    .eq("user_id", user.id)
+    .order("priority", { ascending: false });
+
+  if (error) throw new Error(error.message);
+  return data ?? [];
+}
+
+/**
+ * Create a new tax assignment rule
+ */
+export async function createTaxAssignmentRule(
+  input: CreateRuleInput
+): Promise<TaxAssignmentRule> {
+  const supabase = await createServerSupabaseClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Unauthenticated");
+
+  const { data, error } = await supabase
+    .from("books_tax_assignment_rules")
+    .insert({
+      user_id: user.id,
+      pattern: input.pattern,
+      match_type: input.match_type,
+      tax_entity_id: input.tax_entity_id,
+      business_percentage: input.business_percentage ?? 100,
+      deduction_percentage: input.deduction_percentage ?? 100,
+      priority: input.priority ?? 0,
+      is_active: true,
+    })
+    .select()
+    .single();
+
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+/**
+ * Update an existing rule
+ */
+export async function updateTaxAssignmentRule(
+  ruleId: string,
+  input: UpdateRuleInput
+): Promise<TaxAssignmentRule> {
+  const supabase = await createServerSupabaseClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Unauthenticated");
+
+  const { data, error } = await supabase
+    .from("books_tax_assignment_rules")
+    .update({
+      ...input,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", ruleId)
+    .eq("user_id", user.id)
+    .select()
+    .single();
+
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+/**
+ * Delete a rule
+ */
+export async function deleteTaxAssignmentRule(ruleId: string): Promise<void> {
+  const supabase = await createServerSupabaseClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Unauthenticated");
+
+  const { error } = await supabase
+    .from("books_tax_assignment_rules")
+    .delete()
+    .eq("id", ruleId)
+    .eq("user_id", user.id);
+
+  if (error) throw new Error(error.message);
+}
+
+/**
+ * Test a rule pattern against recent transactions
+ * Returns sample matches without persisting anything
+ */
+export async function testRulePattern(
+  pattern: string,
+  matchType: "contains" | "equals",
+  limit: number = 10
+): Promise<Array<{ id: string; description: string; merchant: string | null; amount: number; date: string }>> {
+  const supabase = await createServerSupabaseClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Unauthenticated");
+
+  const { data, error } = await supabase
+    .from("books_transactions")
+    .select("id, description, merchant, amount, date")
+    .eq("user_id", user.id)
+    .ilike(matchType === "equals" ? "description" : "description", matchType === "equals" ? pattern : `%${pattern}%`)
+    .order("date", { ascending: false })
+    .limit(limit);
+
+  if (error) throw new Error(error.message);
+  return data ?? [];
+}
+
+/**
+ * Apply all active rules to existing transactions
+ * Useful when creating new rules for historical data
+ */
+export async function applyRulesToExistingTransactions(): Promise<{ assigned: number }> {
+  const supabase = await createServerSupabaseClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Unauthenticated");
+
+  // Import here to avoid circular dependency
+  const { fetchActiveRules, applyRulesToTransactions, persistRuleMatches } = await import("../services/tax-rule-engine");
+
+  const rules = await fetchActiveRules(supabase, user.id);
+  if (rules.length === 0) return { assigned: 0 };
+
+  // Fetch unassigned transactions (no tax view yet)
+  const { data: unassignedTxns, error } = await supabase
+    .from("books_transactions")
+    .select("id, description, merchant, amount")
+    .eq("user_id", user.id)
+    .not("id", "in", (
+      supabase
+        .from("books_tax_transaction_views")
+        .select("transaction_id")
+        .eq("user_id", user.id)
+    ))
+    .order("date", { ascending: false })
+    .limit(1000);
+
+  if (error || !unassignedTxns || unassignedTxns.length === 0) {
+    return { assigned: 0 };
+  }
+
+  const matches = applyRulesToTransactions(unassignedTxns, rules);
+  const assigned = await persistRuleMatches(supabase, user.id, matches);
+
+  return { assigned };
+}

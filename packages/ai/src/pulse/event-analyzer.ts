@@ -1,8 +1,9 @@
 /**
- * Event Analyzer — uses OpenAI GPT-4o to extract structured data from raw news text.
+ * Event Analyzer — uses DeepSeek to extract structured data from raw news text.
  * Returns typed objects ready to insert into pulse_events.
  */
 
+import { z } from "zod";
 import { getOpenAIClient, DEFAULT_MODEL } from "../client";
 import type { FinancialEvent } from "./seed-formatter";
 
@@ -14,6 +15,18 @@ export interface AnalyzedEvent {
   affected_instruments: string[];
   raw_text: string;
 }
+
+// ─── Structured Output Schema ────────────────────────────────────────────────
+
+const AnalyzedEventSchema = z.object({
+  title: z.string().min(1).max(120).describe("Concise headline (max 120 chars)"),
+  summary: z.string().min(10).max(500).nullable().describe("2-3 sentences explaining the event"),
+  category: z.enum(["fed", "macro", "geopolitical", "earnings", "sector", "commodities"]),
+  severity: z.enum(["low", "medium", "high", "critical"]),
+  affected_instruments: z.array(z.enum(["ES", "NQ", "YM", "RTY", "CL", "GC", "SI", "DXY", "TLT", "VIX", "XLK", "XLE", "XLF", "XLB", "XLV"])),
+});
+
+// ─── System Prompt ───────────────────────────────────────────────────────────
 
 const SYSTEM_PROMPT = `You are a senior macro analyst at a hedge fund. 
 Given raw financial news text, extract structured information in JSON.
@@ -33,6 +46,8 @@ severity guide:
 - high: Significant macro data (CPI, jobs), major earnings beats/misses, central bank signals
 - medium: Sector-specific news, moderate data releases, routine policy updates
 - low: Minor news, analyst upgrades/downgrades, low-impact data`;
+
+// ─── Analysis Function ───────────────────────────────────────────────────────
 
 export async function analyzeEventFromText(
   rawText: string,
@@ -54,20 +69,25 @@ export async function analyzeEventFromText(
   });
 
   const content = response.choices[0]?.message?.content ?? "{}";
-  const parsed = JSON.parse(content) as {
-    title?: string;
-    summary?: string;
-    category?: string;
-    severity?: string;
-    affected_instruments?: string[];
-  };
+  const parsed = JSON.parse(content);
+
+  // Validate with Zod schema
+  const validated = AnalyzedEventSchema.safeParse(parsed);
+  if (!validated.success) {
+    console.error("Event analysis validation failed:", validated.error);
+    // Return fallback result
+    return {
+      title: rawText.slice(0, 100),
+      summary: null,
+      category: "macro",
+      severity: "medium",
+      affected_instruments: [],
+      raw_text: rawText,
+    };
+  }
 
   return {
-    title: parsed.title ?? rawText.slice(0, 100),
-    summary: parsed.summary ?? null,
-    category: (parsed.category as AnalyzedEvent["category"]) ?? "macro",
-    severity: (parsed.severity as AnalyzedEvent["severity"]) ?? "medium",
-    affected_instruments: parsed.affected_instruments ?? [],
+    ...validated.data,
     raw_text: rawText,
   };
 }

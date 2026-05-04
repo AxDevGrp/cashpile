@@ -390,6 +390,45 @@ export interface Database {
         };
         Relationships: never[];
       };
+      // ─── Tax Assignment Rules ────────────────────────────────────────
+      // Bulk assignment rules for auto-assigning transactions to Tax Entities
+      books_tax_assignment_rules: {
+        Row: {
+          id: string;
+          user_id: string;
+          pattern: string;
+          match_type: "contains" | "equals";
+          tax_entity_id: string;
+          business_percentage: number;
+          deduction_percentage: number;
+          is_active: boolean;
+          priority: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          pattern: string;
+          match_type?: "contains" | "equals";
+          tax_entity_id: string;
+          business_percentage?: number;
+          deduction_percentage?: number;
+          is_active?: boolean;
+          priority?: number;
+        };
+        Update: {
+          pattern?: string;
+          match_type?: "contains" | "equals";
+          tax_entity_id?: string;
+          business_percentage?: number;
+          deduction_percentage?: number;
+          is_active?: boolean;
+          priority?: number;
+          updated_at?: string;
+        };
+        Relationships: never[];
+      };
       // ─── Trades tables ───────────────────────────────────────────────
       trades_prop_accounts: {
         Row: {
