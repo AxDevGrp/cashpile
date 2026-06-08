@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { listTaxAssignmentIndex } from "@/modules/books/actions/tax.actions";
 import type { TaxEntity } from "@/modules/books/types";
 
 type Transaction = {
@@ -30,7 +31,9 @@ function fmt(n: number) {
 export function AssignModal({ taxEntity, year, onClose }: Props) {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [assignedIds, setAssignedIds] = useState<Set<string>>(new Set());
+  const [assignmentIndex, setAssignmentIndex] = useState<Record<string, { taxEntityId: string; taxEntityName: string; notes: string | null }>>({});
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [viewMode, setViewMode] = useState<"available" | "assigned">("available");
   const [businessPct, setBusinessPct] = useState(100);
   const [deductionPct, setDeductionPct] = useState(100);
   const [isDeductible, setIsDeductible] = useState(false);
@@ -49,7 +52,9 @@ export function AssignModal({ taxEntity, year, onClose }: Props) {
       const txData = txRes.ok ? await txRes.json() : { transactions: [] };
       const reportData = reportRes.ok ? await reportRes.json() : { transactions: [] };
       const assigned = new Set<string>((reportData.transactions ?? []).map((v: any) => v.transaction_id as string));
+      const allAssignments = await listTaxAssignmentIndex(year);
       setAssignedIds(assigned);
+      setAssignmentIndex(allAssignments);
       setTransactions(txData.transactions ?? []);
     } finally {
       setLoading(false);
@@ -86,9 +91,16 @@ export function AssignModal({ taxEntity, year, onClose }: Props) {
     onClose();
   };
 
-  const filtered = transactions.filter(t => {
+  const assignedToCurrent = transactions.filter((t) => assignedIds.has(t.id));
+  const availableToAssign = transactions.filter((t) => !assignmentIndex[t.id]);
+
+  const filtered = (viewMode === "assigned" ? assignedToCurrent : availableToAssign).filter(t => {
     const q = search.toLowerCase();
-    return !q || (t.description ?? "").toLowerCase().includes(q) || (t.merchant ?? "").toLowerCase().includes(q);
+    const accountName = t.books_financial_accounts?.name ?? "";
+    return !q ||
+      (t.description ?? "").toLowerCase().includes(q) ||
+      (t.merchant ?? "").toLowerCase().includes(q) ||
+      accountName.toLowerCase().includes(q);
   });
 
   return (
@@ -103,8 +115,24 @@ export function AssignModal({ taxEntity, year, onClose }: Props) {
         </div>
 
         <div className="p-4 border-b border-border space-y-3">
+          <div className="flex gap-2 rounded-md bg-muted/30 p-1 text-sm">
+            <button
+              type="button"
+              onClick={() => setViewMode("available")}
+              className={`flex-1 rounded px-3 py-1.5 ${viewMode === "available" ? "bg-background shadow-sm" : "text-muted-foreground"}`}
+            >
+              Available to assign ({availableToAssign.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("assigned")}
+              className={`flex-1 rounded px-3 py-1.5 ${viewMode === "assigned" ? "bg-background shadow-sm" : "text-muted-foreground"}`}
+            >
+              Assigned to {taxEntity.name} ({assignedToCurrent.length})
+            </button>
+          </div>
           <input
-            placeholder="Search transactions..."
+            placeholder={viewMode === "assigned" ? "Search assigned transactions..." : "Search available transactions..."}
             value={search}
             onChange={e => setSearch(e.target.value)}
             className="w-full bg-background border border-border rounded-md px-3 py-1.5 text-sm"
@@ -137,7 +165,9 @@ export function AssignModal({ taxEntity, year, onClose }: Props) {
           {loading ? (
             <div className="text-center py-10 text-muted-foreground text-sm">Loading...</div>
           ) : filtered.length === 0 ? (
-            <div className="text-center py-10 text-muted-foreground text-sm">No transactions found</div>
+            <div className="text-center py-10 text-muted-foreground text-sm">
+              {viewMode === "assigned" ? "No transactions are assigned to this Tax Entity yet." : "No unassigned transactions found. Transactions already assigned to another Tax Entity are hidden here."}
+            </div>
           ) : (
             <table className="w-full text-sm">
               <thead className="bg-muted/30 sticky top-0">
@@ -154,14 +184,20 @@ export function AssignModal({ taxEntity, year, onClose }: Props) {
                   const isAssigned = assignedIds.has(t.id);
                   const isSelected = selected.has(t.id);
                   const accountName = t.books_financial_accounts?.name ?? "Unknown Account";
+                  const assignment = assignmentIndex[t.id];
                   return (
-                    <tr key={t.id} onClick={() => toggle(t.id)} className={`border-b border-border/50 cursor-pointer hover:bg-muted/20 ${isAssigned ? "opacity-50" : ""}`}>
+                    <tr key={t.id} onClick={() => viewMode === "available" && toggle(t.id)} className={`border-b border-border/50 ${viewMode === "available" ? "cursor-pointer hover:bg-muted/20" : ""}`}>
                       <td className="p-2 text-center">
-                        {isAssigned ? <span className="text-green-500">✓</span> : <input type="checkbox" checked={isSelected} readOnly />}
+                        {viewMode === "assigned" || isAssigned
+                          ? <span className="text-green-500">✓</span>
+                          : <input type="checkbox" checked={isSelected} readOnly />}
                       </td>
                       <td className="p-2 text-muted-foreground whitespace-nowrap">{t.date}</td>
                       <td className="p-2 text-muted-foreground text-xs">{accountName}</td>
-                      <td className="p-2">{t.merchant || t.description || "—"}</td>
+                      <td className="p-2">
+                        <div>{t.merchant || t.description || "—"}</div>
+                        {viewMode === "assigned" && assignment?.notes && <div className="text-xs text-muted-foreground">{assignment.notes}</div>}
+                      </td>
                       <td className={`p-2 text-right whitespace-nowrap ${t.amount < 0 ? "text-red-400" : "text-green-500"}`}>
                         {t.amount < 0 ? "-" : "+"}{fmt(t.amount)}
                       </td>
@@ -174,16 +210,22 @@ export function AssignModal({ taxEntity, year, onClose }: Props) {
         </div>
 
         <div className="p-4 border-t border-border flex items-center justify-between">
-          <div className="text-xs text-muted-foreground">{selected.size} selected</div>
+          <div className="text-xs text-muted-foreground">
+            {viewMode === "assigned"
+              ? `${assignedToCurrent.length} transactions assigned to ${taxEntity.name}`
+              : `${selected.size} selected · ${availableToAssign.length} available`}
+          </div>
           <div className="flex gap-2">
             <button onClick={onClose} className="px-4 py-1.5 rounded-md text-sm border border-border hover:bg-muted/30">Cancel</button>
-            <button
-              onClick={handleSubmit}
-              disabled={!selected.size || saving}
-              className="px-4 py-1.5 rounded-md text-sm bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-            >
-              {saving ? "Saving..." : `Assign ${selected.size}`}
-            </button>
+            {viewMode === "available" && (
+              <button
+                onClick={handleSubmit}
+                disabled={!selected.size || saving}
+                className="px-4 py-1.5 rounded-md text-sm bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+              >
+                {saving ? "Saving..." : `Assign ${selected.size}`}
+              </button>
+            )}
           </div>
         </div>
       </div>

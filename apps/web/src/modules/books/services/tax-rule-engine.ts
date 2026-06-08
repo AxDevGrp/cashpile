@@ -25,15 +25,22 @@ export interface TransactionForRuleMatching {
   description: string;
   merchant?: string | null;
   amount: number;
+  date?: string | null;
+  category_id?: number | null;
+  financial_account_id?: string | null;
 }
 
 export interface RuleMatchResult {
   transaction_id: string;
-  rule_id: string;
+  rule_id?: string;
   tax_entity_id: string;
   business_percentage: number;
   deduction_percentage: number;
   matched_pattern: string;
+  source: "rule" | "account";
+  amount?: number;
+  date?: string | null;
+  category_id?: number | null;
 }
 
 /**
@@ -56,6 +63,37 @@ export async function fetchActiveRules(
   }
 
   return data ?? [];
+}
+
+async function fetchAccountTaxDefaults(
+  supabase: SupabaseClient<Database>,
+  userId: string,
+  transactions: TransactionForRuleMatching[]
+): Promise<Map<string, { tax_entity_id: string; account_name: string }>> {
+  const accountIds = Array.from(
+    new Set(transactions.map((tx) => tx.financial_account_id).filter(Boolean))
+  ) as string[];
+
+  if (accountIds.length === 0) return new Map();
+
+  const { data, error } = await (supabase as any)
+    .from("books_financial_accounts")
+    .select("id, name, tax_entity_id")
+    .eq("user_id", userId)
+    .in("id", accountIds)
+    .not("tax_entity_id", "is", null);
+
+  if (error) {
+    console.error("Failed to fetch account tax defaults:", error);
+    return new Map();
+  }
+
+  return new Map(
+    (data ?? []).map((account: any) => [
+      account.id,
+      { tax_entity_id: account.tax_entity_id, account_name: account.name ?? "assigned account" },
+    ])
+  );
 }
 
 /**
@@ -110,8 +148,42 @@ export function applyRulesToTransactions(
         business_percentage: rule.business_percentage,
         deduction_percentage: rule.deduction_percentage,
         matched_pattern: rule.pattern,
+        source: "rule",
+        amount: tx.amount,
+        date: tx.date,
+        category_id: tx.category_id ?? null,
       });
     }
+  }
+
+  return matches;
+}
+
+function applyAccountDefaultsToUnmatchedTransactions(
+  transactions: TransactionForRuleMatching[],
+  accountDefaults: Map<string, { tax_entity_id: string; account_name: string }>,
+  existingMatches: RuleMatchResult[]
+): RuleMatchResult[] {
+  const matchedTransactionIds = new Set(existingMatches.map((match) => match.transaction_id));
+  const matches: RuleMatchResult[] = [];
+
+  for (const tx of transactions) {
+    if (matchedTransactionIds.has(tx.id) || !tx.financial_account_id) continue;
+
+    const accountDefault = accountDefaults.get(tx.financial_account_id);
+    if (!accountDefault) continue;
+
+    matches.push({
+      transaction_id: tx.id,
+      tax_entity_id: accountDefault.tax_entity_id,
+      business_percentage: 100,
+      deduction_percentage: 100,
+      matched_pattern: accountDefault.account_name,
+      source: "account",
+      amount: tx.amount,
+      date: tx.date,
+      category_id: tx.category_id ?? null,
+    });
   }
 
   return matches;
@@ -131,17 +203,22 @@ export async function persistRuleMatches(
     user_id: userId,
     transaction_id: match.transaction_id,
     tax_entity_id: match.tax_entity_id,
+    tax_amount: Math.abs(Number(match.amount ?? 0)) * ((match.business_percentage ?? 100) / 100),
+    tax_date: match.date ?? null,
+    category_id: match.category_id ?? null,
     business_percentage: match.business_percentage,
     deduction_percentage: match.deduction_percentage,
     is_tax_deductible: match.deduction_percentage > 0,
-    tax_notes: `Auto-assigned by rule: ${match.matched_pattern}`,
+    tax_notes: match.source === "account"
+      ? `Auto-assigned by account: ${match.matched_pattern}`
+      : `Auto-assigned by rule: ${match.matched_pattern}`,
   }));
 
   // Use upsert to avoid duplicates (in case rule is re-applied)
   const { error } = await supabase
     .from("books_tax_transaction_views")
     .upsert(inserts, {
-      onConflict: "transaction_id,tax_entity_id",
+      onConflict: "tax_entity_id,transaction_id",
       ignoreDuplicates: true,
     });
 
@@ -163,15 +240,16 @@ export async function autoAssignTaxEntities(
   transactions: TransactionForRuleMatching[]
 ): Promise<number> {
   const rules = await fetchActiveRules(supabase, userId);
-  
-  if (rules.length === 0) {
-    return 0;
-  }
+  const accountDefaults = await fetchAccountTaxDefaults(supabase, userId, transactions);
 
-  const matches = applyRulesToTransactions(transactions, rules);
+  if (rules.length === 0 && accountDefaults.size === 0) return 0;
+
+  const ruleMatches = applyRulesToTransactions(transactions, rules);
+  const accountMatches = applyAccountDefaultsToUnmatchedTransactions(transactions, accountDefaults, ruleMatches);
+  const matches = [...ruleMatches, ...accountMatches];
   const assigned = await persistRuleMatches(supabase, userId, matches);
 
-  console.log(`[tax-rules] Applied ${rules.length} rules to ${transactions.length} transactions, assigned ${assigned}`);
+  console.log(`[tax-assignment] Applied ${rules.length} rules and ${accountDefaults.size} account defaults to ${transactions.length} transactions, assigned ${assigned}`);
   
   return assigned;
 }

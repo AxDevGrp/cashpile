@@ -20,10 +20,10 @@ export class ReportService {
   ): Promise<PnLReport> {
     const { data: txns, error } = await this.supabase
       .from("books_transactions")
-      .select(`id, date, amount, type, category_id, is_transfer,
-        books_categories(id, name, type)`)
+      .select(`id, date, amount, transaction_type, category_id, is_transfer,
+        books_categories(id, name, category_type)`)
       .eq("user_id", userId)
-      .eq("entity_id", entityId)
+      .contains("metadata", { tax_entity_id: entityId })
       .eq("is_transfer", false)
       .gte("date", periodStart)
       .lte("date", periodEnd);
@@ -36,7 +36,7 @@ export class ReportService {
       const cat = (tx as any).books_categories;
       const catId = tx.category_id ?? "__uncategorized__";
       const catName = cat?.name ?? "Uncategorized";
-      const catType: "income" | "expense" = cat?.type === "income" ? "income" : "expense";
+      const catType: "income" | "expense" = cat?.category_type === "income" ? "income" : "expense";
       const month = tx.date.slice(0, 7); // YYYY-MM
 
       if (!rowMap.has(catId)) {
@@ -69,9 +69,9 @@ export class ReportService {
   ): Promise<CashFlowReport> {
     const { data: txns, error } = await this.supabase
       .from("books_transactions")
-      .select("date, amount, type, is_transfer")
+      .select("date, amount, transaction_type, is_transfer")
       .eq("user_id", userId)
-      .eq("entity_id", entityId)
+      .contains("metadata", { tax_entity_id: entityId })
       .eq("is_transfer", false)
       .gte("date", periodStart)
       .lte("date", periodEnd)
@@ -129,10 +129,10 @@ export class ReportService {
 
         const { data: txns } = await this.supabase
           .from("books_transactions")
-          .select(`amount, type, books_categories(name, type, tax_category)`)
+          .select(`amount, transaction_type, books_categories(name, category_type)`)
           .eq("user_id", userId)
           .eq("is_transfer", false)
-          .in("account_id", accountIds)
+          .in("financial_account_id", accountIds)
           .gte("date", periodStart)
           .lte("date", periodEnd);
 
@@ -142,7 +142,7 @@ export class ReportService {
         for (const tx of txns ?? []) {
           const cat = (tx as any).books_categories;
           const amt = Math.abs(tx.amount);
-          if (cat?.type === "income") {
+          if (cat?.category_type === "income") {
             income += amt;
           } else {
             const label = cat?.name ?? "Other";

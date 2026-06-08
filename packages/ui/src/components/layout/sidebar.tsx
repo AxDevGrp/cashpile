@@ -6,11 +6,9 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   BookOpen,
-  TrendingUp,
-  Activity,
+  Receipt,
   Settings,
   ChevronLeft,
-  ChevronRight,
   X,
   Pin,
 } from "lucide-react";
@@ -24,11 +22,10 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { href: "/cashboard", label: "Cashboard",  icon: LayoutDashboard },
-  { href: "/books",     label: "Books",      icon: BookOpen,   moduleColor: "text-emerald-500" },
-  { href: "/trades",    label: "Trades",     icon: TrendingUp, moduleColor: "text-blue-500" },
-  { href: "/pulse",     label: "Pulse",      icon: Activity,   moduleColor: "text-violet-500" },
-  { href: "/settings",  label: "Settings",   icon: Settings },
+  { href: "/cashboard", label: "Cashboard", icon: LayoutDashboard },
+  { href: "/books", label: "Books", icon: BookOpen, moduleColor: "text-emerald-500" },
+  { href: "/books/tax", label: "Taxes", icon: Receipt, moduleColor: "text-amber-500" },
+  { href: "/settings", label: "Settings", icon: Settings },
 ];
 
 interface SidebarProps {
@@ -38,6 +35,71 @@ interface SidebarProps {
   /** Mobile: drawer is open */
   mobileOpen?: boolean;
   onMobileClose?: () => void;
+}
+
+function isNavItemActive(pathname: string, href: string) {
+  if (href === "/books") {
+    return pathname === "/books" || (pathname.startsWith("/books/") && !pathname.startsWith("/books/tax"));
+  }
+  return pathname === href || pathname.startsWith(href + "/");
+}
+
+function NavLink({
+  item,
+  pathname,
+  onMobileClose,
+  forMobile,
+  pinned,
+}: {
+  item: NavItem;
+  pathname: string;
+  onMobileClose?: () => void;
+  forMobile: boolean;
+  pinned: boolean;
+}) {
+  const isActive = isNavItemActive(pathname, item.href);
+  const Icon = item.icon;
+
+  return (
+    <Link
+      href={item.href}
+      onClick={onMobileClose}
+      title={item.label}
+      className={cn(
+        "flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold transition-colors group/item",
+        isActive
+          ? "bg-emerald-50 text-emerald-800 shadow-sm"
+          : "text-slate-600 hover:bg-slate-50 hover:text-slate-950"
+      )}
+    >
+      <Icon
+        className={cn(
+          "h-5 w-5 shrink-0",
+          isActive ? "text-emerald-600" : item.moduleColor ?? ""
+        )}
+      />
+      <span
+        className={cn(
+          "flex-1 truncate transition-all duration-200",
+          forMobile
+            ? "opacity-100 w-auto"
+            : "opacity-0 w-0 overflow-hidden group-hover:opacity-100 group-hover:w-auto",
+          pinned && !forMobile && "opacity-100 w-auto"
+        )}
+      >
+        {item.label}
+      </span>
+      {isActive && (
+        <span
+          className={cn(
+            "w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0 transition-all duration-200",
+            forMobile ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+            pinned && !forMobile && "opacity-100"
+          )}
+        />
+      )}
+    </Link>
+  );
 }
 
 function NavContent({
@@ -52,26 +114,22 @@ function NavContent({
   forMobile?: boolean;
 }) {
   const pathname = usePathname();
-  // On desktop, labels show when pinned OR when hovering (via CSS group-hover)
-  // The `showLabel` logic only applies for the static mobile drawer
-  const showLabel = forMobile || pinned;
 
   return (
     <div className="flex flex-col h-full">
       {/* Logo */}
-      <div className="flex items-center h-16 px-3 border-b shrink-0 overflow-hidden">
+      <div className="flex items-center h-16 px-4 border-b border-slate-100 shrink-0 overflow-hidden">
         <Link
           href="/cashboard"
           onClick={onMobileClose}
           className="flex items-center gap-2.5 min-w-0"
         >
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 via-blue-500 to-violet-500 flex items-center justify-center text-white font-bold text-sm shrink-0">
+          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-emerald-500 to-blue-600 flex items-center justify-center text-white font-black text-sm shrink-0 shadow-lg shadow-blue-500/15">
             C
           </div>
-          {/* Desktop: fade-in on hover via group-hover; always show on mobile/pinned */}
           <span
             className={cn(
-              "font-bold text-lg tracking-tight whitespace-nowrap transition-all duration-200",
+              "font-black text-xl tracking-tight whitespace-nowrap transition-all duration-200 text-slate-950",
               forMobile ? "opacity-100 w-auto" : "opacity-0 w-0 group-hover:opacity-100 group-hover:w-auto",
               pinned && !forMobile && "opacity-100 w-auto"
             )}
@@ -79,11 +137,10 @@ function NavContent({
             Cashpile
           </span>
         </Link>
-        {/* Mobile close */}
         {forMobile && (
           <button
             onClick={onMobileClose}
-            className="ml-auto p-1.5 rounded-md text-muted-foreground hover:bg-accent"
+            className="ml-auto p-1.5 rounded-md text-slate-500 hover:bg-slate-100"
           >
             <X className="h-5 w-5" />
           </button>
@@ -91,64 +148,26 @@ function NavContent({
       </div>
 
       {/* Nav items */}
-      <nav className="flex-1 py-4 px-2 space-y-0.5 overflow-y-auto">
-        {NAV_ITEMS.map(({ href, label, icon: Icon, moduleColor }) => {
-          const isActive = pathname === href || pathname.startsWith(href + "/");
-          return (
-            <Link
-              key={href}
-              href={href}
-              onClick={onMobileClose}
-              title={label}
-              className={cn(
-                "flex items-center gap-3 px-2.5 py-2.5 rounded-lg text-sm font-medium transition-colors group/item",
-                isActive
-                  ? "bg-accent/80 text-foreground"
-                  : "text-muted-foreground hover:bg-accent/60 hover:text-foreground"
-              )}
-            >
-              <Icon
-                className={cn(
-                  "h-5 w-5 shrink-0",
-                  isActive && moduleColor ? moduleColor : ""
-                )}
-              />
-              {/* Label: static on mobile/pinned, hover-reveal on desktop unpinned */}
-              <span
-                className={cn(
-                  "flex-1 truncate transition-all duration-200",
-                  forMobile
-                    ? "opacity-100 w-auto"
-                    : "opacity-0 w-0 overflow-hidden group-hover:opacity-100 group-hover:w-auto",
-                  pinned && !forMobile && "opacity-100 w-auto"
-                )}
-              >
-                {label}
-              </span>
-              {/* Active dot */}
-              {isActive && (
-                <span
-                  className={cn(
-                    "w-1.5 h-1.5 rounded-full bg-primary shrink-0 transition-all duration-200",
-                    forMobile
-                      ? "opacity-100"
-                      : "opacity-0 group-hover:opacity-100",
-                    pinned && !forMobile && "opacity-100"
-                  )}
-                />
-              )}
-            </Link>
-          );
-        })}
+      <nav className="flex-1 py-5 px-3 space-y-2 overflow-y-auto">
+        {NAV_ITEMS.map((item) => (
+          <NavLink
+            key={item.href}
+            item={item}
+            pathname={pathname}
+            onMobileClose={onMobileClose}
+            forMobile={forMobile}
+            pinned={pinned}
+          />
+        ))}
       </nav>
 
       {/* Pin toggle (desktop only) */}
       {!forMobile && onPin && (
-        <div className="p-2 border-t shrink-0">
+        <div className="p-3 border-t border-slate-100 shrink-0">
           <button
             onClick={onPin}
             title={pinned ? "Unpin sidebar" : "Pin sidebar open"}
-            className="w-full flex items-center justify-center p-2 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+            className="w-full flex items-center justify-center p-2 rounded-xl text-slate-500 hover:bg-slate-100 hover:text-slate-950 transition-colors"
           >
             {pinned ? (
               <ChevronLeft className="h-4 w-4" />
@@ -173,10 +192,10 @@ export function Sidebar({
       {/* Desktop sidebar — icon-only by default, hover expands via CSS group */}
       <aside
         className={cn(
-          "hidden lg:flex flex-col h-full bg-background/95 border-r",
+          "hidden lg:flex flex-col h-full bg-white/90 backdrop-blur-xl border-r border-slate-100",
           "transition-all duration-200 ease-in-out",
-          "group hover:w-56",
-          pinned ? "w-56" : "w-14"
+          "group hover:w-64",
+          pinned ? "w-64" : "w-16"
         )}
       >
         <NavContent pinned={pinned} onPin={onPin} />
@@ -193,7 +212,7 @@ export function Sidebar({
       {/* Mobile drawer */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 flex flex-col w-72 bg-background border-r",
+          "fixed inset-y-0 left-0 z-50 flex flex-col w-72 bg-white border-r border-slate-100",
           "transition-transform duration-300 lg:hidden",
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         )}

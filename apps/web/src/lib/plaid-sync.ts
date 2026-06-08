@@ -55,6 +55,7 @@ export async function syncPlaidItem(itemId: string, serviceClient?: any) {
       date:                 t.date,
       transaction_type:     t.amount > 0 ? "debit" : "credit",
       plaid_transaction_id:  t.transaction_id,
+      dedupe_fingerprint:    null,
       import_source:        "plaid",
       import_batch_id:      null,
       metadata:             {
@@ -72,18 +73,18 @@ export async function syncPlaidItem(itemId: string, serviceClient?: any) {
       const dates = toUpsert.map((t) => t.date).sort();
       const { data: existingTransactions } = await client
         .from("books_transactions")
-        .select("date, amount")
+        .select("financial_account_id, date, amount")
         .eq("user_id", user_id)
         .is("plaid_transaction_id", null)
         .gte("date", dates[0])
         .lte("date", dates[dates.length - 1]);
 
       const existingKeys = new Set(
-        (existingTransactions ?? []).map((t: any) => `${t.date}|${Number(t.amount).toFixed(2)}`)
+        (existingTransactions ?? []).map((t: any) => `${t.financial_account_id ?? "unknown"}|${t.date}|${Number(t.amount).toFixed(2)}`)
       );
 
       toUpsert = toUpsert.map((t) => {
-        const possibleDuplicate = existingKeys.has(`${t.date}|${Number(t.amount).toFixed(2)}`);
+        const possibleDuplicate = existingKeys.has(`${t.financial_account_id ?? "unknown"}|${t.date}|${Number(t.amount).toFixed(2)}`);
         return {
           ...t,
           metadata: {
@@ -128,7 +129,7 @@ export async function syncPlaidItem(itemId: string, serviceClient?: any) {
   if (added > 0) {
     const { data: newTransactions } = await client
       .from("books_transactions")
-      .select("id, description, merchant, amount")
+      .select("id, description, merchant, amount, date, category_id, financial_account_id")
       .eq("user_id", user_id)
       .eq("import_source", "plaid")
       .order("created_at", { ascending: false })

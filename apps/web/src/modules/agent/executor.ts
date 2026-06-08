@@ -1,4 +1,5 @@
 import { createServiceRoleClient } from "@cashpile/db";
+import { checkAffordability, getCashflowSnapshot, detectRecurringItems } from "@cashpile/ai";
 import { AGENT_CAPABILITIES, getAgentCapability } from "./capabilities";
 import { auditAgentCall } from "./audit";
 import { createConfirmationToken, verifyConfirmationToken } from "./confirmation";
@@ -33,7 +34,7 @@ async function listBooksTransactions(userId: string, input: Record<string, any>)
 
   let q = supabase
     .from("books_transactions")
-    .select("id, date, description, merchant, amount, type, category_id, financial_account_id, is_transfer, notes, created_at", { count: "exact" })
+    .select("id, date, description, merchant, amount, transaction_type, category_id, financial_account_id, is_transfer, notes, created_at", { count: "exact" })
     .eq("user_id", userId)
     .order("date", { ascending: false })
     .range(offset, offset + limit - 1);
@@ -124,7 +125,7 @@ async function generateTaxReport(userId: string, input: Record<string, any>) {
     .from("books_tax_transaction_views")
     .select(`
       id, tax_amount, tax_description, tax_date, is_tax_deductible, business_percentage, deduction_percentage, tax_notes, category_id,
-      books_transactions(id, date, description, merchant, amount, type),
+      books_transactions(id, date, description, merchant, amount, transaction_type),
       books_categories(id, name)
     `)
     .eq("user_id", userId)
@@ -147,112 +148,31 @@ async function generateTaxReport(userId: string, input: Record<string, any>) {
   };
 }
 
-async function getTradesSnapshot(userId: string) {
-  const supabase = createServiceRoleClient() as any;
-  const { data: accounts, error } = await supabase
-    .from("trades_prop_accounts")
-    .select("id, firm_name, account_label, starting_balance, current_balance, status, max_total_drawdown_pct")
-    .eq("user_id", userId)
-    .neq("status", "inactive");
-  if (error) throw new Error(error.message);
-
-  const list = accounts ?? [];
-  const accountIds = list.map((account: any) => account.id);
-  let recentTrades: any[] = [];
-  if (accountIds.length > 0) {
-    const { data } = await supabase
-      .from("trades_entries")
-      .select("instrument, direction, net_pnl, entry_time")
-      .in("account_id", accountIds)
-      .eq("is_open", false)
-      .order("entry_time", { ascending: false })
-      .limit(20);
-    recentTrades = data ?? [];
-  }
-
-  const accountSummaries = list.map((account: any) => {
-    const pnl = Number(account.current_balance ?? 0) - Number(account.starting_balance ?? 0);
-    const drawdownPct = Number(account.starting_balance ?? 0) > 0
-      ? ((Number(account.starting_balance) - Number(account.current_balance)) / Number(account.starting_balance)) * 100
-      : 0;
-    return {
-      id: account.id,
-      label: `${account.firm_name} ${account.account_label ?? ""}`.trim(),
-      pnl: +pnl.toFixed(2),
-      drawdownPct: +drawdownPct.toFixed(2),
-      maxDrawdownPct: account.max_total_drawdown_pct,
-      status: account.status,
-      atRisk: drawdownPct >= Number(account.max_total_drawdown_pct ?? 0) * 0.8,
-    };
-  });
-
-  const wins = recentTrades.filter((trade) => Number(trade.net_pnl ?? 0) > 0).length;
-  return {
-    accountCount: list.length,
-    totalPnl: +accountSummaries.reduce((sum: number, account: any) => sum + account.pnl, 0).toFixed(2),
-    breachedCount: list.filter((account: any) => account.status === "breached").length,
-    winRate: recentTrades.length ? +((wins / recentTrades.length) * 100).toFixed(1) : null,
-    accounts: accountSummaries,
-    recentTrades: recentTrades.slice(0, 5),
-  };
-}
-
-async function listPulseEvents(input: Record<string, any>) {
-  const limit = limitNumber(input.limit, 10, 50);
-  const supabase = createServiceRoleClient() as any;
-  const { data, error } = await supabase
-    .from("pulse_events")
-    .select("id, title, summary, category, severity, affected_instruments, published_at, source")
-    .order("published_at", { ascending: false })
-    .limit(limit);
-  if (error) throw new Error(error.message);
-
-  const instruments = Array.isArray(input.instruments) ? input.instruments : [];
-  const events = instruments.length
-    ? (data ?? []).filter((event: any) => Array.isArray(event.affected_instruments) && instruments.some((instrument: string) => event.affected_instruments.includes(instrument)))
-    : data ?? [];
-  return { events, count: events.length };
-}
-
-async function listPulseAlerts(userId: string, input: Record<string, any>) {
-  const supabase = createServiceRoleClient() as any;
-  let q = supabase
-    .from("pulse_alerts")
-    .select("id, instrument, message, severity, created_at, read_at")
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false })
-    .limit(50);
-  if (input.unreadOnly !== false) q = q.is("read_at", null);
-  const { data, error } = await q;
-  if (error) throw new Error(error.message);
-  return { alerts: data ?? [], unreadCount: (data ?? []).filter((alert: any) => !alert.read_at).length };
-}
-
 async function generateBriefing(userId: string) {
-  const [books, trades, pulse] = await Promise.all([
+  const [books, cashflow] = await Promise.all([
     listBooksTransactions(userId, { dateFrom: periodStartDate("mtd"), limit: 100 }),
-    getTradesSnapshot(userId),
-    listPulseAlerts(userId, { unreadOnly: true }),
+    getCashflowSnapshot(userId, 30),
   ]);
-  const income = (books.transactions as any[]).filter((t) => t.type === "credit").reduce((sum, t) => sum + Math.abs(Number(t.amount ?? 0)), 0);
-  const expenses = (books.transactions as any[]).filter((t) => t.type === "debit").reduce((sum, t) => sum + Math.abs(Number(t.amount ?? 0)), 0);
+  const income = (books.transactions as any[]).filter((t) => t.transaction_type === "credit").reduce((sum, t) => sum + Math.abs(Number(t.amount ?? 0)), 0);
+  const expenses = (books.transactions as any[]).filter((t) => t.transaction_type === "debit").reduce((sum, t) => sum + Math.abs(Number(t.amount ?? 0)), 0);
+  const netCashFlow = income - expenses;
   return {
-    briefing: `Books MTD net cash flow is $${(income - expenses).toFixed(2)} across ${books.count} transactions. Trades total P&L is $${trades.totalPnl.toFixed(2)} across ${trades.accountCount} active accounts. Pulse has ${pulse.unreadCount} unread alerts.`,
-    data: { books: { income, expenses, netCashFlow: income - expenses, count: books.count }, trades, pulse },
+    briefing: `Books MTD net cash flow is $${netCashFlow.toFixed(2)} across ${books.count} transactions. Safe-to-spend is $${cashflow.safeToSpend.toFixed(2)} with a projected low balance of $${cashflow.forecast.projectedLowBalance.toFixed(2)}.`,
+    data: { books: { income, expenses, netCashFlow, count: books.count }, cashflow },
   };
 }
 
 async function runCapability(userId: string, name: string, input: Record<string, any>) {
   switch (name) {
     case "cashpile.briefing.generate": return generateBriefing(userId);
+    case "cashflow.snapshot.get": return getCashflowSnapshot(userId, limitNumber(input.horizonDays, 30, 90));
+    case "cashflow.affordability.check": return checkAffordability(userId, { amount: Number(input.amount), description: input.description, date: input.date, horizonDays: limitNumber(input.horizonDays, 30, 90) });
+    case "cashflow.recurring_items.list": return { recurringItems: await detectRecurringItems(userId) };
     case "books.transactions.list": return listBooksTransactions(userId, input);
     case "books.accounts.list": return listBooksAccounts(userId, input);
     case "books.categories.list": return listBooksCategories(userId);
     case "books.transactions.categorize": return categorizeTransactions(userId, input);
     case "tax.report.generate": return generateTaxReport(userId, input);
-    case "trades.snapshot.get": return getTradesSnapshot(userId);
-    case "pulse.events.list": return listPulseEvents(input);
-    case "pulse.alerts.list": return listPulseAlerts(userId, input);
     default: throw new Error(`Unknown capability: ${name}`);
   }
 }
@@ -299,13 +219,11 @@ export async function callAgentCapability(params: {
 
 export function getAgentResources() {
   return [
+    { uri: "cashpile://cashflow/snapshot", name: "Cash flow snapshot", scopes: ["books:read"] },
     { uri: "cashpile://books/accounts", name: "Books accounts", scopes: ["books:read"] },
     { uri: "cashpile://books/transactions", name: "Books transactions", scopes: ["books:read"] },
     { uri: "cashpile://books/categories", name: "Books categories", scopes: ["books:read"] },
     { uri: "cashpile://tax/reports", name: "Tax reports", scopes: ["tax:read"] },
-    { uri: "cashpile://trades/snapshot", name: "Trades snapshot", scopes: ["trades:read"] },
-    { uri: "cashpile://pulse/events", name: "Pulse events", scopes: ["pulse:read"] },
-    { uri: "cashpile://pulse/alerts", name: "Pulse alerts", scopes: ["pulse:read"] },
   ];
 }
 

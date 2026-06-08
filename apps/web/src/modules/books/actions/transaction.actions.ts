@@ -3,6 +3,7 @@
 import { createServerSupabaseClient } from "@cashpile/db";
 import { revalidatePath } from "next/cache";
 import type { BooksTransaction } from "../types";
+import { buildTransactionFingerprint, isUniqueViolation } from "../services/duplicate-detection";
 
 export async function listTransactions(params: {
   taxEntityId?: string; // NEW: Filter by Tax Entity
@@ -11,8 +12,10 @@ export async function listTransactions(params: {
   categoryId?: string;
   dateFrom?: string;
   dateTo?: string;
+  search?: string;
   limit?: number;
   offset?: number;
+  filter?: "uncategorized" | "categorized";
 }) {
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -41,8 +44,14 @@ export async function listTransactions(params: {
   if (accountIds) q = (q as any).in("financial_account_id", accountIds);
   if (params.accountId) q = (q as any).eq("financial_account_id", params.accountId);
   if (params.categoryId) q = q.eq("category_id", params.categoryId);
+  if (params.filter === "uncategorized") q = q.is("category_id", null);
+  if (params.filter === "categorized") q = q.not("category_id", "is", null);
   if (params.dateFrom) q = q.gte("date", params.dateFrom);
   if (params.dateTo) q = q.lte("date", params.dateTo);
+  if (params.search?.trim()) {
+    const term = params.search.trim().replace(/[%_,]/g, "");
+    if (term) q = (q as any).or(`description.ilike.%${term}%,merchant.ilike.%${term}%`);
+  }
   if (params.limit) q = q.limit(params.limit);
   if (params.offset) q = q.range(params.offset, params.offset + (params.limit ?? 50) - 1);
 
@@ -120,18 +129,40 @@ export async function listTransactions(params: {
   };
 }
 
-export async function createTransaction(input: Omit<BooksTransaction, "id" | "user_id" | "created_at" | "updated_at">) {
+export async function createTransaction(
+  input: Omit<BooksTransaction, "id" | "user_id" | "created_at" | "updated_at"> & {
+    financial_account_id?: string | null;
+    allowDuplicate?: boolean;
+  }
+) {
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthenticated");
 
-  const { data, error } = await supabase
+  const { allowDuplicate, ...transactionInput } = input;
+  const accountId = transactionInput.financial_account_id ?? (transactionInput as any).account_id ?? null;
+  const isProviderBacked = transactionInput.import_source === "plaid" || Boolean((transactionInput as any).plaid_transaction_id);
+  const dedupeFingerprint = !allowDuplicate && !isProviderBacked
+    ? buildTransactionFingerprint({
+        financialAccountId: accountId,
+        date: transactionInput.date,
+        amount: transactionInput.amount,
+        description: transactionInput.description,
+      })
+    : null;
+
+  const { data, error } = await (supabase as any)
     .from("books_transactions")
-    .insert({ ...input, user_id: user.id })
+    .insert({ ...transactionInput, user_id: user.id, dedupe_fingerprint: dedupeFingerprint })
     .select()
     .single();
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    if (isUniqueViolation(error)) {
+      throw new Error("This transaction appears to already exist. Enable duplicate override to add it anyway.");
+    }
+    throw new Error(error.message);
+  }
   revalidatePath("/books/transactions");
   return data;
 }
@@ -185,4 +216,21 @@ export async function bulkUpdateTransactions(
 
   if (error) throw new Error(error.message);
   revalidatePath("/books/transactions");
+}
+
+export async function bulkCategorizeUncategorizedTransactions(options?: {
+  limit?: number;
+  useAI?: boolean;
+  minConfidence?: number;
+}) {
+  const supabase = await createServerSupabaseClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Unauthenticated");
+
+  const { bulkCategorizeTransactions } = await import("../services/categorization-engine");
+  const result = await bulkCategorizeTransactions(supabase as any, user.id, options);
+
+  revalidatePath("/books");
+  revalidatePath("/books/transactions");
+  return result;
 }

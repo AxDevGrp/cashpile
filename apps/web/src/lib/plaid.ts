@@ -2,6 +2,12 @@ import { Configuration, PlaidApi, PlaidEnvironments } from "plaid";
 
 export const PLAID_ENV = process.env.PLAID_ENV ?? "sandbox";
 
+const PLAID_BASE_URLS = {
+  sandbox: PlaidEnvironments.sandbox,
+  development: PlaidEnvironments.production,
+  production: PlaidEnvironments.production,
+} as const;
+
 function csv(name: string, fallback: readonly string[]) {
   const value = process.env[name];
   if (!value) return fallback;
@@ -12,7 +18,7 @@ function csv(name: string, fallback: readonly string[]) {
 }
 
 export function getPlaidConfigStatus() {
-  const validEnv = PLAID_ENV in PlaidEnvironments;
+  const validEnv = PLAID_ENV in PLAID_BASE_URLS;
   return {
     env: PLAID_ENV,
     validEnv,
@@ -36,7 +42,7 @@ export function assertPlaidConfigured() {
 }
 
 const config = new Configuration({
-  basePath: PlaidEnvironments[PLAID_ENV as keyof typeof PlaidEnvironments],
+  basePath: PLAID_BASE_URLS[PLAID_ENV as keyof typeof PLAID_BASE_URLS],
   baseOptions: {
     headers: {
       "PLAID-CLIENT-ID": process.env.PLAID_CLIENT_ID ?? "",

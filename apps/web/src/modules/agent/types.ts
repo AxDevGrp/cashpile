@@ -13,7 +13,7 @@ export interface AgentCapability {
   name: string;
   title: string;
   description: string;
-  module: "books" | "trades" | "pulse" | "tax" | "cashpile";
+  module: "books" | "trades" | "pulse" | "tax" | "cashpile" | "cashflow";
   kind: AgentCapabilityKind;
   requiredScopes: AgentScope[];
   requiresConfirmation: boolean;

@@ -3,7 +3,7 @@
 import * as React from "react";
 import { createContext, useContext, useEffect, useRef, useState, useCallback } from "react";
 import { useChat } from "ai/react";
-import { X, Send, Loader2, BookOpen, TrendingUp, Activity, Sparkles, Zap } from "lucide-react";
+import { X, Send, Loader2, BookOpen, Sparkles, Zap, WalletCards } from "lucide-react";
 import { TopupModal } from "@/components/ai/TopupModal";
 
 // ─── Context ──────────────────────────────────────────────────────────────────
@@ -30,9 +30,8 @@ const TOOL_LABELS: Record<string, { label: string; Icon: React.ElementType }> = 
   bulk_categorize_transactions: { label: "categorizing…",           Icon: BookOpen },
   suggest_transfers:            { label: "detecting transfers…",    Icon: BookOpen },
   get_books_export:             { label: "preparing export…",       Icon: BookOpen },
-  get_trades_snapshot:          { label: "checking Trades…",        Icon: TrendingUp },
-  get_pulse_events:             { label: "checking Pulse events…",  Icon: Activity },
-  get_pulse_alerts:             { label: "checking Pulse alerts…",  Icon: Activity },
+  get_cashflow_snapshot:        { label: "checking cash flow…",     Icon: WalletCards },
+  check_affordability:          { label: "checking affordability…", Icon: WalletCards },
 };
 
 function ToolIndicator({ toolName }: { toolName: string }) {
@@ -108,9 +107,9 @@ function InsufficientCreditsBanner({ onTopup }: { onTopup: () => void }) {
 
 const SUGGESTED = [
   "Give me a full financial snapshot",
-  "Any trades at risk of breaching today?",
-  "What macro events should I watch this week?",
-  "How does my cash flow compare to my trading P&L?",
+  "Can I afford $250 this week?",
+  "What subscriptions am I paying for?",
+  "What should I review for taxes?",
 ];
 
 function CashOverlayModal({
@@ -242,7 +241,7 @@ function CashOverlayModal({
             {messages.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center gap-4">
                 <p className="text-sm text-muted-foreground text-center max-w-xs">
-                  I have live access to your Books, Trades, and Pulse data. Ask anything.
+                  I have live access to your Books, cash flow, and tax data. Ask anything.
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full">
                   {SUGGESTED.map((q) => (

@@ -244,6 +244,31 @@ export async function getTaxSummaryForEntities(
   return result;
 }
 
+
+export async function listTaxAssignmentIndex(year: number): Promise<Record<string, { taxEntityId: string; taxEntityName: string; notes: string | null }>> {
+  const supabase = await createServerSupabaseClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Unauthenticated");
+
+  const { data, error } = await (supabase as any)
+    .from("books_tax_transaction_views")
+    .select("transaction_id, tax_entity_id, tax_notes, books_business_entities(name)")
+    .eq("user_id", user.id)
+    .gte("tax_date", `${year}-01-01`)
+    .lte("tax_date", `${year}-12-31`);
+
+  if (error) throw new Error(error.message);
+
+  return Object.fromEntries((data ?? []).map((row: any) => [
+    row.transaction_id,
+    {
+      taxEntityId: row.tax_entity_id,
+      taxEntityName: row.books_business_entities?.name ?? "Unknown Tax Entity",
+      notes: row.tax_notes ?? null,
+    },
+  ]));
+}
+
 // ─── Backward Compatibility ─────────────────────────────────────────────────
 // DEPRECATED: These functions use old 'uda' terminology
 // Use the TaxEntity functions above instead
@@ -428,15 +453,12 @@ export async function applyRulesToExistingTransactions(): Promise<{ assigned: nu
   if (!user) throw new Error("Unauthenticated");
 
   // Import here to avoid circular dependency
-  const { fetchActiveRules, applyRulesToTransactions, persistRuleMatches } = await import("../services/tax-rule-engine");
-
-  const rules = await fetchActiveRules(supabase, user.id);
-  if (rules.length === 0) return { assigned: 0 };
+  const { autoAssignTaxEntities } = await import("../services/tax-rule-engine");
 
   // Fetch unassigned transactions (no tax view yet)
-  const { data: unassignedTxns, error } = await supabase
+  const { data: unassignedTxns, error } = await (supabase as any)
     .from("books_transactions")
-    .select("id, description, merchant, amount")
+    .select("id, description, merchant, amount, date, category_id, financial_account_id")
     .eq("user_id", user.id)
     .not("id", "in", (
       supabase
@@ -451,8 +473,7 @@ export async function applyRulesToExistingTransactions(): Promise<{ assigned: nu
     return { assigned: 0 };
   }
 
-  const matches = applyRulesToTransactions(unassignedTxns, rules);
-  const assigned = await persistRuleMatches(supabase, user.id, matches);
+  const assigned = await autoAssignTaxEntities(supabase, user.id, unassignedTxns as any);
 
   return { assigned };
 }

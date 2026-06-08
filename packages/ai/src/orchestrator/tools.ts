@@ -1,6 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 import { createServiceRoleClient } from "@cashpile/db";
+import { checkAffordability, getCashflowSnapshot } from "../cashflow";
 
 // ─── Period helpers ───────────────────────────────────────────────────────────
 
@@ -324,9 +325,9 @@ export function createTools(userId: string) {
           .max(200)
           .describe("List of books_transactions UUIDs to update (max 200)"),
         categoryId: z
-          .string()
-          .uuid()
-          .describe("UUID of the books_categories row to assign"),
+          .number()
+          .int()
+          .describe("Integer ID of the books_categories row to assign"),
       }),
       execute: async ({ transactionIds, categoryId }) => {
         const supabase = (createServiceRoleClient()) as any;
@@ -364,7 +365,7 @@ export function createTools(userId: string) {
           .describe("Maximum absolute difference in amounts to still consider a match (default 0.01)"),
       }),
       execute: async ({ dateRangeDays, amountTolerance }) => {
-        const supabase = createServiceRoleClient();
+        const supabase = (createServiceRoleClient()) as any;
 
         const since = new Date();
         since.setDate(since.getDate() - 30);
@@ -372,7 +373,7 @@ export function createTools(userId: string) {
 
         const { data: rows } = await supabase
           .from("books_transactions")
-          .select("id, date, amount, description, account_id, is_transfer, transfer_pair_id")
+          .select("id, date, amount, description, financial_account_id, is_transfer, transfer_pair_id")
           .eq("user_id", userId)
           .is("transfer_pair_id", null)
           .eq("is_transfer", false)
@@ -401,7 +402,7 @@ export function createTools(userId: string) {
             const b = txns[j];
             // Must be opposite signs and different accounts
             if (Math.sign(a.amount) === Math.sign(b.amount)) continue;
-            if (a.account_id === b.account_id) continue;
+            if (a.financial_account_id === b.financial_account_id) continue;
 
             const bAmt = Math.abs(b.amount);
             const bDate = new Date(b.date).getTime();
@@ -413,7 +414,7 @@ export function createTools(userId: string) {
             // Confidence: amount match + date proximity
             let confidence = 0.5; // base: amount matches
             confidence += Math.max(0, 1 - dateDiff / dateRangeDays) * 0.4;
-            confidence += a.account_id !== b.account_id ? 0.1 : 0;
+            confidence += a.financial_account_id !== b.financial_account_id ? 0.1 : 0;
 
             const debit = a.amount < 0 ? a : b;
             const credit = a.amount > 0 ? a : b;
@@ -503,6 +504,30 @@ export function createTools(userId: string) {
           csv: [header, ...csvRows].join("\n"),
         };
       },
+    }),
+
+
+    // ── Cash Flow Copilot ─────────────────────────────────────────────────
+    get_cashflow_snapshot: tool({
+      description:
+        "Fetch the user's cash-flow snapshot: spendable balance, inferred recurring income/bills, projected low balance, minimum buffer, and safe-to-spend amount.",
+      parameters: z.object({
+        horizonDays: z.number().int().min(7).max(90).default(30),
+      }),
+      execute: async ({ horizonDays }) => getCashflowSnapshot(userId, horizonDays),
+    }),
+
+    check_affordability: tool({
+      description:
+        "Answer whether the user can afford a planned purchase using current spendable balance, upcoming recurring income/bills, projected low balance, and buffer policy. Always use this for 'can I afford' questions.",
+      parameters: z.object({
+        amount: z.number().positive().describe("Planned purchase amount in dollars"),
+        description: z.string().optional().describe("What the user is considering buying/paying"),
+        date: z.string().optional().describe("Optional planned purchase date as YYYY-MM-DD; defaults to today"),
+        horizonDays: z.number().int().min(7).max(90).default(30),
+      }),
+      execute: async ({ amount, description, date, horizonDays }) =>
+        checkAffordability(userId, { amount, description, date, horizonDays }),
     }),
 
     // ── Pulse alerts ───────────────────────────────────────────────────────

@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { PageHeader, Button, Badge, Card, CardHeader, CardTitle, CardContent } from "@cashpile/ui";
 import PlaidLinkButton from "@/components/plaid-link-button";
 import type { TaxEntity, BooksAccount } from "@/modules/books/types";
-import { assignAccountToTaxEntity } from "@/modules/books/actions/account.actions";
+import { assignAccountToTaxEntity, mergeFinancialAccounts, updateAccount } from "@/modules/books/actions/account.actions";
 
 interface PlaidItem {
   id: string;
@@ -44,19 +45,46 @@ function isInstitutionalAccount(account: BooksAccount) {
   return Boolean(account.plaid_account_id || account.plaid_item_id);
 }
 
+function accountInstitutionLabel(account: BooksAccount) {
+  const institution = account.institution_name ?? account.institution ?? "—";
+  return `${institution}${account.last_four_digits ? ` - *${account.last_four_digits}` : ""}`;
+}
+
+function BackButton() {
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={() => {
+        if (window.history.length > 1) window.history.back();
+        else window.location.href = "/books";
+      }}
+    >
+      ← Back
+    </Button>
+  );
+}
+
 function AccountCard({
   account,
   plaidItem,
   taxEntities,
   onAssign,
+  onMerge,
+  onRename,
 }: {
   account: BooksAccount;
   plaidItem?: PlaidItem;
   taxEntities: TaxEntity[];
   onAssign: (accountId: string, taxEntityId: string | null) => void;
+  onMerge: (account: BooksAccount) => void;
+  onRename: (accountId: string, name: string) => Promise<void>;
 }) {
   const [syncing, setSyncing] = useState(false);
   const [isAssigning, setIsAssigning] = useState(false);
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [nameDraft, setNameDraft] = useState(account.name);
+  const [savingName, setSavingName] = useState(false);
 
   async function handleRefresh() {
     if (!plaidItem) return;
@@ -72,14 +100,56 @@ function AccountCard({
 
   const assignedEntity = taxEntities.find(e => e.id === account.tax_entity_id);
 
+  async function saveName() {
+    const nextName = nameDraft.trim();
+    if (!nextName || nextName === account.name) {
+      setNameDraft(account.name);
+      setIsRenaming(false);
+      return;
+    }
+    setSavingName(true);
+    try {
+      await onRename(account.id, nextName);
+      setIsRenaming(false);
+    } finally {
+      setSavingName(false);
+    }
+  }
+
   return (
     <Card>
       <CardHeader className="pb-2">
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1">
-            <CardTitle className="text-base">{account.name}</CardTitle>
-            {account.institution_name && (
-              <p className="text-xs text-muted-foreground mt-0.5">{account.institution_name}</p>
+            {isRenaming ? (
+              <div className="space-y-2">
+                <input
+                  value={nameDraft}
+                  onChange={(event) => setNameDraft(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") void saveName();
+                    if (event.key === "Escape") { setNameDraft(account.name); setIsRenaming(false); }
+                  }}
+                  className="w-full bg-background border border-border rounded-md px-2 py-1 text-sm font-medium"
+                  autoFocus
+                />
+                <div className="flex gap-2">
+                  <Button size="sm" className="h-6 px-2 text-xs" onClick={saveName} disabled={savingName}>{savingName ? "Saving…" : "Save"}</Button>
+                  <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => { setNameDraft(account.name); setIsRenaming(false); }} disabled={savingName}>Cancel</Button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <Link href={`/books/accounts/${account.id}/transactions`} className="hover:underline">
+                  <CardTitle className="text-base">{account.name}</CardTitle>
+                </Link>
+                <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => setIsRenaming(true)}>Edit</Button>
+              </div>
+            )}
+            {(account.institution_name || account.institution || account.last_four_digits) && (
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {accountInstitutionLabel(account)}
+              </p>
             )}
           </div>
           <div className="flex gap-2 shrink-0">
@@ -130,14 +200,29 @@ function AccountCard({
                 <span className="text-muted-foreground">Not assigned to a Tax Entity</span>
               )}
             </div>
-            <Button 
-              size="sm" 
-              variant="ghost" 
-              className="h-6 px-2 text-xs"
-              onClick={() => setIsAssigning(!isAssigning)}
-            >
-              {isAssigning ? "Cancel" : assignedEntity ? "Change" : "Assign"}
-            </Button>
+            <div className="flex gap-1">
+              <Link href={`/books/accounts/${account.id}/transactions`}>
+                <Button size="sm" variant="outline" className="h-6 px-2 text-xs">
+                  Transactions
+                </Button>
+              </Link>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 px-2 text-xs"
+                onClick={() => setIsAssigning(!isAssigning)}
+              >
+                {isAssigning ? "Cancel" : assignedEntity ? "Change" : "Assign"}
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 px-2 text-xs"
+                onClick={() => onMerge(account)}
+              >
+                Merge
+              </Button>
+            </div>
           </div>
           
           {isAssigning && (
@@ -166,8 +251,116 @@ function AccountCard({
   );
 }
 
+function MergeAccountModal({
+  keepAccount,
+  accounts,
+  onClose,
+  onMerged,
+}: {
+  keepAccount: BooksAccount;
+  accounts: BooksAccount[];
+  onClose: () => void;
+  onMerged: (deletedAccountId: string, updatedKeepAccount: Partial<BooksAccount> & { id: string }) => void;
+}) {
+  const candidates = accounts.filter((account) => account.id !== keepAccount.id);
+  const [mergeAccountId, setMergeAccountId] = useState(candidates[0]?.id ?? "");
+  const [useMergedAccountName, setUseMergedAccountName] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [result, setResult] = useState<{ movedTransactions: number } | null>(null);
+
+  const mergeAccount = accounts.find((account) => account.id === mergeAccountId);
+
+  async function handleMerge() {
+    if (!mergeAccount) return;
+    if (!window.confirm(`Merge "${mergeAccount.name}" into "${keepAccount.name}"? This moves transactions and deletes the duplicate account.`)) return;
+
+    setSaving(true);
+    try {
+      const mergeResult = await mergeFinancialAccounts({
+        keepAccountId: keepAccount.id,
+        mergeAccountId: mergeAccount.id,
+        useMergedAccountName,
+      });
+      setResult({ movedTransactions: mergeResult.movedTransactions });
+      onMerged(mergeResult.deletedAccountId, {
+        id: keepAccount.id,
+        name: useMergedAccountName ? mergeAccount.name : keepAccount.name,
+        tax_entity_id: keepAccount.tax_entity_id ?? mergeAccount.tax_entity_id,
+        institution_name: keepAccount.institution_name ?? mergeAccount.institution_name,
+        institution: keepAccount.institution ?? mergeAccount.institution,
+        last_four_digits: keepAccount.last_four_digits ?? mergeAccount.last_four_digits,
+      });
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Failed to merge accounts");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div className="bg-card border border-border rounded-xl w-full max-w-lg shadow-xl">
+        <div className="flex items-center justify-between p-4 border-b border-border">
+          <div>
+            <div className="font-semibold">Merge Duplicate Account</div>
+            <div className="text-xs text-muted-foreground">Keep {keepAccount.name}; move another account into it.</div>
+          </div>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground text-xl leading-none">×</button>
+        </div>
+
+        <div className="p-4 space-y-4">
+          <div className="rounded-md bg-muted/30 p-3 text-sm">
+            <div className="text-muted-foreground text-xs">Account to keep</div>
+            <div className="font-medium">{keepAccount.name}</div>
+            <div className="text-xs text-muted-foreground">{accountInstitutionLabel(keepAccount)}</div>
+            <div className="text-xs text-muted-foreground">Balance {keepAccount.current_balance == null ? "—" : Number(keepAccount.current_balance).toLocaleString("en-US", { style: "currency", currency: "USD" })}</div>
+          </div>
+
+          <label className="block text-sm space-y-1">
+            <span className="text-muted-foreground">Duplicate account to merge/delete</span>
+            <select
+              className="w-full bg-background border border-border rounded-md px-3 py-1.5 text-sm"
+              value={mergeAccountId}
+              onChange={(event) => setMergeAccountId(event.target.value)}
+            >
+              {candidates.map((account) => (
+                <option key={account.id} value={account.id}>
+                  {account.name} · {accountInstitutionLabel(account)} · {account.current_balance == null ? "—" : Number(account.current_balance).toLocaleString("en-US", { style: "currency", currency: "USD" })}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          {mergeAccount && (
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
+              <input type="checkbox" checked={useMergedAccountName} onChange={(event) => setUseMergedAccountName(event.target.checked)} />
+              <span>Rename kept account to “{mergeAccount.name}”</span>
+            </label>
+          )}
+
+          <div className="text-xs text-muted-foreground">
+            This moves transactions from the duplicate account into the kept account, preserves tax assignments through those transactions, and deletes the duplicate account.
+          </div>
+
+          {result && (
+            <div className="rounded-md bg-muted/30 p-3 text-sm text-muted-foreground">
+              Done — moved {result.movedTransactions} transaction{result.movedTransactions === 1 ? "" : "s"}.
+            </div>
+          )}
+        </div>
+
+        <div className="p-4 border-t border-border flex justify-end gap-2">
+          <Button variant="outline" onClick={onClose}>{result ? "Close" : "Cancel"}</Button>
+          {!result && <Button onClick={handleMerge} disabled={saving || !mergeAccountId}>{saving ? "Merging…" : "Merge Accounts"}</Button>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AccountsClient({ taxEntities, accounts, plaidItems }: Props) {
   const [localAccounts, setLocalAccounts] = useState(accounts);
+  const [mergeTarget, setMergeTarget] = useState<BooksAccount | null>(null);
 
   const getPlaidItem = (accountId: string) => {
     const account = localAccounts.find(a => a.id === accountId);
@@ -177,13 +370,25 @@ export default function AccountsClient({ taxEntities, accounts, plaidItems }: Pr
   async function handleAssign(accountId: string, taxEntityId: string | null) {
     try {
       await assignAccountToTaxEntity(accountId, taxEntityId);
-      // Update local state
-      setLocalAccounts(prev => 
+      setLocalAccounts(prev =>
         prev.map(a => a.id === accountId ? { ...a, tax_entity_id: taxEntityId } : a)
       );
     } catch (err) {
       console.error("Failed to assign account:", err);
       alert("Failed to assign account to Tax Entity");
+    }
+  }
+
+  async function handleRename(accountId: string, name: string) {
+    try {
+      await updateAccount(accountId, { name });
+      setLocalAccounts(prev =>
+        prev.map(a => a.id === accountId ? { ...a, name } : a)
+      );
+    } catch (err) {
+      console.error("Failed to rename account:", err);
+      alert("Failed to rename account");
+      throw err;
     }
   }
 
@@ -204,6 +409,7 @@ export default function AccountsClient({ taxEntities, accounts, plaidItems }: Pr
   if (taxEntities.length === 0 && accounts.length === 0) {
     return (
       <div className="space-y-6 p-6">
+        <BackButton />
         <PageHeader
           title="Accounts"
           description="Connect bank and credit card accounts. UDAs are logical groupings and do not connect through Plaid."
@@ -219,6 +425,7 @@ export default function AccountsClient({ taxEntities, accounts, plaidItems }: Pr
 
   return (
     <div className="space-y-6 p-6">
+      <BackButton />
       <PageHeader
         title="Accounts"
         description="Manage connected bank/credit card accounts separately from logical User Defined Accounts."
@@ -252,6 +459,8 @@ export default function AccountsClient({ taxEntities, accounts, plaidItems }: Pr
                             plaidItem={getPlaidItem(account.id)}
                             taxEntities={taxEntities}
                             onAssign={handleAssign}
+                            onMerge={setMergeTarget}
+                            onRename={handleRename}
                           />
                         ))}
                       </div>
@@ -268,6 +477,8 @@ export default function AccountsClient({ taxEntities, accounts, plaidItems }: Pr
                             plaidItem={undefined}
                             taxEntities={taxEntities}
                             onAssign={handleAssign}
+                            onMerge={setMergeTarget}
+                            onRename={handleRename}
                           />
                         ))}
                       </div>
@@ -298,6 +509,8 @@ export default function AccountsClient({ taxEntities, accounts, plaidItems }: Pr
                         plaidItem={getPlaidItem(account.id)}
                         taxEntities={taxEntities}
                         onAssign={handleAssign}
+                        onMerge={setMergeTarget}
+                        onRename={handleRename}
                       />
                     ))}
                   </div>
@@ -314,6 +527,8 @@ export default function AccountsClient({ taxEntities, accounts, plaidItems }: Pr
                         plaidItem={undefined}
                         taxEntities={taxEntities}
                         onAssign={handleAssign}
+                        onMerge={setMergeTarget}
+                        onRename={handleRename}
                       />
                     ))}
                   </div>
@@ -323,6 +538,21 @@ export default function AccountsClient({ taxEntities, accounts, plaidItems }: Pr
           </div>
         )}
       </div>
+
+      {mergeTarget && (
+        <MergeAccountModal
+          keepAccount={mergeTarget}
+          accounts={localAccounts}
+          onClose={() => setMergeTarget(null)}
+          onMerged={(deletedAccountId, updatedKeepAccount) => {
+            setLocalAccounts((current) => current
+              .filter((account) => account.id !== deletedAccountId)
+              .map((account) => account.id === updatedKeepAccount.id ? { ...account, ...updatedKeepAccount } : account)
+            );
+            setMergeTarget(null);
+          }}
+        />
+      )}
     </div>
   );
 }

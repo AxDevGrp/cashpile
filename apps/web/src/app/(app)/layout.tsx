@@ -9,7 +9,7 @@ import { CashOverlayProvider } from "./_components/cash-overlay";
 const NAV_PIN_KEY = "cashpile-nav-pinned";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
-  const [pinned, setPinned] = useState(false); // icon-only by default
+  const [pinned, setPinned] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false);
 
   // Restore pinned state from localStorage on mount
@@ -28,7 +28,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <CashOverlayProvider>
-      <div className="flex h-screen overflow-hidden bg-background">
+      <div className="flex h-screen overflow-hidden bg-background text-foreground">
         <Sidebar
           pinned={pinned}
           onPin={handlePin}
@@ -39,7 +39,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         {/* Main content */}
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           {/* Mobile top bar */}
-          <div className="lg:hidden flex items-center h-14 border-b bg-background/95 backdrop-blur-sm px-4 shrink-0">
+          <div className="lg:hidden flex items-center h-14 border-b bg-white/85 backdrop-blur-sm px-4 shrink-0">
             <button
               onClick={() => setMobileOpen(true)}
               className="p-2 rounded-md text-muted-foreground hover:bg-accent transition-colors"
@@ -56,9 +56,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
 
           <main
-            className="flex-1 overflow-y-auto"
+            className="flex-1 overflow-y-auto bg-[radial-gradient(circle_at_top_left,rgba(24,201,154,0.10),transparent_28%),radial-gradient(circle_at_top_right,rgba(37,99,235,0.08),transparent_30%)]"
             data-agent-surface="cashpile-app"
-            data-agent-modules="books,trades,pulse,ai,settings"
+            data-agent-modules="books,tax,cashflow,ai,settings"
             data-agent-capabilities-url="/api/agent/capabilities"
             data-agent-discovery-url="/.well-known/cashpile-agent.json"
           >

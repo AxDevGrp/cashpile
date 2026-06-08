@@ -45,7 +45,7 @@ export default function ImportWizard({ entities, initialUdas }: Props) {
     setLoading(true);
     setError("");
     try {
-      const p = await getImportPreview(csvContent);
+      const p = await getImportPreview(csvContent, accountId);
       setPreview(p);
       if (p.errors.length > 0 && p.transactions.length === 0) {
         setError(p.errors.join("\n"));
@@ -144,7 +144,7 @@ export default function ImportWizard({ entities, initialUdas }: Props) {
           <div className="flex gap-4 text-sm">
             <span className="font-medium">{preview.totalRows} rows</span>
             {preview.duplicateCount > 0 && (
-              <Badge variant="outline" className="text-yellow-600 border-yellow-400">{preview.duplicateCount} duplicates</Badge>
+              <Badge variant="outline" className="text-yellow-600 border-yellow-400">{preview.duplicateCount} exact duplicates</Badge>
             )}
             {preview.transferCount > 0 && (
               <Badge variant="outline">{preview.transferCount} transfers</Badge>
@@ -183,6 +183,7 @@ export default function ImportWizard({ entities, initialUdas }: Props) {
                     </td>
                     <td className="p-2 flex gap-1">
                       {tx.isDuplicate && <Badge variant="outline" className="text-yellow-600 border-yellow-400 text-xs">Dup</Badge>}
+                      {tx.possibleDuplicate && <Badge variant="outline" className="text-orange-600 border-orange-400 text-xs">Review</Badge>}
                       {tx.isTransfer && <Badge variant="outline" className="text-xs">Xfer</Badge>}
                     </td>
                   </tr>

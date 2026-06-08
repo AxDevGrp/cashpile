@@ -28,7 +28,9 @@ type DuplicateMode = "flag_review" | "keep_all";
 
 export default function PlaidLinkButton({ taxEntityId, udaId, onSuccess }: Props) {
   const [linkToken, setLinkToken] = useState<string | null>(null);
+  const [openedToken, setOpenedToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [opening, setOpening] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [importPreset, setImportPreset] = useState<ImportPreset>("tax2025");
@@ -63,6 +65,11 @@ export default function PlaidLinkButton({ taxEntityId, udaId, onSuccess }: Props
         return;
       }
       setLinkToken(data.link_token);
+      setOpenedToken(null);
+      window.localStorage.setItem("cashpile_plaid_link_token", data.link_token);
+      window.localStorage.setItem("cashpile_plaid_import_options", JSON.stringify(importOptions));
+      if (entityId) window.localStorage.setItem("cashpile_plaid_tax_entity_id", entityId);
+      else window.localStorage.removeItem("cashpile_plaid_tax_entity_id");
     } catch (err) {
       console.error("Failed to get link token", err);
       setError("Failed to connect to Plaid");
@@ -72,7 +79,8 @@ export default function PlaidLinkButton({ taxEntityId, udaId, onSuccess }: Props
     }
   }, [importOptions]);
 
-  const { open, ready } = usePlaidLink({
+
+  const { open, ready, error: plaidLinkError } = usePlaidLink({
     token: linkToken ?? "",
     onSuccess: async (public_token) => {
       setLoading(true);
@@ -88,6 +96,9 @@ export default function PlaidLinkButton({ taxEntityId, udaId, onSuccess }: Props
           return;
         }
         if (data.institution) {
+          window.localStorage.removeItem("cashpile_plaid_link_token");
+          window.localStorage.removeItem("cashpile_plaid_import_options");
+          window.localStorage.removeItem("cashpile_plaid_tax_entity_id");
           onSuccess?.(data.institution);
           window.location.reload();
         }
@@ -98,24 +109,112 @@ export default function PlaidLinkButton({ taxEntityId, udaId, onSuccess }: Props
         setLoading(false);
       }
     },
-    onExit: () => setLinkToken(null),
+    onExit: (err) => {
+      if (err) setError(err.display_message ?? err.error_message ?? "Plaid Link was closed before connecting");
+      setLinkToken(null);
+      setOpenedToken(null);
+      setLoading(false);
+      setOpening(false);
+    },
+    onEvent: (eventName) => {
+      if (eventName === "OPEN") setOpening(false);
+    },
   });
 
+  const handleOpenPlaid = useCallback(() => {
+    if (!ready || !linkToken) return;
+    setOpening(true);
+    setOpenedToken(linkToken);
+    setError(null);
+    try {
+      open();
+      window.setTimeout(() => setOpening(false), 4000);
+    } catch (err) {
+      console.error("Failed to open Plaid Link", err);
+      setOpening(false);
+      setOpenedToken(null);
+      setError("Plaid Link did not open. Try Retry, or connect again in Chrome/Safari if this browser stalls.");
+    }
+  }, [linkToken, open, ready]);
+
   useEffect(() => {
-    if (linkToken && ready) open();
-  }, [linkToken, ready, open]);
+    if (plaidLinkError) {
+      setError((plaidLinkError as any).display_message ?? (plaidLinkError as any).error_message ?? "Plaid Link failed to load");
+      setLoading(false);
+      setOpening(false);
+      setOpenedToken(null);
+      setLinkToken(null);
+    }
+  }, [plaidLinkError]);
+
+  useEffect(() => {
+    if (linkToken && ready && openedToken !== linkToken) {
+      handleOpenPlaid();
+    }
+  }, [handleOpenPlaid, linkToken, openedToken, ready]);
+
+  useEffect(() => {
+    if (!linkToken || ready) return;
+    const timeout = window.setTimeout(() => {
+      setError("Plaid Link is taking too long to load. Check popup/content blockers and try again.");
+      setLoading(false);
+      setOpening(false);
+      setOpenedToken(null);
+      setLinkToken(null);
+    }, 15000);
+    return () => window.clearTimeout(timeout);
+  }, [linkToken, ready]);
 
   return (
     <div className="space-y-1">
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={linkToken && ready ? () => open() : () => setOptionsOpen(true)}
-        disabled={loading || (!!linkToken && !ready)}
-      >
-        {loading ? "Connecting…" : "Connect Account"}
-      </Button>
-      {error && <p className="text-xs text-destructive max-w-48">{error}</p>}
+      <div className="flex flex-wrap items-center gap-2">
+        {!linkToken && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setOptionsOpen(true)}
+            disabled={loading}
+          >
+            {loading ? "Preparing Plaid…" : "Connect Account"}
+          </Button>
+        )}
+        {linkToken && (
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setOpenedToken(null);
+                handleOpenPlaid();
+              }}
+              disabled={!ready || loading || opening}
+            >
+              {opening ? "Opening Plaid…" : ready ? "Retry Plaid Link" : "Loading Plaid…"}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setLinkToken(null);
+                setOpenedToken(null);
+                setLoading(false);
+                setOpening(false);
+                setError(null);
+              }}
+            >
+              Reset
+            </Button>
+          </>
+        )}
+      </div>
+      {linkToken && (
+        <p className="text-xs text-muted-foreground max-w-64">
+          {ready
+            ? "Plaid should open automatically. If it does not, click Retry Plaid Link or use Chrome/Safari."
+            : "Loading Plaid…"}
+        </p>
+      )}
+      {error && <p className="text-xs text-destructive max-w-64">{error}</p>}
 
       <Dialog open={optionsOpen} onOpenChange={setOptionsOpen}>
         <DialogContent className="sm:max-w-md">

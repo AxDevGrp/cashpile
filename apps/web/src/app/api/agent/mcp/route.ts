@@ -25,9 +25,8 @@ export async function GET() {
     })),
     resources: getAgentResources(),
     prompts: [
-      { name: "daily_financial_briefing", description: "Summarize Books, Trades, and Pulse into a concise daily briefing." },
+      { name: "daily_financial_briefing", description: "Summarize Books, cash flow, and tax context into a concise daily briefing." },
       { name: "tax_prep_review", description: "Review tax assignments and missing categorization for a tax year." },
-      { name: "trading_risk_review", description: "Review drawdown, breach risk, and recent performance." },
     ],
   });
 }

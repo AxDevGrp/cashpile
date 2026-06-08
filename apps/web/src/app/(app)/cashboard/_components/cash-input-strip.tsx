@@ -5,10 +5,10 @@ import { Sparkles, ArrowRight } from "lucide-react";
 import { useCashOverlay } from "../../_components/cash-overlay";
 
 const CHIPS = [
-  "Full financial snapshot",
-  "Trades at risk today?",
-  "What macro events matter this week?",
-  "Compare cash flow to trading P&L",
+  "Can I afford $250 this week?",
+  "What is my safe-to-spend amount?",
+  "Show my subscriptions",
+  "What should I review for taxes?",
 ];
 
 export function CashInputStrip() {

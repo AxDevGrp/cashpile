@@ -15,11 +15,11 @@ export async function parseFile(csvContent: string): Promise<{
   return { preview, errors: parsed.errors };
 }
 
-export async function getImportPreview(csvContent: string): Promise<ImportPreview> {
+export async function getImportPreview(csvContent: string, accountId: string): Promise<ImportPreview> {
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthenticated");
-  return previewImport(csvContent, user.id);
+  return previewImport(csvContent, user.id, accountId);
 }
 
 export async function executeImport(
@@ -32,7 +32,7 @@ export async function executeImport(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthenticated");
 
-  const preview = await previewImport(csvContent, user.id);
+  const preview = await previewImport(csvContent, user.id, accountId);
   const batchId = randomUUID();
 
   return confirmImport({

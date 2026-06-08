@@ -6,12 +6,15 @@ import { AssignModal } from "./assign-modal";
 import { BulkAssignModal } from "./bulk-assign-modal";
 import { ExportPanel } from "./export-panel";
 import { RulesModal } from "./rules-modal";
-import type { TaxEntity } from "@/modules/books/types";
+import { AccountAssignmentModal } from "./account-assignment-modal";
+import { AddTaxEntityModal } from "./add-tax-entity-modal";
+import type { BooksAccount, TaxEntity } from "@/modules/books/types";
 
 type Summary = { totalIncome: number; totalExpenses: number; transactionCount: number };
 
 interface Props {
   taxEntities: TaxEntity[];
+  accounts: BooksAccount[];
   summaries: Record<string, Summary>;
   defaultYear: number;
 }
@@ -29,9 +32,11 @@ function fmt(n: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
 }
 
-export function TaxClient({ taxEntities, summaries, defaultYear }: Props) {
+export function TaxClient({ taxEntities, accounts, summaries, defaultYear }: Props) {
   const [year, setYear] = useState(defaultYear);
+  const [addEntityOpen, setAddEntityOpen] = useState(false);
   const [assignEntity, setAssignEntity] = useState<TaxEntity | null>(null);
+  const [accountAssignEntity, setAccountAssignEntity] = useState<TaxEntity | null>(null);
   const [bulkOpen, setBulkOpen] = useState(false);
   const [exportEntity, setExportEntity] = useState<TaxEntity | null>(null);
   const [rulesOpen, setRulesOpen] = useState(false);
@@ -42,9 +47,9 @@ export function TaxClient({ taxEntities, summaries, defaultYear }: Props) {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Tax Entities</h1>
+          <h1 className="text-2xl font-bold">Taxes</h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Assign transactions to Tax Entities for tax reporting
+            Review tax entities, assign transactions, and export tax-ready reports
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -57,6 +62,12 @@ export function TaxClient({ taxEntities, summaries, defaultYear }: Props) {
               <option key={y} value={y}>{y}</option>
             ))}
           </select>
+          <button
+            onClick={() => setAddEntityOpen(true)}
+            className="bg-primary text-primary-foreground px-4 py-1.5 rounded-md text-sm font-medium hover:bg-primary/90"
+          >
+            Add Tax Entity
+          </button>
           <button
             onClick={() => setRulesOpen(true)}
             className="bg-secondary text-secondary-foreground px-4 py-1.5 rounded-md text-sm hover:bg-secondary/80"
@@ -74,8 +85,8 @@ export function TaxClient({ taxEntities, summaries, defaultYear }: Props) {
 
       {taxEntities.length === 0 && (
         <div className="text-center py-20 text-muted-foreground">
-          <p className="mb-4">No Tax Entities found.</p>
-          <p className="text-sm">Create a Tax Entity in Settings to start tracking business expenses.</p>
+          <p className="mb-4">No tax entities found.</p>
+          <p className="text-sm">Create an entity in Books to start tracking deductible activity.</p>
         </div>
       )}
 
@@ -83,6 +94,7 @@ export function TaxClient({ taxEntities, summaries, defaultYear }: Props) {
         {taxEntities.map((entity) => {
           const s = summaries[entity.id] ?? { totalIncome: 0, totalExpenses: 0, transactionCount: 0 };
           const net = s.totalIncome - s.totalExpenses;
+          const assignedAccounts = accounts.filter((account) => account.tax_entity_id === entity.id);
           return (
             <div key={entity.id} className="bg-card border border-border rounded-xl p-5 space-y-4">
               <div>
@@ -112,15 +124,26 @@ export function TaxClient({ taxEntities, summaries, defaultYear }: Props) {
                   </div>
                 </div>
               </div>
-              <div className="text-xs text-muted-foreground">
-                {s.transactionCount} transactions assigned
+              <div className="space-y-1 text-xs text-muted-foreground">
+                <div>{s.transactionCount} transactions assigned</div>
+                <div>
+                  {assignedAccounts.length > 0
+                    ? `${assignedAccounts.length} account${assignedAccounts.length === 1 ? "" : "s"}: ${assignedAccounts.slice(0, 2).map((account) => account.name).join(", ")}${assignedAccounts.length > 2 ? "…" : ""}`
+                    : "No accounts assigned"}
+                </div>
               </div>
-              <div className="flex gap-2 pt-1">
+              <div className="flex flex-wrap gap-2 pt-1">
                 <button
                   onClick={() => setAssignEntity(entity)}
-                  className="flex-1 bg-primary text-primary-foreground rounded-md py-1.5 text-xs font-medium hover:bg-primary/90"
+                  className="flex-1 min-w-32 bg-primary text-primary-foreground rounded-md py-1.5 text-xs font-medium hover:bg-primary/90"
                 >
                   Assign Transactions
+                </button>
+                <button
+                  onClick={() => setAccountAssignEntity(entity)}
+                  className="flex-1 min-w-32 bg-secondary text-secondary-foreground rounded-md px-3 py-1.5 text-xs hover:bg-secondary/80"
+                >
+                  Assign Accounts
                 </button>
                 <button
                   onClick={() => setExportEntity(entity)}
@@ -134,8 +157,19 @@ export function TaxClient({ taxEntities, summaries, defaultYear }: Props) {
         })}
       </div>
 
+      {addEntityOpen && (
+        <AddTaxEntityModal onClose={() => setAddEntityOpen(false)} />
+      )}
       {assignEntity && (
         <AssignModal taxEntity={assignEntity} year={year} onClose={() => setAssignEntity(null)} />
+      )}
+      {accountAssignEntity && (
+        <AccountAssignmentModal
+          taxEntity={accountAssignEntity}
+          taxEntities={taxEntities}
+          accounts={accounts}
+          onClose={() => setAccountAssignEntity(null)}
+        />
       )}
       {bulkOpen && (
         <BulkAssignModal taxEntities={taxEntities} onClose={() => setBulkOpen(false)} />

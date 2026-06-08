@@ -97,6 +97,8 @@ export interface BooksTransaction {
   transfer_pair_id?: string | null;
   import_source?: string | null;
   import_batch_id?: string | null;
+  dedupe_fingerprint?: string | null;
+  metadata?: Record<string, unknown> | null;
   notes?: string | null;
   created_at: string;
   updated_at: string;
@@ -139,6 +141,9 @@ export interface ImportPreview {
   transactions: (ImportedTransaction & {
     fingerprint: string;
     isDuplicate: boolean;
+    possibleDuplicate?: boolean;
+    duplicateConfidence?: number;
+    duplicateCandidateId?: string;
     isTransfer: boolean;
     transferConfidence?: number;
   })[];
@@ -156,6 +161,9 @@ export interface ConfirmImportPayload {
   transactions: (ImportedTransaction & {
     fingerprint: string;
     isDuplicate: boolean;
+    possibleDuplicate?: boolean;
+    duplicateConfidence?: number;
+    duplicateCandidateId?: string;
     isTransfer: boolean;
     overrideDuplicate?: boolean;
   })[];

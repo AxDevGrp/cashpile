@@ -20,6 +20,9 @@ export async function POST(req: NextRequest) {
     const body = await req.json().catch(() => ({}));
     const daysRequested = clampDaysRequested(body.days_requested);
 
+    const origin = new URL(req.url).origin;
+    const redirectUri = process.env.PLAID_REDIRECT_URI || `${origin}/plaid/oauth`;
+
     const request: any = {
       user: { client_user_id: user.id },
       client_name: "Cashpile",
@@ -27,6 +30,7 @@ export async function POST(req: NextRequest) {
       country_codes: PLAID_COUNTRY_CODES as unknown as CountryCode[],
       language: "en",
       webhook: process.env.PLAID_WEBHOOK_URL || undefined,
+      redirect_uri: redirectUri,
     };
 
     if (PLAID_PRODUCTS.includes("transactions")) {
@@ -35,7 +39,7 @@ export async function POST(req: NextRequest) {
 
     const response = await plaidClient.linkTokenCreate(request);
 
-    return NextResponse.json({ link_token: response.data.link_token, days_requested: daysRequested });
+    return NextResponse.json({ link_token: response.data.link_token, days_requested: daysRequested, redirect_uri: redirectUri });
   } catch (err: any) {
     console.error("[plaid/link-token]", err?.response?.data ?? err);
     return NextResponse.json(
