@@ -5,7 +5,7 @@ import Link from "next/link";
 import { PageHeader, Button, Badge, Card, CardHeader, CardTitle, CardContent } from "@cashpile/ui";
 import PlaidLinkButton from "@/components/plaid-link-button";
 import type { TaxEntity, BooksAccount } from "@/modules/books/types";
-import { assignAccountToTaxEntity, mergeFinancialAccounts, updateAccount } from "@/modules/books/actions/account.actions";
+import { assignAccountToTaxEntity, createAccount, mergeFinancialAccounts, updateAccount } from "@/modules/books/actions/account.actions";
 
 interface PlaidItem {
   id: string;
@@ -454,7 +454,149 @@ function MergeAccountModal({
   );
 }
 
-function PlaidAccountActions() {
+function AddManualAccountModal({
+  taxEntities,
+  onClose,
+  onCreated,
+}: {
+  taxEntities: TaxEntity[];
+  onClose: () => void;
+  onCreated: (account: BooksAccount) => void;
+}) {
+  const [name, setName] = useState("");
+  const [institutionName, setInstitutionName] = useState("");
+  const [lastFourDigits, setLastFourDigits] = useState("");
+  const [accountType, setAccountType] = useState<BooksAccount["account_type"]>("checking");
+  const [taxEntityId, setTaxEntityId] = useState("");
+  const [currentBalance, setCurrentBalance] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  async function handleCreate() {
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+      alert("Account name is required");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const account = await createAccount({
+        name: trimmedName,
+        institution_name: institutionName.trim() || null,
+        last_four_digits: lastFourDigits.trim() || null,
+        account_type: accountType,
+        tax_entity_id: taxEntityId || null,
+        current_balance: currentBalance.trim() ? Number(currentBalance) : 0,
+        currency: "USD",
+      } as any);
+      onCreated(account);
+      onClose();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Failed to add account");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div className="bg-card border border-border rounded-xl w-full max-w-lg shadow-xl">
+        <div className="flex items-center justify-between p-4 border-b border-border">
+          <div>
+            <div className="font-semibold">Add Account Manually</div>
+            <div className="text-xs text-muted-foreground">Create an account without connecting Plaid. You can import transactions later.</div>
+          </div>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground text-xl leading-none">×</button>
+        </div>
+
+        <div className="p-4 space-y-4">
+          <label className="block text-sm space-y-1">
+            <span className="text-muted-foreground">Account name</span>
+            <input
+              className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              placeholder="e.g. Chase Ink Thousand Cuts"
+              autoFocus
+            />
+          </label>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="block text-sm space-y-1">
+              <span className="text-muted-foreground">Institution</span>
+              <input
+                className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm"
+                value={institutionName}
+                onChange={(event) => setInstitutionName(event.target.value)}
+                placeholder="e.g. Chase"
+              />
+            </label>
+
+            <label className="block text-sm space-y-1">
+              <span className="text-muted-foreground">Last four digits</span>
+              <input
+                className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm"
+                value={lastFourDigits}
+                onChange={(event) => setLastFourDigits(event.target.value.replace(/\D/g, "").slice(0, 4))}
+                placeholder="2671"
+                inputMode="numeric"
+              />
+            </label>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="block text-sm space-y-1">
+              <span className="text-muted-foreground">Account type</span>
+              <select
+                className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm"
+                value={accountType}
+                onChange={(event) => setAccountType(event.target.value as BooksAccount["account_type"])}
+              >
+                {Object.entries(ACCOUNT_TYPE_LABELS).map(([value, label]) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
+              </select>
+            </label>
+
+            <label className="block text-sm space-y-1">
+              <span className="text-muted-foreground">Current balance</span>
+              <input
+                className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm"
+                value={currentBalance}
+                onChange={(event) => setCurrentBalance(event.target.value)}
+                placeholder="0.00"
+                inputMode="decimal"
+              />
+            </label>
+          </div>
+
+          <label className="block text-sm space-y-1">
+            <span className="text-muted-foreground">Tax Entity</span>
+            <select
+              className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm"
+              value={taxEntityId}
+              onChange={(event) => setTaxEntityId(event.target.value)}
+            >
+              <option value="">-- Not Assigned --</option>
+              {taxEntities.map((entity) => (
+                <option key={entity.id} value={entity.id}>
+                  {entity.name} ({ENTITY_TYPE_LABELS[entity.entity_type] ?? entity.entity_type})
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        <div className="p-4 border-t border-border flex justify-end gap-2">
+          <Button variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
+          <Button onClick={handleCreate} disabled={saving}>{saving ? "Adding…" : "Add Account"}</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PlaidAccountActions({ onAddManual }: { onAddManual: () => void }) {
   const [year, setYear] = useState("2025");
   const [backfilling, setBackfilling] = useState(false);
   const [summary, setSummary] = useState<string | null>(null);
@@ -493,6 +635,9 @@ function PlaidAccountActions() {
 
   return (
     <div className="flex flex-wrap items-center gap-2">
+      <Button variant="outline" size="sm" onClick={onAddManual}>
+        Add Account Manually
+      </Button>
       <PlaidLinkButton />
       <Button variant="outline" size="sm" onClick={backfillAll} disabled={backfilling}>
         {backfilling ? "Backfilling…" : `Backfill Plaid ${year}`}
@@ -516,6 +661,7 @@ function PlaidAccountActions() {
 export default function AccountsClient({ taxEntities, accounts, plaidItems }: Props) {
   const [localAccounts, setLocalAccounts] = useState(accounts);
   const [mergeTarget, setMergeTarget] = useState<BooksAccount | null>(null);
+  const [addManualOpen, setAddManualOpen] = useState(false);
 
   const getPlaidItem = (accountId: string) => {
     const account = localAccounts.find(a => a.id === accountId);
@@ -561,19 +707,29 @@ export default function AccountsClient({ taxEntities, accounts, plaidItems }: Pr
 
   const unassignedAccounts = accountsByEntity.get(null) ?? [];
 
-  if (taxEntities.length === 0 && accounts.length === 0) {
+  if (taxEntities.length === 0 && localAccounts.length === 0) {
     return (
       <div className="space-y-6 p-6">
         <BackButton />
         <PageHeader
           title="Accounts"
           description="Connect bank and credit card accounts. UDAs are logical groupings and do not connect through Plaid."
-          actions={<PlaidAccountActions />}
+          actions={<PlaidAccountActions onAddManual={() => setAddManualOpen(true)} />}
         />
         <div className="rounded-lg border p-12 text-center text-muted-foreground">
           <p className="mb-4">No accounts yet.</p>
-          <PlaidLinkButton />
+          <div className="flex justify-center gap-2">
+            <Button variant="outline" onClick={() => setAddManualOpen(true)}>Add Account Manually</Button>
+            <PlaidLinkButton />
+          </div>
         </div>
+        {addManualOpen && (
+          <AddManualAccountModal
+            taxEntities={taxEntities}
+            onClose={() => setAddManualOpen(false)}
+            onCreated={(account) => setLocalAccounts((current) => [...current, account])}
+          />
+        )}
       </div>
     );
   }
@@ -584,7 +740,7 @@ export default function AccountsClient({ taxEntities, accounts, plaidItems }: Pr
       <PageHeader
         title="Accounts"
         description="Manage connected bank/credit card accounts separately from logical User Defined Accounts."
-        actions={<PlaidAccountActions />}
+        actions={<PlaidAccountActions onAddManual={() => setAddManualOpen(true)} />}
       />
 
       {/* Tax Entities with Accounts */}
@@ -706,6 +862,13 @@ export default function AccountsClient({ taxEntities, accounts, plaidItems }: Pr
             );
             setMergeTarget(null);
           }}
+        />
+      )}
+      {addManualOpen && (
+        <AddManualAccountModal
+          taxEntities={taxEntities}
+          onClose={() => setAddManualOpen(false)}
+          onCreated={(account) => setLocalAccounts((current) => [...current, account])}
         />
       )}
     </div>
