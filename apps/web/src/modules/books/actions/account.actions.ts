@@ -142,9 +142,50 @@ export async function createAccount(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthenticated");
 
+  let udaId = input.uda_id ?? null;
+  if (!udaId) {
+    const { data: existingUda, error: existingUdaError } = await (supabase as any)
+      .from("books_udas")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("name", "Manual Accounts")
+      .maybeSingle();
+
+    if (existingUdaError) throw new Error(existingUdaError.message);
+    udaId = existingUda?.id ?? null;
+
+    if (!udaId) {
+      const { data: createdUda, error: createdUdaError } = await (supabase as any)
+        .from("books_udas")
+        .insert({
+          user_id: user.id,
+          name: "Manual Accounts",
+          description: "Default group for manually created accounts",
+        })
+        .select("id")
+        .single();
+
+      if (createdUdaError) throw new Error(createdUdaError.message);
+      udaId = createdUda.id;
+    }
+  }
+
+  const row = {
+    uda_id: udaId,
+    tax_entity_id: input.tax_entity_id ?? null,
+    name: input.name,
+    account_type: input.account_type ?? "other",
+    institution_name: input.institution_name ?? input.institution ?? null,
+    last_four_digits: input.last_four_digits ?? null,
+    account_identifier: (input as any).account_identifier ?? null,
+    current_balance: input.current_balance ?? 0,
+    user_id: user.id,
+    is_active: true,
+  };
+
   const { data, error } = await (supabase as any)
     .from("books_financial_accounts")
-    .insert({ ...input, user_id: user.id, is_active: true })
+    .insert(row)
     .select()
     .single();
 

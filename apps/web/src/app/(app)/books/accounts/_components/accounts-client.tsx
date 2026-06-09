@@ -477,6 +477,12 @@ function AddManualAccountModal({
       alert("Account name is required");
       return;
     }
+    const balanceText = currentBalance.trim().replace(/,/g, "");
+    const balance = balanceText ? Number(balanceText) : 0;
+    if (!Number.isFinite(balance)) {
+      alert("Current balance must be a valid number");
+      return;
+    }
 
     setSaving(true);
     try {
@@ -486,8 +492,7 @@ function AddManualAccountModal({
         last_four_digits: lastFourDigits.trim() || null,
         account_type: accountType,
         tax_entity_id: taxEntityId || null,
-        current_balance: currentBalance.trim() ? Number(currentBalance) : 0,
-        currency: "USD",
+        current_balance: balance,
       } as any);
       onCreated(account);
       onClose();
