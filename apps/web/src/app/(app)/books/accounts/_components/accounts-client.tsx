@@ -122,13 +122,14 @@ function AccountCard({
       const result = data.results?.[0];
       if (result?.error) throw new Error(typeof result.error === "string" ? result.error : JSON.stringify(result.error));
 
-      const returned = result?.total_returned ?? 0;
-      const upserted = result?.total_upserted ?? 0;
+      const returned = Number(result?.plaid_returned ?? result?.total_returned ?? 0);
+      const available = Number(result?.total_available ?? returned);
+      const upserted = Number(result?.upserted ?? result?.total_upserted ?? 0);
       const needsReconnect = returned === 0;
       setBackfillSummary(
         needsReconnect
           ? "Plaid returned 0 transactions for 2025. Reconnect this bank with 24-month history, then run backfill again."
-          : `Backfill finished: Plaid returned ${returned} and upserted ${upserted}.`
+          : `Backfill finished: Plaid returned ${returned}${available !== returned ? ` of ${available} available` : ""} and upserted ${upserted}.`
       );
       if (upserted > 0) window.location.reload();
     } catch (error) {
@@ -139,6 +140,7 @@ function AccountCard({
   }
 
   const assignedEntity = taxEntities.find(e => e.id === account.tax_entity_id);
+  const isPlaidLinked = Boolean(plaidItem || account.plaid_account_id || account.plaid_item_id);
 
   async function saveName() {
     const nextName = nameDraft.trim();
@@ -264,7 +266,7 @@ function AccountCard({
               </Button>
             </div>
           </div>
-          {plaidItem && (
+          {isPlaidLinked && (
             <div className="mt-3 rounded-md border border-border bg-muted/20 p-2 space-y-2">
               <p className="text-xs text-muted-foreground">
                 Plaid reconnects the bank connection that owns this account, not one account by itself.
@@ -275,8 +277,8 @@ function AccountCard({
                 </Button>
                 <PlaidLinkButton
                   taxEntityId={account.tax_entity_id ?? undefined}
-                  updatePlaidItemId={plaidItem.id}
-                  updateItemId={plaidItem.item_id}
+                  updatePlaidItemId={plaidItem?.id ?? account.plaid_item_id ?? undefined}
+                  updateItemId={plaidItem?.item_id}
                   backfillAccountId={account.id}
                   label="Reconnect bank + backfill 2025"
                 />
