@@ -230,10 +230,11 @@ export default function TransactionsClient({
 
       const totalReturned = (data.results ?? []).reduce((sum: number, result: any) => sum + Number(result.plaid_returned ?? 0), 0);
       const totalUpserted = (data.results ?? []).reduce((sum: number, result: any) => sum + Number(result.upserted ?? 0), 0);
+      const totalCategorized = (data.results ?? []).reduce((sum: number, result: any) => sum + Number(result.categorized ?? 0), 0);
       const reconnectCount = (data.results ?? []).filter((result: any) => result.needs_reconnect_for_more_history).length;
       const summary = reconnectCount > 0
-        ? `Backfill finished: Plaid returned ${totalReturned} transactions and upserted ${totalUpserted}. ${reconnectCount} item(s) returned no 2025 history and may need reconnecting with 24-month history.`
-        : `Backfill finished: Plaid returned ${totalReturned} transactions and upserted ${totalUpserted}.`;
+        ? `Backfill finished: Plaid returned ${totalReturned} transactions, upserted ${totalUpserted}, and auto-categorized ${totalCategorized}. ${reconnectCount} item(s) returned no 2025 history and may need reconnecting with 24-month history.`
+        : `Backfill finished: Plaid returned ${totalReturned} transactions, upserted ${totalUpserted}, and auto-categorized ${totalCategorized}.`;
       setBackfillSummary(summary);
       toast.success(summary);
       router.refresh();

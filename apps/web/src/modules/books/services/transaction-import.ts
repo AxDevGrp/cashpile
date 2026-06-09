@@ -18,6 +18,7 @@ import {
 } from "./duplicate-detection";
 import { annotateWithTransferFlags } from "./transfer-detection";
 import { autoAssignTaxEntities } from "./tax-rule-engine";
+import { categorizeTransactionsByIds } from "./categorization-engine";
 import type { ConfirmImportPayload, ImportPreview, ImportResult, ImportedTransaction } from "../types";
 
 const FUZZY_DUPLICATE_THRESHOLD = 0.86;
@@ -224,6 +225,17 @@ export async function confirmImport(payload: ConfirmImportPayload): Promise<Impo
 
   const assignedCount = await autoAssignTaxEntities(supabase, user.id, insertedRows);
   console.log(`[import] Auto-assigned ${assignedCount} transactions to tax entities via rules`);
+
+  const categorization = await categorizeTransactionsByIds(
+    supabase as any,
+    user.id,
+    insertedRows.map((row) => row.id),
+    { useAI: true, minConfidence: 0.85 }
+  );
+  console.log(
+    `[import] Auto-categorized ${categorization.categorized}/${categorization.scanned} transactions ` +
+    `(${categorization.ruleMatches} rules, ${categorization.learnedMatches} learned, ${categorization.aiMatches} AI)`
+  );
 
   return result;
 }

@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { plaidClient } from "@/lib/plaid";
 import { autoAssignTaxEntities } from "@/modules/books/services/tax-rule-engine";
+import { categorizeTransactionsByIds } from "@/modules/books/services/categorization-engine";
 
 function getServiceClient() {
   return createClient(
@@ -89,11 +90,19 @@ async function upsertPlaidTransactions(client: any, item: any, transactions: any
     .in("plaid_transaction_id", rows.map((row) => row.plaid_transaction_id));
 
   let assigned = 0;
+  let categorized = 0;
   if (importedRows?.length) {
     assigned = await autoAssignTaxEntities(client, item.user_id, importedRows);
+    const categorization = await categorizeTransactionsByIds(
+      client,
+      item.user_id,
+      importedRows.map((row: any) => row.id),
+      { useAI: true, minConfidence: 0.85 }
+    );
+    categorized = categorization.categorized;
   }
 
-  return { upserted: rows.length, assigned, accountIds };
+  return { upserted: rows.length, assigned, categorized, accountIds };
 }
 
 export async function backfillPlaidItemTransactions(input: {
@@ -120,6 +129,7 @@ export async function backfillPlaidItemTransactions(input: {
   let fetched = 0;
   let upserted = 0;
   let assigned = 0;
+  let categorized = 0;
 
   do {
     const response = await plaidClient.transactionsGet({
@@ -141,6 +151,7 @@ export async function backfillPlaidItemTransactions(input: {
     const result = await upsertPlaidTransactions(client, item, transactions);
     upserted += result.upserted;
     assigned += result.assigned;
+    categorized += result.categorized ?? 0;
 
     offset += transactions.length;
     if (transactions.length === 0) break;
@@ -168,6 +179,7 @@ export async function backfillPlaidItemTransactions(input: {
     total_available: totalTransactions,
     upserted,
     tax_assigned: assigned,
+    categorized,
     needs_reconnect_for_more_history: fetched === 0,
   };
 }

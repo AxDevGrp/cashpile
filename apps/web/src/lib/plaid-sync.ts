@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { plaidClient } from "@/lib/plaid";
 import { autoAssignTaxEntities } from "@/modules/books/services/tax-rule-engine";
+import { categorizeTransactionsByIds } from "@/modules/books/services/categorization-engine";
 
 // Service-role client for sync (bypasses RLS — used internally only)
 function getServiceClient() {
@@ -138,6 +139,17 @@ export async function syncPlaidItem(itemId: string, serviceClient?: any) {
     if (newTransactions && newTransactions.length > 0) {
       const assignedCount = await autoAssignTaxEntities(client, user_id, newTransactions);
       console.log(`[plaid-sync] Auto-assigned ${assignedCount} transactions to tax entities via rules`);
+
+      const categorization = await categorizeTransactionsByIds(
+        client,
+        user_id,
+        newTransactions.map((transaction: any) => transaction.id),
+        { useAI: true, minConfidence: 0.85 }
+      );
+      console.log(
+        `[plaid-sync] Auto-categorized ${categorization.categorized}/${categorization.scanned} transactions ` +
+        `(${categorization.ruleMatches} rules, ${categorization.learnedMatches} learned, ${categorization.aiMatches} AI)`
+      );
     }
   }
 

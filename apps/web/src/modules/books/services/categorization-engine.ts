@@ -363,6 +363,19 @@ async function fetchUncategorizedTransactions(supabase: SupabaseLike, userId: st
   return (data ?? []) as TransactionRow[];
 }
 
+async function fetchUncategorizedTransactionsByIds(supabase: SupabaseLike, userId: string, ids: string[]) {
+  if (ids.length === 0) return [] as TransactionRow[];
+  const { data, error } = await supabase
+    .from("books_transactions")
+    .select("id, description, merchant, amount, transaction_type, category_id")
+    .eq("user_id", userId)
+    .in("id", ids)
+    .is("category_id", null)
+    .eq("is_transfer", false);
+  if (error) throw new Error(error.message);
+  return (data ?? []) as TransactionRow[];
+}
+
 async function fetchCategorizedTransactions(supabase: SupabaseLike, userId: string) {
   const { data, error } = await supabase
     .from("books_transactions")
@@ -466,6 +479,102 @@ export async function bulkCategorizeTransactions(
       }
     } catch (error) {
       console.warn("[bulk-categorize] AI pass skipped:", error instanceof Error ? error.message : error);
+    }
+  }
+
+  const confidentMatches = matches.filter((match) => match.confidence >= minConfidence);
+  const applied = await applyMatches(supabase, userId, txById, confidentMatches);
+  await updateRuleMatchCounts(supabase, confidentMatches.map((match) => match.ruleId).filter(Boolean) as string[]);
+
+  return {
+    scanned: uncategorized.length,
+    categorized: applied,
+    ruleMatches: confidentMatches.filter((match) => match.method === "category_rule" || match.method === "default_rule" || match.method === "rule_based").length,
+    learnedMatches: confidentMatches.filter((match) => match.method === "learned_rule").length,
+    aiMatches: confidentMatches.filter((match) => match.method === "ai").length,
+    needsReview: Math.max(uncategorized.length - applied, 0),
+    createdCategories: created,
+    examples: confidentMatches.slice(0, 8).map((match) => ({
+      description: txById.get(match.transactionId)?.description ?? "Transaction",
+      categoryName: match.categoryName,
+      confidence: match.confidence,
+      method: match.method,
+    })),
+  };
+}
+
+export async function categorizeTransactionsByIds(
+  supabase: SupabaseLike,
+  userId: string,
+  ids: string[],
+  options?: { useAI?: boolean; minConfidence?: number }
+): Promise<BulkCategorizationResult> {
+  const uniqueIds = [...new Set(ids)].filter(Boolean);
+  const minConfidence = options?.minConfidence ?? 0.85;
+  const useAI = options?.useAI ?? true;
+
+  const initialCategories = await fetchCategories(supabase, userId);
+  const { categories, created } = await ensureDefaultCategories(supabase, userId, initialCategories);
+  const [uncategorized, categorized, categoryRules] = await Promise.all([
+    fetchUncategorizedTransactionsByIds(supabase, userId, uniqueIds),
+    fetchCategorizedTransactions(supabase, userId),
+    fetchCategoryRules(supabase, userId),
+  ]);
+
+  const txById = new Map(uncategorized.map((tx) => [tx.id, tx]));
+  const learnedRules = buildLearnedRules(categorized);
+  const matches: CategorizationMatch[] = [];
+  const leftovers: TransactionRow[] = [];
+
+  for (const tx of uncategorized) {
+    const explicitRule = getCategoryRuleMatch(tx, categoryRules, categories);
+    if (explicitRule) {
+      matches.push(explicitRule);
+      continue;
+    }
+
+    const learned = getLearnedMatch(tx, learnedRules, categories);
+    if (learned) {
+      matches.push(learned);
+      continue;
+    }
+
+    const defaultMatch = getDefaultMatch(tx, categories);
+    if (defaultMatch) {
+      matches.push(defaultMatch);
+      continue;
+    }
+
+    leftovers.push(tx);
+  }
+
+  if (useAI && leftovers.length > 0) {
+    try {
+      const aiResults = await aiCategorizeTransactions(
+        leftovers.map((tx) => ({
+          id: tx.id,
+          description: tx.description,
+          merchant: tx.merchant ?? undefined,
+          amount: Number(tx.amount),
+          type: tx.transaction_type ?? tx.type ?? undefined,
+        })),
+        categories.map((category) => ({ id: Number(category.id), name: category.name }))
+      );
+
+      for (const result of aiResults) {
+        if (result.confidence < minConfidence) continue;
+        const category = categoryByName(categories, result.categoryName);
+        if (!category) continue;
+        matches.push({
+          transactionId: result.transactionId,
+          categoryId: category.id,
+          categoryName: category.name,
+          confidence: result.confidence,
+          method: result.method === "rule_based" ? "rule_based" : "ai",
+        });
+      }
+    } catch (error) {
+      console.warn("[auto-categorize] AI pass skipped:", error instanceof Error ? error.message : error);
     }
   }
 

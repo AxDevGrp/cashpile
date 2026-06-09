@@ -128,11 +128,12 @@ function AccountCard({
       const returned = Number(result?.plaid_returned ?? result?.total_returned ?? 0);
       const available = Number(result?.total_available ?? returned);
       const upserted = Number(result?.upserted ?? result?.total_upserted ?? 0);
+      const categorized = Number(result?.categorized ?? 0);
       const needsReconnect = returned === 0;
       setBackfillSummary(
         needsReconnect
           ? "Plaid returned 0 transactions for 2025. Reconnect this bank with 24-month history, then run backfill again."
-          : `Backfill finished: Plaid returned ${returned}${available !== returned ? ` of ${available} available` : ""} and upserted ${upserted}.`
+          : `Backfill finished: Plaid returned ${returned}${available !== returned ? ` of ${available} available` : ""}, upserted ${upserted}, and auto-categorized ${categorized}.`
       );
       if (upserted > 0) window.location.reload();
     } catch (error) {
