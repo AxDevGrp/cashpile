@@ -63,6 +63,7 @@ export default function TransactionsClient({
   const [categorizeSummary, setCategorizeSummary] = useState<string | null>(null);
   const [backfillSummary, setBackfillSummary] = useState<string | null>(null);
   const [isBackfilling, setIsBackfilling] = useState(false);
+  const [backfillYear, setBackfillYear] = useState("2025");
   const [searchDraft, setSearchDraft] = useState(filters.search ?? "");
   const currentYear = new Date().getFullYear();
   const yearOptions = Array.from({ length: 8 }, (_, index) => String(currentYear - index));
@@ -211,7 +212,7 @@ export default function TransactionsClient({
   async function runPlaidBackfill() {
     const accountId = lockedAccountId ?? filters.accountId;
     const target = accountId ? "the selected account" : "all active Plaid-connected accounts";
-    if (!window.confirm(`Backfill 2025 Plaid transactions for ${target}? This may take a minute and will not duplicate existing Plaid transactions.`)) return;
+    if (!window.confirm(`Backfill ${backfillYear} Plaid transactions for ${target}? This may take a minute and will not duplicate existing Plaid transactions.`)) return;
 
     setIsBackfilling(true);
     setBackfillSummary(null);
@@ -221,8 +222,8 @@ export default function TransactionsClient({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           account_id: accountId || undefined,
-          start_date: "2025-01-01",
-          end_date: "2025-12-31",
+          start_date: `${backfillYear}-01-01`,
+          end_date: `${backfillYear}-12-31`,
         }),
       });
       const data = await res.json();
@@ -364,8 +365,19 @@ export default function TransactionsClient({
             <Button variant="outline">Duplicate Review</Button>
           </Link>
           <Button onClick={runPlaidBackfill} disabled={isBackfilling} variant="outline">
-            {isBackfilling ? "Backfilling Plaid…" : "Backfill Plaid 2025"}
+            {isBackfilling ? "Backfilling Plaid…" : `Backfill Plaid ${backfillYear}`}
           </Button>
+          <select
+            className="h-10 rounded-md border border-border bg-background px-3 text-sm"
+            value={backfillYear}
+            onChange={(event) => setBackfillYear(event.target.value)}
+            disabled={isBackfilling}
+            aria-label="Backfill year"
+          >
+            {yearOptions.map((year) => (
+              <option key={year} value={year}>{year}</option>
+            ))}
+          </select>
           <Link href="/books/transactions/import">
             <Button variant="outline">Import CSV</Button>
           </Link>

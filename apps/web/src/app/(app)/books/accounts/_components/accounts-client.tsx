@@ -41,6 +41,11 @@ const ENTITY_TYPE_LABELS: Record<string, string> = {
   rental_property: "Rental Property",
 };
 
+function getBackfillYears() {
+  const currentYear = new Date().getFullYear();
+  return Array.from({ length: 8 }, (_, index) => String(currentYear - index));
+}
+
 function isInstitutionalAccount(account: BooksAccount) {
   return Boolean(account.plaid_account_id || account.plaid_item_id);
 }
@@ -87,6 +92,7 @@ function AccountCard({
   const [savingName, setSavingName] = useState(false);
   const [backfilling, setBackfilling] = useState(false);
   const [backfillSummary, setBackfillSummary] = useState<string | null>(null);
+  const [backfillYear, setBackfillYear] = useState("2025");
 
   async function handleRefresh() {
     if (!plaidItem) return;
@@ -100,12 +106,12 @@ function AccountCard({
     window.location.reload();
   }
 
-  async function handleBackfill2025() {
+  async function handleBackfillYear() {
     if (!plaidItem) {
-      setBackfillSummary("Cannot backfill yet because Cashpile cannot find this account’s stored Plaid connection. Use Connect bank again first, then run Backfill 2025.");
+      setBackfillSummary(`Cannot backfill yet because Cashpile cannot find this account’s stored Plaid connection. Use Connect bank again first, then run Backfill ${backfillYear}.`);
       return;
     }
-    if (!window.confirm(`Backfill 2025 Plaid transactions for "${account.name}"? This will only ask Plaid for this account and will not duplicate existing Plaid transaction IDs.`)) return;
+    if (!window.confirm(`Backfill ${backfillYear} Plaid transactions for "${account.name}"? This will only ask Plaid for this account and will not duplicate existing Plaid transaction IDs.`)) return;
 
     setBackfilling(true);
     setBackfillSummary(null);
@@ -115,8 +121,8 @@ function AccountCard({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           account_id: account.id,
-          start_date: "2025-01-01",
-          end_date: "2025-12-31",
+          start_date: `${backfillYear}-01-01`,
+          end_date: `${backfillYear}-12-31`,
         }),
       });
       const data = await res.json();
@@ -132,7 +138,7 @@ function AccountCard({
       const needsReconnect = returned === 0;
       setBackfillSummary(
         needsReconnect
-          ? "Plaid returned 0 transactions for 2025. Reconnect this bank with 24-month history, then run backfill again."
+          ? `Plaid returned 0 transactions for ${backfillYear}. Reconnect this bank with 24-month history, then run backfill again.`
           : `Backfill finished: Plaid returned ${returned}${available !== returned ? ` of ${available} available` : ""}, upserted ${upserted}, and auto-categorized ${categorized}.`
       );
       if (upserted > 0) window.location.reload();
@@ -279,9 +285,20 @@ function AccountCard({
                   : "This account has Plaid account data, but Cashpile cannot find its stored Plaid connection. Connect the bank again to request more history."}
               </p>
               <div className="flex flex-wrap gap-2">
-                <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={handleBackfill2025} disabled={backfilling}>
-                  {backfilling ? "Backfilling…" : "Backfill 2025"}
+                <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={handleBackfillYear} disabled={backfilling}>
+                  {backfilling ? "Backfilling…" : `Backfill ${backfillYear}`}
                 </Button>
+                <select
+                  className="h-7 rounded-md border border-border bg-background px-2 text-xs"
+                  value={backfillYear}
+                  onChange={(event) => setBackfillYear(event.target.value)}
+                  disabled={backfilling}
+                  aria-label="Account backfill year"
+                >
+                  {getBackfillYears().map((year) => (
+                    <option key={year} value={year}>{year}</option>
+                  ))}
+                </select>
                 {canReconnectPlaidItem ? (
                   <PlaidLinkButton
                     taxEntityId={account.tax_entity_id ?? undefined}
@@ -437,6 +454,65 @@ function MergeAccountModal({
   );
 }
 
+function PlaidAccountActions() {
+  const [year, setYear] = useState("2025");
+  const [backfilling, setBackfilling] = useState(false);
+  const [summary, setSummary] = useState<string | null>(null);
+
+  async function backfillAll() {
+    if (!window.confirm(`Backfill ${year} transactions for all active Plaid-connected accounts? This may take a minute and will not duplicate existing Plaid transaction IDs.`)) return;
+
+    setBackfilling(true);
+    setSummary(null);
+    try {
+      const res = await fetch("/api/plaid/backfill", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          start_date: `${year}-01-01`,
+          end_date: `${year}-12-31`,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Plaid backfill failed");
+
+      const results = data.results ?? [];
+      const returned = results.reduce((sum: number, result: any) => sum + Number(result.plaid_returned ?? 0), 0);
+      const upserted = results.reduce((sum: number, result: any) => sum + Number(result.upserted ?? 0), 0);
+      const categorized = results.reduce((sum: number, result: any) => sum + Number(result.categorized ?? 0), 0);
+      const errors = results.filter((result: any) => result.error).length;
+      const message = `Backfill ${year} finished: Plaid returned ${returned}, upserted ${upserted}, and auto-categorized ${categorized}${errors ? `. ${errors} item(s) had errors.` : "."}`;
+      setSummary(message);
+      if (upserted > 0) window.location.reload();
+    } catch (error) {
+      setSummary(error instanceof Error ? error.message : "Plaid backfill failed");
+    } finally {
+      setBackfilling(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <PlaidLinkButton />
+      <Button variant="outline" size="sm" onClick={backfillAll} disabled={backfilling}>
+        {backfilling ? "Backfilling…" : `Backfill Plaid ${year}`}
+      </Button>
+      <select
+        className="h-9 rounded-md border border-border bg-background px-2 text-sm"
+        value={year}
+        onChange={(event) => setYear(event.target.value)}
+        disabled={backfilling}
+        aria-label="Backfill year"
+      >
+        {getBackfillYears().map((option) => (
+          <option key={option} value={option}>{option}</option>
+        ))}
+      </select>
+      {summary && <p className="basis-full text-xs text-muted-foreground">{summary}</p>}
+    </div>
+  );
+}
+
 export default function AccountsClient({ taxEntities, accounts, plaidItems }: Props) {
   const [localAccounts, setLocalAccounts] = useState(accounts);
   const [mergeTarget, setMergeTarget] = useState<BooksAccount | null>(null);
@@ -492,7 +568,7 @@ export default function AccountsClient({ taxEntities, accounts, plaidItems }: Pr
         <PageHeader
           title="Accounts"
           description="Connect bank and credit card accounts. UDAs are logical groupings and do not connect through Plaid."
-          actions={<PlaidLinkButton />}
+          actions={<PlaidAccountActions />}
         />
         <div className="rounded-lg border p-12 text-center text-muted-foreground">
           <p className="mb-4">No accounts yet.</p>
@@ -508,7 +584,7 @@ export default function AccountsClient({ taxEntities, accounts, plaidItems }: Pr
       <PageHeader
         title="Accounts"
         description="Manage connected bank/credit card accounts separately from logical User Defined Accounts."
-        actions={<PlaidLinkButton />}
+        actions={<PlaidAccountActions />}
       />
 
       {/* Tax Entities with Accounts */}
