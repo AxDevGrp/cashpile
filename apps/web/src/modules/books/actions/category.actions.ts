@@ -55,9 +55,18 @@ export async function updateCategory(id: string, input: Partial<BooksCategory>) 
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthenticated");
 
-  const { data, error } = await supabase
+  const update: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (input.name !== undefined) update.name = input.name.trim();
+  if (input.description !== undefined) update.description = input.description;
+  if (input.category_type !== undefined || input.type !== undefined) update.category_type = input.category_type ?? input.type;
+  if (input.parent_category_id !== undefined || input.parent_id !== undefined) update.parent_category_id = input.parent_category_id ?? input.parent_id;
+  if (input.is_tax_deductible !== undefined) update.is_tax_deductible = input.is_tax_deductible;
+  if (input.color !== undefined) update.color = input.color;
+  if (input.icon !== undefined) update.icon = input.icon;
+
+  const { data, error } = await (supabase as any)
     .from("books_categories")
-    .update(input)
+    .update(update)
     .eq("id", id)
     .eq("user_id", user.id)
     .select()
@@ -65,6 +74,8 @@ export async function updateCategory(id: string, input: Partial<BooksCategory>) 
 
   if (error) throw new Error(error.message);
   revalidatePath("/books");
+  revalidatePath("/books/transactions");
+  revalidatePath("/books/category-rules");
   return data as BooksCategory;
 }
 

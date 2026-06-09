@@ -108,6 +108,10 @@ export default function TransactionsClient({
   const [newCategoryParentId, setNewCategoryParentId] = useState("none");
   const [newCategoryType, setNewCategoryType] = useState("expense");
   const [isCreatingCategory, setIsCreatingCategory] = useState(false);
+  const [isEditCategoryOpen, setIsEditCategoryOpen] = useState(false);
+  const [editCategoryId, setEditCategoryId] = useState("");
+  const [editCategoryName, setEditCategoryName] = useState("");
+  const [isUpdatingCategory, setIsUpdatingCategory] = useState(false);
   const currentYear = new Date().getFullYear();
   const yearOptions = Array.from({ length: 8 }, (_, index) => String(currentYear - index));
   const rootCategories = categoryOptions.filter((category) => !categoryParentId(category));
@@ -306,6 +310,51 @@ export default function TransactionsClient({
     }
   }
 
+  function openEditCategory() {
+    const firstCategory = sortedCategoryOptions[0];
+    setEditCategoryId(firstCategory ? String(firstCategory.id) : "");
+    setEditCategoryName(firstCategory?.name ?? "");
+    setIsEditCategoryOpen(true);
+  }
+
+  async function updateInlineCategory() {
+    const name = editCategoryName.trim();
+    if (!editCategoryId) {
+      toast.error("Choose a category to edit");
+      return;
+    }
+    if (!name) {
+      toast.error("Enter a category name");
+      return;
+    }
+
+    setIsUpdatingCategory(true);
+    try {
+      const res = await fetch("/api/books/categories", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: editCategoryId, name }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Unable to update category");
+
+      setCategoryOptions(data.categories ?? categoryOptions.map((category) => (
+        String(category.id) === editCategoryId ? { ...category, name } : category
+      )));
+      setRows((current) => current.map((tx) => (
+        String(tx.category_id) === editCategoryId
+          ? { ...tx, books_categories: { name } }
+          : tx
+      )));
+      setIsEditCategoryOpen(false);
+      toast.success(`Renamed category to ${name}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to update category");
+    } finally {
+      setIsUpdatingCategory(false);
+    }
+  }
+
   function toggleSelect(id: string) {
     setSelected((prev) => {
       const next = new Set(prev);
@@ -490,6 +539,9 @@ export default function TransactionsClient({
           <Button variant="outline" onClick={() => openAddCategory()}>
             Add Category
           </Button>
+          <Button variant="outline" onClick={openEditCategory} disabled={categoryOptions.length === 0}>
+            Edit Category
+          </Button>
           <Link href="/books/transactions/duplicates">
             <Button variant="outline">Duplicate Review</Button>
           </Link>
@@ -589,6 +641,9 @@ export default function TransactionsClient({
         {/* Category filter */}
         <Button variant="outline" onClick={() => openAddCategory()}>
           Add Category
+        </Button>
+        <Button variant="outline" onClick={openEditCategory} disabled={categoryOptions.length === 0}>
+          Edit Category
         </Button>
         <Select
           value={filters.categoryId ?? "all"}
@@ -910,6 +965,65 @@ export default function TransactionsClient({
             </Button>
             <Button onClick={createInlineCategory} disabled={isCreatingCategory}>
               {isCreatingCategory ? "Adding…" : "Add category"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isEditCategoryOpen} onOpenChange={setIsEditCategoryOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit category</DialogTitle>
+            <DialogDescription>
+              Rename an existing category or sub-category. Existing categorized transactions will show the new name.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <label className="block space-y-1 text-sm">
+              <span className="font-medium">Category</span>
+              <Select
+                value={editCategoryId}
+                onValueChange={(value) => {
+                  const category = categoryOptions.find((item) => String(item.id) === value);
+                  setEditCategoryId(value);
+                  setEditCategoryName(category?.name ?? "");
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose category" />
+                </SelectTrigger>
+                <SelectContent>
+                  {sortedCategoryOptions.map((category) => (
+                    <SelectItem key={category.id} value={String(category.id)}>
+                      {categoryLabel(category, categoryOptions)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </label>
+
+            <label className="block space-y-1 text-sm">
+              <span className="font-medium">New name</span>
+              <input
+                value={editCategoryName}
+                onChange={(event) => setEditCategoryName(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") updateInlineCategory();
+                }}
+                placeholder="Category name"
+                className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground"
+                autoFocus
+              />
+            </label>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditCategoryOpen(false)} disabled={isUpdatingCategory}>
+              Cancel
+            </Button>
+            <Button onClick={updateInlineCategory} disabled={isUpdatingCategory || !editCategoryId}>
+              {isUpdatingCategory ? "Saving…" : "Save name"}
             </Button>
           </DialogFooter>
         </DialogContent>
