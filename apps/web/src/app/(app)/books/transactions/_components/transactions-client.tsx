@@ -925,11 +925,11 @@ export default function TransactionsClient({
         </table>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
-        <div>
+      <div className="space-y-3 rounded-lg border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
+        <div className="text-center">
           Showing {visibleStart}-{visibleEnd} of {count} transactions · Page {currentPage} of {totalPages}
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center justify-center gap-2">
           <Button
             variant="outline"
             size="sm"
