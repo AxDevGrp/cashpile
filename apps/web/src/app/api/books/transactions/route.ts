@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { bulkCategorizeUncategorizedTransactions, listTransactions, updateTransaction } from "@/modules/books/actions/transaction.actions";
 import { listCategories } from "@/modules/books/actions/category.actions";
-import { learnCategoryRuleFromTransaction } from "@/modules/books/actions/category-rule.actions";
+import { applyCategoryRuleToUncategorizedTransactions, learnCategoryRuleFromTransaction } from "@/modules/books/actions/category-rule.actions";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -62,14 +62,19 @@ export async function PATCH(req: NextRequest) {
       category_id: body.categoryId ?? null,
     } as any);
     let rule = null;
+    let appliedMatches = 0;
     if (body.learnRule !== false && body.categoryId) {
       try {
         rule = await learnCategoryRuleFromTransaction(body.id, body.categoryId);
+        if (rule?.id) {
+          const applyResult = await applyCategoryRuleToUncategorizedTransactions(rule.id);
+          appliedMatches = applyResult.applied;
+        }
       } catch (learnError) {
         console.warn("[category-rules] Failed to save learned rule:", learnError);
       }
     }
-    return NextResponse.json({ transaction: updated, rule });
+    return NextResponse.json({ transaction: updated, rule, appliedMatches });
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 });
   }

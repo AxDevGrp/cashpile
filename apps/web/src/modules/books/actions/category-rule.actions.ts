@@ -200,3 +200,67 @@ export async function learnCategoryRuleFromTransaction(transactionId: string, ca
   if (!pattern) return null;
   return createCategoryRule({ pattern, categoryId, source: "learned" });
 }
+
+export async function applyCategoryRuleToUncategorizedTransactions(ruleId: string) {
+  const supabase = await createServerSupabaseClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Unauthenticated");
+
+  const { data: rule, error: ruleError } = await (supabase as any)
+    .from("books_category_rules")
+    .select("id, pattern, match_type, category_id, match_count")
+    .eq("id", ruleId)
+    .eq("user_id", user.id)
+    .eq("is_active", true)
+    .single();
+
+  if (ruleError) throw new Error(ruleError.message);
+
+  const pattern = normalizePattern(rule?.pattern);
+  if (!pattern) return { applied: 0 };
+
+  const { data: candidates, error: candidateError } = await (supabase as any)
+    .from("books_transactions")
+    .select("id, merchant, description")
+    .eq("user_id", user.id)
+    .is("category_id", null)
+    .eq("is_transfer", false)
+    .limit(10000);
+
+  if (candidateError) throw new Error(candidateError.message);
+
+  const matchingIds = (candidates ?? [])
+    .filter((tx: any) => {
+      const normalized = normalizePattern(tx.merchant) || normalizePattern(tx.description);
+      return rule.match_type === "equals" ? normalized === pattern : normalized.includes(pattern);
+    })
+    .map((tx: any) => tx.id);
+
+  if (matchingIds.length === 0) return { applied: 0 };
+
+  const now = new Date().toISOString();
+  let applied = 0;
+  const chunkSize = 500;
+  for (let i = 0; i < matchingIds.length; i += chunkSize) {
+    const ids = matchingIds.slice(i, i + chunkSize);
+    const { error } = await (supabase as any)
+      .from("books_transactions")
+      .update({ category_id: rule.category_id, updated_at: now })
+      .eq("user_id", user.id)
+      .in("id", ids)
+      .is("category_id", null);
+
+    if (error) throw new Error(error.message);
+    applied += ids.length;
+  }
+
+  await (supabase as any)
+    .from("books_category_rules")
+    .update({ match_count: (rule.match_count ?? 0) + applied, last_matched_at: now, updated_at: now })
+    .eq("id", rule.id)
+    .eq("user_id", user.id);
+
+  revalidatePath("/books/category-rules");
+  revalidatePath("/books/transactions");
+  return { applied };
+}

@@ -314,7 +314,28 @@ export default function TransactionsClient({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Unable to update category");
-      toast.success(nextCategory ? `Categorized as ${nextCategory.name}; rule saved for future matches` : "Marked uncategorized");
+      if (nextCategory) {
+        const appliedMatches = Number(data.appliedMatches ?? 0);
+        toast.success(
+          appliedMatches > 0
+            ? `Categorized as ${nextCategory.name}; rule applied to ${appliedMatches} matching uncategorized transaction${appliedMatches === 1 ? "" : "s"}`
+            : `Categorized as ${nextCategory.name}; rule saved for future matches`
+        );
+        if (appliedMatches > 0) {
+          router.refresh();
+          const params = new URLSearchParams(searchParams.toString());
+          params.set("limit", String(pageSize));
+          const refreshed = await fetch(`/api/books/transactions?${params.toString()}`, { cache: "no-store" });
+          if (refreshed.ok) {
+            const refreshedData = await refreshed.json();
+            setRows(refreshedData.transactions ?? []);
+            setCount(refreshedData.count ?? 0);
+            setCategoryOptions(refreshedData.categories ?? []);
+          }
+        }
+      } else {
+        toast.success("Marked uncategorized");
+      }
     } catch (error) {
       setRows(previousRows);
       toast.error(error instanceof Error ? error.message : "Unable to update category");
