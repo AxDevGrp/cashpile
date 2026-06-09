@@ -7,7 +7,22 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { PageHeader } from "@cashpile/ui";
 import { Button } from "@cashpile/ui";
 import { Badge } from "@cashpile/ui";
-import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@cashpile/ui";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectSeparator,
+  SelectTrigger,
+  SelectValue,
+} from "@cashpile/ui";
 import { formatCurrency, formatDate } from "@cashpile/ui";
 import type { BooksTransaction, TaxEntity, BooksCategory, BooksUda } from "@/modules/books/types";
 
@@ -31,6 +46,28 @@ interface Props {
   lockedAccountId?: string;
   requireQuery?: boolean;
   emptyQueryMessage?: string;
+}
+
+function buildPageNumbers(currentPage: number, totalPages: number) {
+  const pages = new Set([1, totalPages]);
+  for (let page = currentPage - 2; page <= currentPage + 2; page += 1) {
+    if (page >= 1 && page <= totalPages) pages.add(page);
+  }
+  return [...pages].sort((a, b) => a - b);
+}
+
+function categoryType(category: BooksCategory) {
+  return category.category_type ?? category.type ?? "expense";
+}
+
+function categoryParentId(category: BooksCategory) {
+  return category.parent_category_id ?? category.parent_id ?? null;
+}
+
+function categoryLabel(category: BooksCategory, categories: BooksCategory[]) {
+  const parentId = categoryParentId(category);
+  const parent = parentId ? categories.find((item) => String(item.id) === String(parentId)) : null;
+  return parent ? `${parent.name} / ${category.name}` : category.name;
 }
 
 export default function TransactionsClient({
@@ -65,8 +102,18 @@ export default function TransactionsClient({
   const [isBackfilling, setIsBackfilling] = useState(false);
   const [backfillYear, setBackfillYear] = useState("2025");
   const [searchDraft, setSearchDraft] = useState(filters.search ?? "");
+  const [isAddCategoryOpen, setIsAddCategoryOpen] = useState(false);
+  const [addCategoryForTransactionId, setAddCategoryForTransactionId] = useState<string | null>(null);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [newCategoryParentId, setNewCategoryParentId] = useState("none");
+  const [newCategoryType, setNewCategoryType] = useState("expense");
+  const [isCreatingCategory, setIsCreatingCategory] = useState(false);
   const currentYear = new Date().getFullYear();
   const yearOptions = Array.from({ length: 8 }, (_, index) => String(currentYear - index));
+  const rootCategories = categoryOptions.filter((category) => !categoryParentId(category));
+  const sortedCategoryOptions = [...categoryOptions].sort((a, b) => (
+    categoryLabel(a, categoryOptions).localeCompare(categoryLabel(b, categoryOptions))
+  ));
   const selectedYear = filters.from?.match(/^\d{4}-01-01$/) && filters.to === `${filters.from.slice(0, 4)}-12-31`
     ? filters.from.slice(0, 4)
     : filters.from || filters.to
@@ -83,11 +130,13 @@ export default function TransactionsClient({
   );
   const shouldLoadTransactions = !requireQuery || hasActiveQuery;
   const pageSize = 100;
-  const currentOffset = Math.max(0, Number(searchParams.get("offset") ?? 0) || 0);
-  const currentPage = Math.floor(currentOffset / pageSize) + 1;
+  const requestedOffset = Math.max(0, Number(searchParams.get("offset") ?? 0) || 0);
   const totalPages = Math.max(1, Math.ceil(count / pageSize));
-  const visibleStart = count === 0 ? 0 : currentOffset + 1;
-  const visibleEnd = Math.min(currentOffset + rows.length, count);
+  const currentPage = count === 0 ? 1 : Math.min(totalPages, Math.floor(requestedOffset / pageSize) + 1);
+  const currentOffset = (currentPage - 1) * pageSize;
+  const pageNumbers = buildPageNumbers(currentPage, totalPages);
+  const visibleStart = count === 0 || rows.length === 0 ? 0 : requestedOffset + 1;
+  const visibleEnd = Math.min(requestedOffset + rows.length, count);
   const headerDescription = !shouldLoadTransactions
     ? description ?? emptyQueryMessage
     : isLoading
@@ -201,6 +250,62 @@ export default function TransactionsClient({
     router.push(`${basePath}?${params.toString()}`);
   }
 
+  function updatePage(page: number) {
+    updateOffset((page - 1) * pageSize);
+  }
+
+  function openAddCategory(transactionId?: string | null) {
+    const currentTransaction = transactionId ? rows.find((tx) => tx.id === transactionId) : null;
+    setAddCategoryForTransactionId(transactionId ?? null);
+    setNewCategoryName("");
+    setNewCategoryParentId("none");
+    setNewCategoryType(currentTransaction?.amount && currentTransaction.amount > 0 ? "income" : "expense");
+    setIsAddCategoryOpen(true);
+  }
+
+  async function createInlineCategory() {
+    const name = newCategoryName.trim();
+    if (!name) {
+      toast.error("Enter a category name");
+      return;
+    }
+
+    const parent = newCategoryParentId === "none"
+      ? null
+      : categoryOptions.find((category) => String(category.id) === newCategoryParentId);
+    const effectiveType = parent ? categoryType(parent) : newCategoryType;
+
+    setIsCreatingCategory(true);
+    try {
+      const res = await fetch("/api/books/categories", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          parentCategoryId: parent?.id ?? null,
+          categoryType: effectiveType,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Unable to create category");
+
+      setCategoryOptions(data.categories ?? [...categoryOptions, data.category]);
+      setNewCategoryName("");
+      setNewCategoryParentId("none");
+      setAddCategoryForTransactionId(null);
+      setIsAddCategoryOpen(false);
+      toast.success(parent ? `Added ${parent.name} / ${data.category.name}` : `Added ${data.category.name}`);
+
+      if (addCategoryForTransactionId) {
+        await assignCategory(addCategoryForTransactionId, String(data.category.id), data.category);
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to create category");
+    } finally {
+      setIsCreatingCategory(false);
+    }
+  }
+
   function toggleSelect(id: string) {
     setSelected((prev) => {
       const next = new Set(prev);
@@ -296,10 +401,10 @@ export default function TransactionsClient({
     }
   }
 
-  async function assignCategory(transactionId: string, categoryId: string) {
+  async function assignCategory(transactionId: string, categoryId: string, categoryOverride?: BooksCategory) {
     const previousRows = rows;
     const nextCategoryId = categoryId === "uncategorized" ? null : categoryId;
-    const nextCategory = categoryOptions.find((category) => String(category.id) === String(nextCategoryId));
+    const nextCategory = categoryOverride ?? categoryOptions.find((category) => String(category.id) === String(nextCategoryId));
 
     setRows((current) => current.map((tx) => tx.id === transactionId
       ? { ...tx, category_id: nextCategoryId, books_categories: nextCategory ? { name: nextCategory.name } : null }
@@ -382,6 +487,9 @@ export default function TransactionsClient({
           <Link href="/books/category-rules">
             <Button variant="outline">Category Rules</Button>
           </Link>
+          <Button variant="outline" onClick={() => openAddCategory()}>
+            Add Category
+          </Button>
           <Link href="/books/transactions/duplicates">
             <Button variant="outline">Duplicate Review</Button>
           </Link>
@@ -479,13 +587,31 @@ export default function TransactionsClient({
         )}
 
         {/* Category filter */}
-        <Select value={filters.categoryId ?? "all"} onValueChange={(v) => updateFilter("categoryId", v)}>
+        <Button variant="outline" onClick={() => openAddCategory()}>
+          Add Category
+        </Button>
+        <Select
+          value={filters.categoryId ?? "all"}
+          onValueChange={(v) => {
+            if (v === "__add_category__") {
+              openAddCategory();
+              return;
+            }
+            updateFilter("categoryId", v);
+          }}
+        >
           <SelectTrigger className="w-44">
             <SelectValue placeholder="All categories" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All categories</SelectItem>
-            {categoryOptions.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
+            {sortedCategoryOptions.map((c) => (
+              <SelectItem key={c.id} value={String(c.id)}>
+                {categoryLabel(c, categoryOptions)}
+              </SelectItem>
+            ))}
+            <SelectSeparator />
+            <SelectItem value="__add_category__">+ Add category…</SelectItem>
           </SelectContent>
         </Select>
 
@@ -584,18 +710,26 @@ export default function TransactionsClient({
                   <td className="p-3">
                     <Select
                       value={tx.category_id ? String(tx.category_id) : "uncategorized"}
-                      onValueChange={(value) => assignCategory(tx.id, value)}
+                      onValueChange={(value) => {
+                        if (value === "__add_category__") {
+                          openAddCategory(tx.id);
+                          return;
+                        }
+                        assignCategory(tx.id, value);
+                      }}
                     >
                       <SelectTrigger className="h-8 w-56 rounded-full bg-white text-xs">
                         <SelectValue placeholder="Uncategorized" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="uncategorized">Uncategorized</SelectItem>
-                        {categoryOptions.map((category) => (
+                        {sortedCategoryOptions.map((category) => (
                           <SelectItem key={category.id} value={String(category.id)}>
-                            {category.name}
+                            {categoryLabel(category, categoryOptions)}
                           </SelectItem>
                         ))}
+                        <SelectSeparator />
+                        <SelectItem value="__add_category__">+ Add category…</SelectItem>
                       </SelectContent>
                     </Select>
                   </td>
@@ -631,26 +765,155 @@ export default function TransactionsClient({
         <div>
           Showing {visibleStart}-{visibleEnd} of {count} transactions · Page {currentPage} of {totalPages}
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button
             variant="outline"
             size="sm"
-            onClick={() => updateOffset(Math.max(0, currentOffset - pageSize))}
+            onClick={() => updatePage(1)}
+            disabled={isLoading || currentOffset === 0}
+          >
+            First
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => updatePage(currentPage - 1)}
             disabled={isLoading || currentOffset === 0}
           >
             Previous
           </Button>
+          {pageNumbers.map((page, index) => (
+            <div key={page} className="flex items-center gap-2">
+              {index > 0 && page - pageNumbers[index - 1] > 1 && (
+                <span className="px-1 text-muted-foreground">…</span>
+              )}
+              <Button
+                variant={page === currentPage ? "default" : "outline"}
+                size="sm"
+                onClick={() => updatePage(page)}
+                disabled={isLoading || page === currentPage}
+                aria-current={page === currentPage ? "page" : undefined}
+              >
+                {page}
+              </Button>
+            </div>
+          ))}
           <Button
             variant="outline"
             size="sm"
-            onClick={() => updateOffset(currentOffset + pageSize)}
+            onClick={() => updatePage(currentPage + 1)}
             disabled={isLoading || currentOffset + pageSize >= count}
           >
             Next
           </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => updatePage(totalPages)}
+            disabled={isLoading || currentOffset + pageSize >= count}
+          >
+            Last
+          </Button>
         </div>
       </div>
       </>}
+
+      <Dialog open={isAddCategoryOpen} onOpenChange={(open) => {
+        setIsAddCategoryOpen(open);
+        if (!open) {
+          setAddCategoryForTransactionId(null);
+          setNewCategoryName("");
+          setNewCategoryParentId("none");
+        }
+      }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add category</DialogTitle>
+            <DialogDescription>
+              Create a top-level category or choose a parent to create a sub-category, like Income / Property Income.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <label className="block space-y-1 text-sm">
+              <span className="font-medium">Category name</span>
+              <input
+                value={newCategoryName}
+                onChange={(event) => setNewCategoryName(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") createInlineCategory();
+                }}
+                placeholder="e.g. W-2 Income, Property Income"
+                className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground"
+                autoFocus
+              />
+            </label>
+
+            <label className="block space-y-1 text-sm">
+              <span className="font-medium">Parent category</span>
+              <Select
+                value={newCategoryParentId}
+                onValueChange={(value) => {
+                  setNewCategoryParentId(value);
+                  const parent = categoryOptions.find((category) => String(category.id) === value);
+                  if (parent) setNewCategoryType(categoryType(parent));
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="No parent" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No parent — top-level category</SelectItem>
+                  {rootCategories.map((category) => (
+                    <SelectItem key={category.id} value={String(category.id)}>
+                      {category.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </label>
+
+            <label className="block space-y-1 text-sm">
+              <span className="font-medium">Type</span>
+              <Select
+                value={newCategoryType}
+                onValueChange={setNewCategoryType}
+                disabled={newCategoryParentId !== "none"}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Category type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="income">Income</SelectItem>
+                  <SelectItem value="expense">Expense</SelectItem>
+                  <SelectItem value="transfer">Transfer</SelectItem>
+                </SelectContent>
+              </Select>
+              {newCategoryParentId !== "none" && (
+                <p className="text-xs text-muted-foreground">Sub-categories inherit their parent category type.</p>
+              )}
+            </label>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsAddCategoryOpen(false);
+                setAddCategoryForTransactionId(null);
+                setNewCategoryName("");
+                setNewCategoryParentId("none");
+              }}
+              disabled={isCreatingCategory}
+            >
+              Cancel
+            </Button>
+            <Button onClick={createInlineCategory} disabled={isCreatingCategory}>
+              {isCreatingCategory ? "Adding…" : "Add category"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

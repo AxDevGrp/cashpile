@@ -20,20 +20,33 @@ export async function listCategories(_entityId?: string) {
 }
 
 export async function createCategory(
-  input: Omit<BooksCategory, "id" | "user_id" | "created_at">
+  input: Partial<Omit<BooksCategory, "id" | "user_id" | "created_at">> & { name: string }
 ) {
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthenticated");
 
-  const { data, error } = await supabase
+  const row = {
+    name: input.name.trim(),
+    description: input.description ?? null,
+    category_type: input.category_type ?? input.type ?? "expense",
+    parent_category_id: input.parent_category_id ?? input.parent_id ?? null,
+    is_tax_deductible: input.is_tax_deductible ?? false,
+    color: input.color ?? "#6B7280",
+    icon: input.icon ?? "folder",
+    user_id: user.id,
+  };
+
+  const { data, error } = await (supabase as any)
     .from("books_categories")
-    .insert({ ...input, user_id: user.id })
+    .insert(row)
     .select()
     .single();
 
   if (error) throw new Error(error.message);
   revalidatePath("/books");
+  revalidatePath("/books/transactions");
+  revalidatePath("/books/category-rules");
   return data as BooksCategory;
 }
 

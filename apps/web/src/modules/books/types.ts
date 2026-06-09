@@ -75,8 +75,14 @@ export interface BooksCategory {
   entity_id?: string | null;
   name: string;
   parent_id?: string | null;
+  parent_category_id?: string | number | null;
   type: "income" | "expense" | "transfer";
+  category_type?: "income" | "expense" | "asset" | "liability" | "equity" | "transfer";
   tax_category?: string | null;
+  description?: string | null;
+  is_tax_deductible?: boolean;
+  color?: string | null;
+  icon?: string | null;
   is_active: boolean;
   created_at: string;
 }
