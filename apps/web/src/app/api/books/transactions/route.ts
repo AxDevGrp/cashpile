@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { bulkCategorizeUncategorizedTransactions, listTransactions, updateTransaction } from "@/modules/books/actions/transaction.actions";
+import { bulkCategorizeUncategorizedTransactions, bulkUpdateTransactions, listTransactions, updateTransaction } from "@/modules/books/actions/transaction.actions";
 import { listCategories } from "@/modules/books/actions/category.actions";
 import { applyCategoryRuleToUncategorizedTransactions, learnCategoryRuleFromTransaction } from "@/modules/books/actions/category-rule.actions";
 
@@ -55,6 +55,17 @@ export async function POST(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   try {
     const body = await req.json();
+    if (Array.isArray(body?.ids)) {
+      const ids = body.ids.filter((id: unknown) => typeof id === "string" && id.length > 0);
+      if (ids.length === 0) {
+        return NextResponse.json({ error: "At least one transaction id is required" }, { status: 400 });
+      }
+      await bulkUpdateTransactions(ids, {
+        category_id: body.categoryId ?? null,
+      } as any);
+      return NextResponse.json({ updated: ids.length });
+    }
+
     if (!body?.id) {
       return NextResponse.json({ error: "Transaction id is required" }, { status: 400 });
     }

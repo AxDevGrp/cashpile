@@ -95,6 +95,8 @@ export default function TransactionsClient({
   const [isLoading, setIsLoading] = useState(!requireQuery);
   const [clientError, setClientError] = useState<string | undefined>(loadError);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkCategoryId, setBulkCategoryId] = useState("");
+  const [isBulkUpdating, setIsBulkUpdating] = useState(false);
   const [isCategorizing, setIsCategorizing] = useState(false);
   const [categorizeMode, setCategorizeMode] = useState<"rules" | "ai" | null>(null);
   const [categorizeSummary, setCategorizeSummary] = useState<string | null>(null);
@@ -361,6 +363,50 @@ export default function TransactionsClient({
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
+  }
+
+  async function applyBulkCategory() {
+    if (selected.size === 0) {
+      toast.error("Select transactions first");
+      return;
+    }
+    if (!bulkCategoryId) {
+      toast.error("Choose a category to apply");
+      return;
+    }
+
+    const ids = Array.from(selected);
+    const nextCategoryId = bulkCategoryId === "uncategorized" ? null : bulkCategoryId;
+    const nextCategory = nextCategoryId
+      ? categoryOptions.find((category) => String(category.id) === String(nextCategoryId))
+      : null;
+    const previousRows = rows;
+
+    setIsBulkUpdating(true);
+    setRows((current) => current.map((tx) => (
+      selected.has(tx.id)
+        ? { ...tx, category_id: nextCategoryId, books_categories: nextCategory ? { name: nextCategory.name } : null }
+        : tx
+    )));
+
+    try {
+      const res = await fetch("/api/books/transactions", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids, categoryId: nextCategoryId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Unable to update selected transactions");
+
+      setSelected(new Set());
+      setBulkCategoryId("");
+      toast.success(`Updated ${data.updated ?? ids.length} selected transaction${ids.length === 1 ? "" : "s"}`);
+    } catch (error) {
+      setRows(previousRows);
+      toast.error(error instanceof Error ? error.message : "Unable to update selected transactions");
+    } finally {
+      setIsBulkUpdating(false);
+    }
   }
 
   async function runPlaidBackfill() {
@@ -738,6 +784,42 @@ export default function TransactionsClient({
       )}
 
       {shouldLoadTransactions && <>
+      {selected.size > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+          <div className="font-medium">
+            {selected.size} transaction{selected.size === 1 ? "" : "s"} selected
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Select value={bulkCategoryId} onValueChange={setBulkCategoryId}>
+              <SelectTrigger className="w-72 bg-white">
+                <SelectValue placeholder="Choose category to apply" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="uncategorized">Uncategorized</SelectItem>
+                {sortedCategoryOptions.map((category) => (
+                  <SelectItem key={category.id} value={String(category.id)}>
+                    {categoryLabel(category, categoryOptions)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button onClick={applyBulkCategory} disabled={isBulkUpdating || !bulkCategoryId}>
+              {isBulkUpdating ? "Applying…" : "Apply to Selected"}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setSelected(new Set());
+                setBulkCategoryId("");
+              }}
+              disabled={isBulkUpdating}
+            >
+              Clear Selection
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Table */}
       <div className="rounded-lg border">
         <table className="w-full text-sm">
@@ -747,6 +829,7 @@ export default function TransactionsClient({
                 <input
                   type="checkbox"
                   className="rounded"
+                  checked={rows.length > 0 && rows.every((tx) => selected.has(tx.id))}
                   onChange={(e) => setSelected(e.target.checked ? new Set(rows.map((t) => t.id)) : new Set())}
                 />
               </th>
