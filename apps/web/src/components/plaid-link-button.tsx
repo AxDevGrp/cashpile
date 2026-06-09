@@ -21,12 +21,24 @@ interface Props {
   taxEntityId?: string; // NEW: Use tax_entity_id instead of udaId
   udaId?: string; // DEPRECATED: For backward compatibility
   onSuccess?: (institution: string) => void;
+  label?: string;
+  updatePlaidItemId?: string;
+  updateItemId?: string;
+  backfillAccountId?: string;
 }
 
 type ImportPreset = "tax2025" | "last90" | "last730";
 type DuplicateMode = "flag_review" | "keep_all";
 
-export default function PlaidLinkButton({ taxEntityId, udaId, onSuccess }: Props) {
+export default function PlaidLinkButton({
+  taxEntityId,
+  udaId,
+  onSuccess,
+  label = "Connect Account",
+  updatePlaidItemId,
+  updateItemId,
+  backfillAccountId,
+}: Props) {
   const [linkToken, setLinkToken] = useState<string | null>(null);
   const [openedToken, setOpenedToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -38,6 +50,7 @@ export default function PlaidLinkButton({ taxEntityId, udaId, onSuccess }: Props
 
   // Use the new taxEntityId if provided, fall back to deprecated udaId
   const entityId = taxEntityId ?? udaId;
+  const isUpdateMode = Boolean(updatePlaidItemId);
   const daysRequested = importPreset === "last90" ? 90 : 730;
   const importOptions = useMemo(
     () => ({
@@ -57,7 +70,7 @@ export default function PlaidLinkButton({ taxEntityId, udaId, onSuccess }: Props
       const res = await fetch("/api/plaid/link-token", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(importOptions),
+        body: JSON.stringify({ ...importOptions, update_plaid_item_id: updatePlaidItemId }),
       });
       const data = await res.json();
       if (!res.ok || !data.link_token) {
@@ -68,6 +81,12 @@ export default function PlaidLinkButton({ taxEntityId, udaId, onSuccess }: Props
       setOpenedToken(null);
       window.localStorage.setItem("cashpile_plaid_link_token", data.link_token);
       window.localStorage.setItem("cashpile_plaid_import_options", JSON.stringify(importOptions));
+      if (updatePlaidItemId) window.localStorage.setItem("cashpile_plaid_update_item_id", updatePlaidItemId);
+      else window.localStorage.removeItem("cashpile_plaid_update_item_id");
+      if (updateItemId) window.localStorage.setItem("cashpile_plaid_update_external_item_id", updateItemId);
+      else window.localStorage.removeItem("cashpile_plaid_update_external_item_id");
+      if (backfillAccountId) window.localStorage.setItem("cashpile_plaid_backfill_account_id", backfillAccountId);
+      else window.localStorage.removeItem("cashpile_plaid_backfill_account_id");
       if (entityId) window.localStorage.setItem("cashpile_plaid_tax_entity_id", entityId);
       else window.localStorage.removeItem("cashpile_plaid_tax_entity_id");
     } catch (err) {
@@ -77,7 +96,7 @@ export default function PlaidLinkButton({ taxEntityId, udaId, onSuccess }: Props
       setLoading(false);
       setOptionsOpen(false);
     }
-  }, [importOptions]);
+  }, [backfillAccountId, importOptions, updateItemId, updatePlaidItemId]);
 
 
   const { open, ready, error: plaidLinkError } = usePlaidLink({
@@ -85,6 +104,36 @@ export default function PlaidLinkButton({ taxEntityId, udaId, onSuccess }: Props
     onSuccess: async (public_token) => {
       setLoading(true);
       try {
+        if (updatePlaidItemId) {
+          if (updateItemId) {
+            await fetch("/api/plaid/sync", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ item_id: updateItemId }),
+            });
+          }
+          if (backfillAccountId) {
+            await fetch("/api/plaid/backfill", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                account_id: backfillAccountId,
+                start_date: "2025-01-01",
+                end_date: "2025-12-31",
+              }),
+            });
+          }
+          window.localStorage.removeItem("cashpile_plaid_link_token");
+          window.localStorage.removeItem("cashpile_plaid_import_options");
+          window.localStorage.removeItem("cashpile_plaid_tax_entity_id");
+          window.localStorage.removeItem("cashpile_plaid_update_item_id");
+          window.localStorage.removeItem("cashpile_plaid_update_external_item_id");
+          window.localStorage.removeItem("cashpile_plaid_backfill_account_id");
+          onSuccess?.("Plaid");
+          window.location.reload();
+          return;
+        }
+
         const res = await fetch("/api/plaid/exchange-token", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -99,6 +148,9 @@ export default function PlaidLinkButton({ taxEntityId, udaId, onSuccess }: Props
           window.localStorage.removeItem("cashpile_plaid_link_token");
           window.localStorage.removeItem("cashpile_plaid_import_options");
           window.localStorage.removeItem("cashpile_plaid_tax_entity_id");
+          window.localStorage.removeItem("cashpile_plaid_update_item_id");
+          window.localStorage.removeItem("cashpile_plaid_update_external_item_id");
+          window.localStorage.removeItem("cashpile_plaid_backfill_account_id");
           onSuccess?.(data.institution);
           window.location.reload();
         }
@@ -175,7 +227,7 @@ export default function PlaidLinkButton({ taxEntityId, udaId, onSuccess }: Props
             onClick={() => setOptionsOpen(true)}
             disabled={loading}
           >
-            {loading ? "Preparing Plaid…" : "Connect Account"}
+            {loading ? "Preparing Plaid…" : label}
           </Button>
         )}
         {linkToken && (
@@ -219,13 +271,15 @@ export default function PlaidLinkButton({ taxEntityId, udaId, onSuccess }: Props
       <Dialog open={optionsOpen} onOpenChange={setOptionsOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Plaid import options</DialogTitle>
+            <DialogTitle>{isUpdateMode ? "Reconnect bank" : "Plaid import options"}</DialogTitle>
             <DialogDescription>
-              Choose how much history to request before connecting. Plaid can provide up to 24 months when the bank supports it.
+              {isUpdateMode
+                ? "Plaid will refresh authorization for this bank connection. Cashpile will then sync and backfill 2025 for the selected account."
+                : "Choose how much history to request before connecting. Plaid can provide up to 24 months when the bank supports it."}
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 py-2">
+          {!isUpdateMode && <div className="space-y-4 py-2">
             <div className="space-y-2">
               <label className="text-sm font-medium">Transaction history</label>
               <Select value={importPreset} onValueChange={(value) => setImportPreset(value as ImportPreset)}>
@@ -258,7 +312,7 @@ export default function PlaidLinkButton({ taxEntityId, udaId, onSuccess }: Props
                 Cashpile will not auto-delete suspected duplicates. Exact Plaid transaction IDs are still deduped automatically.
               </p>
             </div>
-          </div>
+          </div>}
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setOptionsOpen(false)} disabled={loading}>

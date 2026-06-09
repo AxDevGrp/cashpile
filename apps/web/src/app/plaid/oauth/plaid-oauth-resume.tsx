@@ -39,6 +39,40 @@ export default function PlaidOAuthResume() {
     setMessage("Saving connected account…");
     setError(null);
     try {
+      const updatePlaidItemId = window.localStorage.getItem("cashpile_plaid_update_item_id");
+      const updateItemId = window.localStorage.getItem("cashpile_plaid_update_external_item_id");
+      const backfillAccountId = window.localStorage.getItem("cashpile_plaid_backfill_account_id");
+      if (updatePlaidItemId) {
+        setMessage("Refreshing bank connection…");
+        if (updateItemId) {
+          await fetch("/api/plaid/sync", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ item_id: updateItemId }),
+          });
+        }
+        if (backfillAccountId) {
+          setMessage("Backfilling 2025 transactions…");
+          await fetch("/api/plaid/backfill", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              account_id: backfillAccountId,
+              start_date: "2025-01-01",
+              end_date: "2025-12-31",
+            }),
+          });
+        }
+        window.localStorage.removeItem("cashpile_plaid_link_token");
+        window.localStorage.removeItem("cashpile_plaid_import_options");
+        window.localStorage.removeItem("cashpile_plaid_tax_entity_id");
+        window.localStorage.removeItem("cashpile_plaid_update_item_id");
+        window.localStorage.removeItem("cashpile_plaid_update_external_item_id");
+        window.localStorage.removeItem("cashpile_plaid_backfill_account_id");
+        window.location.href = "/books/accounts";
+        return;
+      }
+
       const taxEntityId = window.localStorage.getItem("cashpile_plaid_tax_entity_id");
       const res = await fetch("/api/plaid/exchange-token", {
         method: "POST",
@@ -54,6 +88,9 @@ export default function PlaidOAuthResume() {
       window.localStorage.removeItem("cashpile_plaid_link_token");
       window.localStorage.removeItem("cashpile_plaid_import_options");
       window.localStorage.removeItem("cashpile_plaid_tax_entity_id");
+      window.localStorage.removeItem("cashpile_plaid_update_item_id");
+      window.localStorage.removeItem("cashpile_plaid_update_external_item_id");
+      window.localStorage.removeItem("cashpile_plaid_backfill_account_id");
       window.location.href = "/books/accounts";
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to connect account");

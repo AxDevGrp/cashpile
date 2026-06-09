@@ -85,6 +85,8 @@ function AccountCard({
   const [isRenaming, setIsRenaming] = useState(false);
   const [nameDraft, setNameDraft] = useState(account.name);
   const [savingName, setSavingName] = useState(false);
+  const [backfilling, setBackfilling] = useState(false);
+  const [backfillSummary, setBackfillSummary] = useState<string | null>(null);
 
   async function handleRefresh() {
     if (!plaidItem) return;
@@ -96,6 +98,44 @@ function AccountCard({
     });
     setSyncing(false);
     window.location.reload();
+  }
+
+  async function handleBackfill2025() {
+    if (!plaidItem) return;
+    if (!window.confirm(`Backfill 2025 Plaid transactions for "${account.name}"? This will only ask Plaid for this account and will not duplicate existing Plaid transaction IDs.`)) return;
+
+    setBackfilling(true);
+    setBackfillSummary(null);
+    try {
+      const res = await fetch("/api/plaid/backfill", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          account_id: account.id,
+          start_date: "2025-01-01",
+          end_date: "2025-12-31",
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Plaid backfill failed");
+
+      const result = data.results?.[0];
+      if (result?.error) throw new Error(typeof result.error === "string" ? result.error : JSON.stringify(result.error));
+
+      const returned = result?.total_returned ?? 0;
+      const upserted = result?.total_upserted ?? 0;
+      const needsReconnect = returned === 0;
+      setBackfillSummary(
+        needsReconnect
+          ? "Plaid returned 0 transactions for 2025. Reconnect this bank with 24-month history, then run backfill again."
+          : `Backfill finished: Plaid returned ${returned} and upserted ${upserted}.`
+      );
+      if (upserted > 0) window.location.reload();
+    } catch (error) {
+      setBackfillSummary(error instanceof Error ? error.message : "Plaid backfill failed");
+    } finally {
+      setBackfilling(false);
+    }
   }
 
   const assignedEntity = taxEntities.find(e => e.id === account.tax_entity_id);
@@ -224,6 +264,28 @@ function AccountCard({
               </Button>
             </div>
           </div>
+          {plaidItem && (
+            <div className="mt-3 rounded-md border border-border bg-muted/20 p-2 space-y-2">
+              <p className="text-xs text-muted-foreground">
+                Plaid reconnects the bank connection that owns this account, not one account by itself.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={handleBackfill2025} disabled={backfilling}>
+                  {backfilling ? "Backfilling…" : "Backfill 2025"}
+                </Button>
+                <PlaidLinkButton
+                  taxEntityId={account.tax_entity_id ?? undefined}
+                  updatePlaidItemId={plaidItem.id}
+                  updateItemId={plaidItem.item_id}
+                  backfillAccountId={account.id}
+                  label="Reconnect bank + backfill 2025"
+                />
+              </div>
+              {backfillSummary && (
+                <p className="text-xs text-muted-foreground">{backfillSummary}</p>
+              )}
+            </div>
+          )}
           
           {isAssigning && (
             <div className="mt-2 space-y-2">
