@@ -66,6 +66,7 @@ export default function PlaidOAuthResume() {
         window.localStorage.removeItem("cashpile_plaid_link_token");
         window.localStorage.removeItem("cashpile_plaid_import_options");
         window.localStorage.removeItem("cashpile_plaid_tax_entity_id");
+        window.localStorage.removeItem("cashpile_plaid_replace_account_id");
         window.localStorage.removeItem("cashpile_plaid_update_item_id");
         window.localStorage.removeItem("cashpile_plaid_update_external_item_id");
         window.localStorage.removeItem("cashpile_plaid_backfill_account_id");
@@ -74,6 +75,7 @@ export default function PlaidOAuthResume() {
       }
 
       const taxEntityId = window.localStorage.getItem("cashpile_plaid_tax_entity_id");
+      const replaceAccountId = window.localStorage.getItem("cashpile_plaid_replace_account_id");
       const res = await fetch("/api/plaid/exchange-token", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -81,13 +83,27 @@ export default function PlaidOAuthResume() {
           public_token: publicToken,
           tax_entity_id: taxEntityId || undefined,
           import_options: importOptions,
+          replace_account_id: replaceAccountId || undefined,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to connect account");
+      if (replaceAccountId) {
+        setMessage("Backfilling 2025 transactions…");
+        await fetch("/api/plaid/backfill", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            account_id: replaceAccountId,
+            start_date: "2025-01-01",
+            end_date: "2025-12-31",
+          }),
+        });
+      }
       window.localStorage.removeItem("cashpile_plaid_link_token");
       window.localStorage.removeItem("cashpile_plaid_import_options");
       window.localStorage.removeItem("cashpile_plaid_tax_entity_id");
+      window.localStorage.removeItem("cashpile_plaid_replace_account_id");
       window.localStorage.removeItem("cashpile_plaid_update_item_id");
       window.localStorage.removeItem("cashpile_plaid_update_external_item_id");
       window.localStorage.removeItem("cashpile_plaid_backfill_account_id");

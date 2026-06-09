@@ -101,7 +101,10 @@ function AccountCard({
   }
 
   async function handleBackfill2025() {
-    if (!plaidItem) return;
+    if (!plaidItem) {
+      setBackfillSummary("Cannot backfill yet because Cashpile cannot find this account’s stored Plaid connection. Use Connect bank again first, then run Backfill 2025.");
+      return;
+    }
     if (!window.confirm(`Backfill 2025 Plaid transactions for "${account.name}"? This will only ask Plaid for this account and will not duplicate existing Plaid transaction IDs.`)) return;
 
     setBackfilling(true);
@@ -289,6 +292,7 @@ function AccountCard({
                 ) : (
                   <PlaidLinkButton
                     taxEntityId={account.tax_entity_id ?? undefined}
+                    replaceAccountId={account.id}
                     label="Connect bank again"
                   />
                 )}

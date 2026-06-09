@@ -37,6 +37,16 @@ async function upsertPlaidAccount(serviceClient: any, account: Record<string, an
   if (error) throw new Error(error.message);
 }
 
+function scorePlaidAccountMatch(existingAccount: any, plaidAccount: any) {
+  let score = 0;
+  if (existingAccount.last_four_digits && plaidAccount.mask && existingAccount.last_four_digits === plaidAccount.mask) score += 3;
+  if (existingAccount.account_type && existingAccount.account_type === mapAccountType(plaidAccount.type, plaidAccount.subtype)) score += 2;
+  const existingName = String(existingAccount.name ?? "").toLowerCase();
+  const plaidName = String(plaidAccount.name ?? "").toLowerCase();
+  if (existingName && plaidName && (existingName.includes(plaidName) || plaidName.includes(existingName))) score += 1;
+  return score;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();
@@ -45,7 +55,7 @@ export async function POST(req: NextRequest) {
 
     assertPlaidConfigured();
 
-    const { public_token, tax_entity_id, uda_id, import_options } = await req.json();
+    const { public_token, tax_entity_id, uda_id, import_options, replace_account_id } = await req.json();
     if (!public_token) return NextResponse.json({ error: "Missing public_token" }, { status: 400 });
     const taxEntityId = tax_entity_id ?? uda_id ?? null;
     const serviceClient = createServiceRoleClient() as any;
@@ -88,7 +98,59 @@ export async function POST(req: NextRequest) {
 
     // Get and create financial accounts
     const accountsRes = await plaidClient.accountsGet({ access_token });
+    let replacedAccountId: string | null = null;
+    let replacementPlaidAccountId: string | null = null;
+
+    if (replace_account_id) {
+      const { data: existingAccount, error: accountErr } = await serviceClient
+        .from("books_financial_accounts")
+        .select("id, name, account_type, last_four_digits, tax_entity_id, uda_id")
+        .eq("id", replace_account_id)
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (accountErr) throw new Error(accountErr.message);
+      if (!existingAccount) return NextResponse.json({ error: "Account to reconnect was not found" }, { status: 404 });
+
+      const candidates = accountsRes.data.accounts
+        .map((account) => ({ account, score: scorePlaidAccountMatch(existingAccount, account) }))
+        .sort((a, b) => b.score - a.score);
+      const best = candidates[0];
+      const second = candidates[1];
+
+      if (!best || best.score < 3 || (second && second.score === best.score)) {
+        return NextResponse.json({
+          error: "Could not confidently match the reconnected Plaid account to this Cashpile account. Check the last four digits and account type, then use the regular Connect Account flow.",
+        }, { status: 400 });
+      }
+
+      const acct = best.account;
+      const replacementTaxEntityId = taxEntityId ?? existingAccount.tax_entity_id ?? existingAccount.uda_id ?? null;
+      const { error: replaceErr } = await serviceClient
+        .from("books_financial_accounts")
+        .update({
+          uda_id:           replacementTaxEntityId,
+          tax_entity_id:    replacementTaxEntityId,
+          plaid_account_id: acct.account_id,
+          plaid_item_id:    plaidItem.id,
+          name:             existingAccount.name ?? acct.name,
+          account_type:     mapAccountType(acct.type, acct.subtype),
+          institution_name: institutionName,
+          last_four_digits: acct.mask,
+          current_balance:  acct.balances.current ?? 0,
+          is_active:        true,
+          updated_at:       new Date().toISOString(),
+        })
+        .eq("id", existingAccount.id)
+        .eq("user_id", user.id);
+
+      if (replaceErr) throw new Error(replaceErr.message);
+      replacedAccountId = existingAccount.id;
+      replacementPlaidAccountId = acct.account_id;
+    }
+
     for (const acct of accountsRes.data.accounts) {
+      if (replacementPlaidAccountId && acct.account_id === replacementPlaidAccountId) continue;
       await upsertPlaidAccount(serviceClient, {
         user_id:          user.id,
         uda_id:           taxEntityId,
@@ -108,7 +170,7 @@ export async function POST(req: NextRequest) {
     // Trigger initial sync directly so the user's auth cookies are not required
     const syncResult = await syncPlaidItem(item_id, serviceClient);
 
-    return NextResponse.json({ success: true, institution: institutionName, sync: syncResult });
+    return NextResponse.json({ success: true, institution: institutionName, sync: syncResult, replaced_account_id: replacedAccountId });
   } catch (err: any) {
     console.error("[plaid/exchange-token]", err?.response?.data ?? err);
     return NextResponse.json(

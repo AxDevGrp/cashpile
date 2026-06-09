@@ -25,6 +25,7 @@ interface Props {
   updatePlaidItemId?: string;
   updateItemId?: string;
   backfillAccountId?: string;
+  replaceAccountId?: string;
 }
 
 type ImportPreset = "tax2025" | "last90" | "last730";
@@ -38,6 +39,7 @@ export default function PlaidLinkButton({
   updatePlaidItemId,
   updateItemId,
   backfillAccountId,
+  replaceAccountId,
 }: Props) {
   const [linkToken, setLinkToken] = useState<string | null>(null);
   const [openedToken, setOpenedToken] = useState<string | null>(null);
@@ -51,6 +53,7 @@ export default function PlaidLinkButton({
   // Use the new taxEntityId if provided, fall back to deprecated udaId
   const entityId = taxEntityId ?? udaId;
   const isUpdateMode = Boolean(updatePlaidItemId);
+  const startsImmediately = Boolean(updatePlaidItemId || replaceAccountId);
   const daysRequested = importPreset === "last90" ? 90 : 730;
   const importOptions = useMemo(
     () => ({
@@ -81,6 +84,8 @@ export default function PlaidLinkButton({
       setOpenedToken(null);
       window.localStorage.setItem("cashpile_plaid_link_token", data.link_token);
       window.localStorage.setItem("cashpile_plaid_import_options", JSON.stringify(importOptions));
+      if (replaceAccountId) window.localStorage.setItem("cashpile_plaid_replace_account_id", replaceAccountId);
+      else window.localStorage.removeItem("cashpile_plaid_replace_account_id");
       if (updatePlaidItemId) window.localStorage.setItem("cashpile_plaid_update_item_id", updatePlaidItemId);
       else window.localStorage.removeItem("cashpile_plaid_update_item_id");
       if (updateItemId) window.localStorage.setItem("cashpile_plaid_update_external_item_id", updateItemId);
@@ -96,7 +101,7 @@ export default function PlaidLinkButton({
       setLoading(false);
       setOptionsOpen(false);
     }
-  }, [backfillAccountId, importOptions, updateItemId, updatePlaidItemId]);
+  }, [backfillAccountId, importOptions, replaceAccountId, updateItemId, updatePlaidItemId]);
 
 
   const { open, ready, error: plaidLinkError } = usePlaidLink({
@@ -126,6 +131,7 @@ export default function PlaidLinkButton({
           window.localStorage.removeItem("cashpile_plaid_link_token");
           window.localStorage.removeItem("cashpile_plaid_import_options");
           window.localStorage.removeItem("cashpile_plaid_tax_entity_id");
+          window.localStorage.removeItem("cashpile_plaid_replace_account_id");
           window.localStorage.removeItem("cashpile_plaid_update_item_id");
           window.localStorage.removeItem("cashpile_plaid_update_external_item_id");
           window.localStorage.removeItem("cashpile_plaid_backfill_account_id");
@@ -137,7 +143,7 @@ export default function PlaidLinkButton({
         const res = await fetch("/api/plaid/exchange-token", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ public_token, tax_entity_id: entityId, import_options: importOptions }),
+          body: JSON.stringify({ public_token, tax_entity_id: entityId, import_options: importOptions, replace_account_id: replaceAccountId }),
         });
         const data = await res.json();
         if (!res.ok) {
@@ -145,9 +151,21 @@ export default function PlaidLinkButton({
           return;
         }
         if (data.institution) {
+          if (replaceAccountId) {
+            await fetch("/api/plaid/backfill", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                account_id: replaceAccountId,
+                start_date: "2025-01-01",
+                end_date: "2025-12-31",
+              }),
+            });
+          }
           window.localStorage.removeItem("cashpile_plaid_link_token");
           window.localStorage.removeItem("cashpile_plaid_import_options");
           window.localStorage.removeItem("cashpile_plaid_tax_entity_id");
+          window.localStorage.removeItem("cashpile_plaid_replace_account_id");
           window.localStorage.removeItem("cashpile_plaid_update_item_id");
           window.localStorage.removeItem("cashpile_plaid_update_external_item_id");
           window.localStorage.removeItem("cashpile_plaid_backfill_account_id");
@@ -224,7 +242,10 @@ export default function PlaidLinkButton({
           <Button
             variant="outline"
             size="sm"
-            onClick={() => setOptionsOpen(true)}
+            onClick={() => {
+              if (startsImmediately) void fetchLinkToken();
+              else setOptionsOpen(true);
+            }}
             disabled={loading}
           >
             {loading ? "Preparing Plaid…" : label}
