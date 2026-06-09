@@ -424,7 +424,7 @@ export default function TransactionsClient({
         toast.success(
           appliedMatches > 0
             ? `Categorized as ${nextCategory.name}; rule applied to ${appliedMatches} matching uncategorized transaction${appliedMatches === 1 ? "" : "s"}`
-            : `Categorized as ${nextCategory.name}; rule saved for future matches`
+            : `Categorized as ${nextCategory.name}; scanned existing Uncategorized transactions and found no other matches`
         );
         if (appliedMatches > 0) {
           router.refresh();

@@ -31,6 +31,40 @@ function normalizePattern(value: string | null | undefined) {
     .slice(0, 80);
 }
 
+function deriveLearnedPattern(merchant: string | null | undefined, description: string | null | undefined) {
+  const normalizedMerchant = normalizePattern(merchant);
+  if (normalizedMerchant) return normalizedMerchant;
+
+  const normalizedDescription = normalizePattern(description);
+  const tokens = normalizedDescription
+    .split(" ")
+    .filter((token) => (
+      token.length > 1 &&
+      !/^\d+$/.test(token) &&
+      !/^[A-Z]*\d[A-Z0-9]*$/.test(token) &&
+      !["ACH", "PPD", "CCD", "WEB", "ID", "POS", "DBT", "CRD", "REF", "TRACE", "TRANSACTION"].includes(token)
+    ));
+
+  return tokens.slice(0, 3).join(" ") || normalizedDescription;
+}
+
+function transactionSearchValues(tx: { merchant?: string | null; description?: string | null }) {
+  return [
+    normalizePattern(tx.merchant),
+    normalizePattern(tx.description),
+    deriveLearnedPattern(tx.merchant, tx.description),
+  ].filter(Boolean);
+}
+
+function matchesRule(values: string[], pattern: string, matchType: "contains" | "equals") {
+  if (matchType === "equals") return values.some((value) => value === pattern);
+  const patternTokens = pattern.split(" ").filter(Boolean);
+  return values.some((value) => (
+    value.includes(pattern) ||
+    (patternTokens.length > 0 && patternTokens.every((token) => value.split(" ").includes(token)))
+  ));
+}
+
 export async function seedSystemCategoryRules() {
   await ensureDefaultBookCategories();
 
@@ -196,7 +230,7 @@ export async function learnCategoryRuleFromTransaction(transactionId: string, ca
     .single();
 
   if (error) throw new Error(error.message);
-  const pattern = normalizePattern(tx?.merchant) || normalizePattern(tx?.description);
+  const pattern = deriveLearnedPattern(tx?.merchant, tx?.description);
   if (!pattern) return null;
   return createCategoryRule({ pattern, categoryId, source: "learned" });
 }
@@ -231,8 +265,8 @@ export async function applyCategoryRuleToUncategorizedTransactions(ruleId: strin
 
   const matchingIds = (candidates ?? [])
     .filter((tx: any) => {
-      const normalized = normalizePattern(tx.merchant) || normalizePattern(tx.description);
-      return rule.match_type === "equals" ? normalized === pattern : normalized.includes(pattern);
+      const values = transactionSearchValues(tx);
+      return matchesRule(values, pattern, rule.match_type);
     })
     .map((tx: any) => tx.id);
 
