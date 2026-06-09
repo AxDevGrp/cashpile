@@ -46,7 +46,11 @@ export async function POST(req: NextRequest) {
         .eq("user_id", user.id)
         .maybeSingle();
       if (itemError) throw new Error(itemError.message);
-      if (!item?.access_token) return NextResponse.json({ error: "Plaid item not found" }, { status: 404 });
+      if (!item?.access_token) {
+        return NextResponse.json({
+          error: "Stored Plaid connection not found for this account. Connect the bank again instead of reconnecting.",
+        }, { status: 404 });
+      }
       request.access_token = item.access_token;
     } else {
       request.products = PLAID_PRODUCTS as unknown as Products[];

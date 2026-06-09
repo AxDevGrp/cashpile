@@ -141,6 +141,7 @@ function AccountCard({
 
   const assignedEntity = taxEntities.find(e => e.id === account.tax_entity_id);
   const isPlaidLinked = Boolean(plaidItem || account.plaid_account_id || account.plaid_item_id);
+  const canReconnectPlaidItem = Boolean(plaidItem?.id && plaidItem?.item_id);
 
   async function saveName() {
     const nextName = nameDraft.trim();
@@ -269,19 +270,28 @@ function AccountCard({
           {isPlaidLinked && (
             <div className="mt-3 rounded-md border border-border bg-muted/20 p-2 space-y-2">
               <p className="text-xs text-muted-foreground">
-                Plaid reconnects the bank connection that owns this account, not one account by itself.
+                {canReconnectPlaidItem
+                  ? "Plaid reconnects the bank connection that owns this account, not one account by itself."
+                  : "This account has Plaid account data, but Cashpile cannot find its stored Plaid connection. Connect the bank again to request more history."}
               </p>
               <div className="flex flex-wrap gap-2">
                 <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={handleBackfill2025} disabled={backfilling}>
                   {backfilling ? "Backfilling…" : "Backfill 2025"}
                 </Button>
-                <PlaidLinkButton
-                  taxEntityId={account.tax_entity_id ?? undefined}
-                  updatePlaidItemId={plaidItem?.id ?? account.plaid_item_id ?? undefined}
-                  updateItemId={plaidItem?.item_id}
-                  backfillAccountId={account.id}
-                  label="Reconnect bank + backfill 2025"
-                />
+                {canReconnectPlaidItem ? (
+                  <PlaidLinkButton
+                    taxEntityId={account.tax_entity_id ?? undefined}
+                    updatePlaidItemId={plaidItem!.id}
+                    updateItemId={plaidItem!.item_id}
+                    backfillAccountId={account.id}
+                    label="Reconnect bank + backfill 2025"
+                  />
+                ) : (
+                  <PlaidLinkButton
+                    taxEntityId={account.tax_entity_id ?? undefined}
+                    label="Connect bank again"
+                  />
+                )}
               </div>
               {backfillSummary && (
                 <p className="text-xs text-muted-foreground">{backfillSummary}</p>
