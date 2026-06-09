@@ -31,6 +31,48 @@ async function upsertPlaidAccount(serviceClient: any, account: Record<string, an
     return;
   }
 
+  if (account.last_four_digits && account.account_type) {
+    const { data: candidates, error: matchErr } = await serviceClient
+      .from("books_financial_accounts")
+      .select("id, name, institution_name, tax_entity_id, uda_id, created_at")
+      .eq("user_id", account.user_id)
+      .eq("account_type", account.account_type)
+      .eq("last_four_digits", account.last_four_digits)
+      .eq("is_active", true)
+      .order("created_at", { ascending: true })
+      .limit(10);
+
+    if (matchErr) throw new Error(matchErr.message);
+
+    const normalizedInstitution = String(account.institution_name ?? "").toLowerCase().replace(/\s+bank$/, "").trim();
+    const reusable = (candidates ?? [])
+      .filter((candidate: any) => {
+        const candidateInstitution = String(candidate.institution_name ?? "").toLowerCase().replace(/\s+bank$/, "").trim();
+        return !normalizedInstitution || !candidateInstitution || normalizedInstitution === candidateInstitution;
+      })
+      .sort((a: any, b: any) => {
+        const aGeneric = /^(TOTAL CHECKING|BUS COMPLETE CHK|CREDIT CARD|CHASE SAVINGS|K\\. ARCIGA|LAND ROVER ACCOUNT|PREMIER PLUS CKG|HIGH SCHOOL CHECKING)$/i.test(a.name ?? "");
+        const bGeneric = /^(TOTAL CHECKING|BUS COMPLETE CHK|CREDIT CARD|CHASE SAVINGS|K\\. ARCIGA|LAND ROVER ACCOUNT|PREMIER PLUS CKG|HIGH SCHOOL CHECKING)$/i.test(b.name ?? "");
+        if (aGeneric !== bGeneric) return aGeneric ? 1 : -1;
+        if (Boolean(a.tax_entity_id) !== Boolean(b.tax_entity_id)) return a.tax_entity_id ? -1 : 1;
+        return 0;
+      })[0];
+
+    if (reusable?.id) {
+      const { error } = await serviceClient
+        .from("books_financial_accounts")
+        .update({
+          ...account,
+          name: reusable.name ?? account.name,
+          tax_entity_id: reusable.tax_entity_id ?? account.tax_entity_id,
+          uda_id: reusable.uda_id ?? account.uda_id,
+        })
+        .eq("id", reusable.id);
+      if (error) throw new Error(error.message);
+      return;
+    }
+  }
+
   const { error } = await serviceClient
     .from("books_financial_accounts")
     .insert(account);
