@@ -533,15 +533,41 @@ export default function TransactionsClient({
           <Button onClick={() => runBulkCategorization(true)} disabled={isCategorizing} variant="outline">
             {isCategorizing && categorizeMode === "ai" ? "Categorizing…" : "Rules + AI"}
           </Button>
-          <Link href="/books/category-rules">
-            <Button variant="outline">Category Rules</Button>
-          </Link>
-          <Button variant="outline" onClick={() => openAddCategory()}>
-            Add Category
-          </Button>
-          <Button variant="outline" onClick={openEditCategory} disabled={categoryOptions.length === 0}>
-            Edit Category
-          </Button>
+          <details className="group relative">
+            <summary className="flex h-10 cursor-pointer list-none items-center gap-2 rounded-md border border-input bg-background px-4 py-2 text-sm font-medium ring-offset-background transition-colors hover:bg-accent hover:text-accent-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 [&::-webkit-details-marker]:hidden">
+              Category
+              <span className="text-xs text-muted-foreground">▾</span>
+            </summary>
+            <div className="absolute right-0 z-20 mt-2 w-48 rounded-md border bg-popover p-1 text-popover-foreground shadow-md">
+              <Link
+                href="/books/category-rules"
+                className="block rounded-sm px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground"
+              >
+                Rules
+              </Link>
+              <button
+                type="button"
+                className="block w-full rounded-sm px-3 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground"
+                onClick={(event) => {
+                  event.currentTarget.closest("details")?.removeAttribute("open");
+                  openAddCategory();
+                }}
+              >
+                Add Category
+              </button>
+              <button
+                type="button"
+                className="block w-full rounded-sm px-3 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50"
+                onClick={(event) => {
+                  event.currentTarget.closest("details")?.removeAttribute("open");
+                  openEditCategory();
+                }}
+                disabled={categoryOptions.length === 0}
+              >
+                Edit Category
+              </button>
+            </div>
+          </details>
           <Link href="/books/transactions/duplicates">
             <Button variant="outline">Duplicate Review</Button>
           </Link>
