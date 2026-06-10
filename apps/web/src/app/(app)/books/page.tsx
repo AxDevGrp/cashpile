@@ -1,4 +1,4 @@
-import { BookOpen, Upload, Building2, Landmark, Tags, ArrowRight, ListChecks, FolderKanban, Settings } from "lucide-react";
+import { BookOpen, Upload, Building2, Landmark, Tags, ArrowRight, ListChecks, Settings } from "lucide-react";
 import { createServerSupabaseClient } from "@cashpile/db";
 import { PageHeader, Card, CardContent } from "@cashpile/ui";
 import Link from "next/link";
@@ -6,7 +6,7 @@ import Link from "next/link";
 async function getBooksDataStatus(userId: string) {
   const supabase = await createServerSupabaseClient();
 
-  const [transactions, accounts, udas, entities, uncategorized, categoryRules] = await Promise.all([
+  const [transactions, accounts, entities, uncategorized, categoryRules] = await Promise.all([
     (supabase as any)
       .from("books_transactions")
       .select("id", { count: "exact", head: true })
@@ -14,11 +14,8 @@ async function getBooksDataStatus(userId: string) {
     (supabase as any)
       .from("books_financial_accounts")
       .select("id", { count: "exact", head: true })
-      .eq("user_id", userId),
-    (supabase as any)
-      .from("books_udas")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", userId),
+      .eq("user_id", userId)
+      .eq("is_active", true),
     (supabase as any)
       .from("books_business_entities")
       .select("id", { count: "exact", head: true })
@@ -37,7 +34,6 @@ async function getBooksDataStatus(userId: string) {
   return {
     transactionCount: transactions.count ?? 0,
     accountCount: accounts.count ?? 0,
-    udaCount: udas.count ?? 0,
     entityCount: entities.count ?? 0,
     uncategorizedCount: uncategorized.count ?? 0,
     categoryRuleCount: categoryRules.count ?? 0,
@@ -80,14 +76,6 @@ export default async function BooksPage() {
       icon: Landmark,
     },
     {
-      href: "/books/accounts#udas",
-      label: "UDAs — User Defined Accounts",
-      desc: "Optional user-defined groupings that combine accounts or sources for reporting.",
-      value: status.udaCount.toLocaleString(),
-      valueLabel: "UDAs",
-      icon: FolderKanban,
-    },
-    {
       href: "/books/entities",
       label: "Entities",
       desc: "Set up LLCs, rentals, businesses, and other tax/reporting entities.",
@@ -120,7 +108,7 @@ export default async function BooksPage() {
       <div className="rounded-xl border bg-card p-5">
         <div className="text-sm font-medium mb-1">Recommended workflow</div>
         <p className="text-sm text-muted-foreground max-w-3xl">
-          Use <span className="font-medium text-foreground">Transactions</span> as the daily workspace: pick an account to view its ledger, or search globally when you need to find something. Accounts, UDAs, Entities, and Rules are setup/data-cleanup tools.
+          Use <span className="font-medium text-foreground">Transactions</span> as the daily workspace: pick an account to view its ledger, or search globally when you need to find something. Accounts, Entities, and Rules are setup/data-cleanup tools.
         </p>
       </div>
 
