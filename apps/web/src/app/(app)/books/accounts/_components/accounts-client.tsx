@@ -215,9 +215,13 @@ function AccountCard({
                   {syncing ? "Syncing…" : "Refresh"}
                 </Button>
               </>
+            ) : isPlaidLinked ? (
+              <Badge variant="outline" className="text-xs">
+                Connected
+              </Badge>
             ) : (
               <Badge variant="outline" className="text-xs">
-                UDA
+                Manual
               </Badge>
             )}
           </div>
@@ -718,7 +722,7 @@ export default function AccountsClient({ taxEntities, accounts, plaidItems }: Pr
         <BackButton />
         <PageHeader
           title="Accounts"
-          description="Connect bank and credit card accounts. UDAs are logical groupings and do not connect through Plaid."
+          description="Manage real financial accounts. Accounts can be connected through Plaid or added manually."
           actions={<PlaidAccountActions onAddManual={() => setAddManualOpen(true)} />}
         />
         <div className="rounded-lg border p-12 text-center text-muted-foreground">
@@ -744,7 +748,7 @@ export default function AccountsClient({ taxEntities, accounts, plaidItems }: Pr
       <BackButton />
       <PageHeader
         title="Accounts"
-        description="Manage connected bank/credit card accounts separately from logical User Defined Accounts."
+        description="Manage real financial accounts, including Plaid-connected and manually added accounts."
         actions={<PlaidAccountActions onAddManual={() => setAddManualOpen(true)} />}
       />
 
@@ -784,7 +788,7 @@ export default function AccountsClient({ taxEntities, accounts, plaidItems }: Pr
                   )}
                   {logicalAccounts.length > 0 && (
                     <div className="space-y-2">
-                      <h3 className="text-sm font-medium text-muted-foreground">Logical User Defined Accounts</h3>
+                      <h3 className="text-sm font-medium text-muted-foreground">Manual accounts</h3>
                       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                         {logicalAccounts.map((account) => (
                           <AccountCard 
@@ -834,7 +838,7 @@ export default function AccountsClient({ taxEntities, accounts, plaidItems }: Pr
               )}
               {unassignedAccounts.filter((account) => !isInstitutionalAccount(account)).length > 0 && (
                 <div className="space-y-2">
-                  <h3 className="text-sm font-medium text-muted-foreground">Logical User Defined Accounts</h3>
+                  <h3 className="text-sm font-medium text-muted-foreground">Manual accounts</h3>
                   <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     {unassignedAccounts.filter((account) => !isInstitutionalAccount(account)).map((account) => (
                       <AccountCard 
