@@ -508,6 +508,24 @@ async function assignTaxEntitiesForMatches(
   return autoAssignTaxEntities(supabase as any, userId, rows as any);
 }
 
+async function syncExistingTaxViewCategories(
+  supabase: SupabaseLike,
+  userId: string,
+  matches: CategorizationMatch[]
+) {
+  let synced = 0;
+  for (const match of matches) {
+    const { error } = await supabase
+      .from("books_tax_transaction_views")
+      .update({ category_id: Number(match.categoryId), updated_at: new Date().toISOString() })
+      .eq("user_id", userId)
+      .eq("transaction_id", match.transactionId)
+      .is("category_id", null);
+    if (!error) synced += 1;
+  }
+  return synced;
+}
+
 export async function bulkCategorizeTransactions(
   supabase: SupabaseLike,
   userId: string,
@@ -584,6 +602,7 @@ export async function bulkCategorizeTransactions(
 
   const confidentMatches = matches.filter((match) => match.confidence >= minConfidence);
   const applied = await applyMatches(supabase, userId, txById, confidentMatches);
+  await syncExistingTaxViewCategories(supabase, userId, confidentMatches);
   const learnedRulesSaved = await createLearnedRulesFromAiMatches(supabase, userId, txById, confidentMatches);
   const taxAssigned = await assignTaxEntitiesForMatches(supabase, userId, txById, confidentMatches);
   await updateRuleMatchCounts(supabase, confidentMatches.map((match) => match.ruleId).filter(Boolean) as string[]);
@@ -684,6 +703,7 @@ export async function categorizeTransactionsByIds(
 
   const confidentMatches = matches.filter((match) => match.confidence >= minConfidence);
   const applied = await applyMatches(supabase, userId, txById, confidentMatches);
+  await syncExistingTaxViewCategories(supabase, userId, confidentMatches);
   const learnedRulesSaved = await createLearnedRulesFromAiMatches(supabase, userId, txById, confidentMatches);
   const taxAssigned = await assignTaxEntitiesForMatches(supabase, userId, txById, confidentMatches);
   await updateRuleMatchCounts(supabase, confidentMatches.map((match) => match.ruleId).filter(Boolean) as string[]);
