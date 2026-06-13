@@ -551,13 +551,13 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
                   </div>
 
                   {suggestion.accountId && draft.taxEntityId && (
-                    <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <label className={`flex items-center gap-2 rounded-md border px-3 py-2 text-sm ${draft.applyAccountDefault ? "border-blue-200 bg-blue-50 text-blue-900" : "text-muted-foreground"}`}>
                       <input
                         type="checkbox"
                         checked={draft.applyAccountDefault}
                         onChange={(event) => updateDraft(suggestion.id, { applyAccountDefault: event.target.checked })}
                       />
-                      <span>Also assign all current and future transactions from {suggestion.accountName} to this Tax Entity.</span>
+                      <span>Also assign all current and future transactions from {suggestion.accountName} to this Tax Entity{draft.applyAccountDefault ? " (account default will be saved)" : ""}.</span>
                     </label>
                   )}
 
