@@ -143,6 +143,7 @@ export default function TransactionsClient({
   const [categorizeMode, setCategorizeMode] = useState<"rules" | "ai" | null>(null);
   const [categorizeSummary, setCategorizeSummary] = useState<string | null>(null);
   const [categorizeNeedsReview, setCategorizeNeedsReview] = useState(0);
+  const [categorizeReviewSuggestions, setCategorizeReviewSuggestions] = useState(0);
   const [categorizeExamples, setCategorizeExamples] = useState<Array<{
     description: string;
     categoryName: string;
@@ -547,6 +548,7 @@ export default function TransactionsClient({
     setCategorizeMode(useAI ? "ai" : "rules");
     setCategorizeSummary(null);
     setCategorizeNeedsReview(0);
+    setCategorizeReviewSuggestions(0);
     setCategorizeExamples([]);
     try {
       const res = await fetch("/api/books/transactions", {
@@ -562,6 +564,7 @@ export default function TransactionsClient({
         : `Applied rules to ${data.categorized} of ${data.scanned} uncategorized transactions (${data.learnedMatches} learned, ${data.ruleMatches} rules) and assigned ${data.taxAssigned ?? 0} to Tax Entities. ${data.needsReview} still need review.`;
       setCategorizeSummary(summary);
       setCategorizeNeedsReview(Number(data.needsReview ?? 0));
+      setCategorizeReviewSuggestions(Number(data.reviewSuggestions ?? 0));
       setCategorizeExamples(Array.isArray(data.examples) ? data.examples : []);
       toast.success(summary);
       router.refresh();
@@ -745,7 +748,9 @@ export default function TransactionsClient({
             {categorizeNeedsReview > 0 && (
               <div className="flex flex-wrap gap-2">
                 <Link href={aiReviewHref}>
-                  <Button variant="outline" size="sm">Review suggestions</Button>
+                  <Button variant="outline" size="sm">
+                    {categorizeReviewSuggestions > 0 ? `Review ${categorizeReviewSuggestions} AI suggestion${categorizeReviewSuggestions === 1 ? "" : "s"}` : "Review suggestions"}
+                  </Button>
                 </Link>
                 <Link href={uncategorizedHref}>
                   <Button variant="outline" size="sm">View Uncategorized</Button>
