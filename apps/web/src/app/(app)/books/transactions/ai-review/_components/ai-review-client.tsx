@@ -515,7 +515,7 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
                         Select
                       </label>
                       <Button onClick={() => acceptSuggestion(suggestion)} disabled={savingId === suggestion.id || bulkProgress !== null}>
-                        {savingId === suggestion.id ? "Applying…" : "Accept & Save Rule"}
+                        {savingId === suggestion.id ? "Applying…" : draft.applyAccountDefault ? `Accept, Save Rule & Account Default (${suggestion.count})` : `Accept & Save Rule (${suggestion.count})`}
                       </Button>
                     </div>
                   </div>
