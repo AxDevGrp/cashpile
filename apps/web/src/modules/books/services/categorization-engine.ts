@@ -1,5 +1,6 @@
 import { categorizeTransactions as aiCategorizeTransactions } from "@cashpile/ai";
 import { getCategoryRuleMatch } from "./rule-matching";
+import { autoAssignTaxEntities } from "./tax-rule-engine";
 
 type SupabaseLike = any;
 
@@ -49,6 +50,7 @@ export interface BulkCategorizationResult {
   learnedMatches: number;
   aiMatches: number;
   learnedRulesSaved: number;
+  taxAssigned: number;
   needsReview: number;
   createdCategories: string[];
   examples: Array<{
@@ -485,6 +487,27 @@ async function applyMatches(supabase: SupabaseLike, userId: string, txById: Map<
   return applied;
 }
 
+async function assignTaxEntitiesForMatches(
+  supabase: SupabaseLike,
+  userId: string,
+  txById: Map<string, TransactionRow>,
+  matches: CategorizationMatch[]
+) {
+  const rows = matches
+    .map((match) => {
+      const tx = txById.get(match.transactionId);
+      if (!tx) return null;
+      return {
+        ...tx,
+        category_id: Number(match.categoryId),
+      };
+    })
+    .filter(Boolean);
+
+  if (rows.length === 0) return 0;
+  return autoAssignTaxEntities(supabase as any, userId, rows as any);
+}
+
 export async function bulkCategorizeTransactions(
   supabase: SupabaseLike,
   userId: string,
@@ -562,6 +585,7 @@ export async function bulkCategorizeTransactions(
   const confidentMatches = matches.filter((match) => match.confidence >= minConfidence);
   const applied = await applyMatches(supabase, userId, txById, confidentMatches);
   const learnedRulesSaved = await createLearnedRulesFromAiMatches(supabase, userId, txById, confidentMatches);
+  const taxAssigned = await assignTaxEntitiesForMatches(supabase, userId, txById, confidentMatches);
   await updateRuleMatchCounts(supabase, confidentMatches.map((match) => match.ruleId).filter(Boolean) as string[]);
 
   return {
@@ -571,6 +595,7 @@ export async function bulkCategorizeTransactions(
     learnedMatches: confidentMatches.filter((match) => match.method === "learned_rule").length,
     aiMatches: confidentMatches.filter((match) => match.method === "ai").length,
     learnedRulesSaved,
+    taxAssigned,
     needsReview: Math.max(uncategorized.length - applied, 0),
     createdCategories: created,
     examples: confidentMatches.slice(0, 8).map((match) => ({
@@ -660,6 +685,7 @@ export async function categorizeTransactionsByIds(
   const confidentMatches = matches.filter((match) => match.confidence >= minConfidence);
   const applied = await applyMatches(supabase, userId, txById, confidentMatches);
   const learnedRulesSaved = await createLearnedRulesFromAiMatches(supabase, userId, txById, confidentMatches);
+  const taxAssigned = await assignTaxEntitiesForMatches(supabase, userId, txById, confidentMatches);
   await updateRuleMatchCounts(supabase, confidentMatches.map((match) => match.ruleId).filter(Boolean) as string[]);
 
   return {
@@ -669,6 +695,7 @@ export async function categorizeTransactionsByIds(
     learnedMatches: confidentMatches.filter((match) => match.method === "learned_rule").length,
     aiMatches: confidentMatches.filter((match) => match.method === "ai").length,
     learnedRulesSaved,
+    taxAssigned,
     needsReview: Math.max(uncategorized.length - applied, 0),
     createdCategories: created,
     examples: confidentMatches.slice(0, 8).map((match) => ({
