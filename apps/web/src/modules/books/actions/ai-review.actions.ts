@@ -241,7 +241,7 @@ export async function listAiReviewSuggestions(limit = 40): Promise<{
         ? `High-impact transaction needs Category confirmation. Account is assigned to ${taxEntityById.get(String(account.tax_entity_id))?.name ?? "a Tax Entity"}.`
         : "High-impact transaction needs Category or Tax Entity confirmation.");
 
-    if (!category && categories?.length) {
+    if ((!category || defaultCategoryName === "Other") && categories?.length) {
       try {
         const aiResults = await aiCategorizeTransactions([
           {
@@ -254,9 +254,12 @@ export async function listAiReviewSuggestions(limit = 40): Promise<{
         ], categories.map((item: any) => ({ id: Number(item.id), name: item.name })));
         const aiResult = aiResults[0];
         if (aiResult?.confidence >= 0.7) {
-          category = categoryByName.get(aiResult.categoryName.toLowerCase()) ?? null;
-          confidence = Math.max(confidence, Math.min(aiResult.confidence, 0.9));
-          reason += ` AI suggested ${aiResult.categoryName}.`;
+          const aiCategory = categoryByName.get(aiResult.categoryName.toLowerCase()) ?? null;
+          if (aiCategory) {
+            category = aiCategory;
+            confidence = Math.max(confidence, Math.min(aiResult.confidence, 0.9));
+            reason += ` AI suggested ${aiResult.categoryName}.`;
+          }
         }
       } catch {
         // AI is best-effort for the review queue; deterministic grouping still works without it.
