@@ -319,7 +319,7 @@ async function fetchCategoryRules(supabase: SupabaseLike, userId: string) {
   return (data ?? []) as CategoryRuleRow[];
 }
 
-function getCategoryRuleMatch(
+export function getCategoryRuleMatch(
   tx: TransactionRow,
   rules: CategoryRuleRow[],
   categories: CategoryRow[]

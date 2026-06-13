@@ -100,7 +100,7 @@ async function fetchAccountTaxDefaults(
 /**
  * Check if a transaction matches a rule
  */
-function transactionMatchesRule(
+export function transactionMatchesRule(
   transaction: TransactionForRuleMatching,
   rule: TaxAssignmentRule
 ): boolean {
