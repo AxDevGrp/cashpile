@@ -53,6 +53,8 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
   const [isPreviewingInstruction, setIsPreviewingInstruction] = useState(false);
   const [instructionPreview, setInstructionPreview] = useState<InstructionPreview | null>(null);
   const [previewSignature, setPreviewSignature] = useState("");
+  const [selectedSuggestionIds, setSelectedSuggestionIds] = useState<Set<string>>(new Set());
+  const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
   const [drafts, setDrafts] = useState<Record<string, { categoryId: string; taxEntityId: string; applyAccountDefault: boolean }>>(() =>
     Object.fromEntries(initialData.suggestions.map((suggestion) => [
       suggestion.id,
@@ -64,6 +66,11 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
     ]))
   );
   const [savingId, setSavingId] = useState<string | null>(null);
+  const selectedSuggestions = suggestions.filter((suggestion) => selectedSuggestionIds.has(suggestion.id));
+  const selectableSuggestions = suggestions.filter((suggestion) => {
+    const draft = drafts[suggestion.id];
+    return Boolean(draft?.categoryId || draft?.taxEntityId);
+  });
   const currentInstructionSignature = JSON.stringify({
     instruction: instruction.trim(),
     accountId: instructionAccountId,
@@ -83,6 +90,38 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
     setDrafts((current) => ({ ...current, [id]: { ...current[id], ...patch } }));
   }
 
+  function toggleSuggestion(id: string) {
+    setSelectedSuggestionIds((current) => {
+      const next = new Set(current);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+
+  async function postSuggestion(suggestion: AiReviewSuggestion) {
+    const draft = drafts[suggestion.id];
+    if (!draft?.categoryId && !draft?.taxEntityId) {
+      throw new Error(`Choose a category or Tax Entity for ${suggestion.pattern}`);
+    }
+
+    const res = await fetch("/api/books/ai-review", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        transactionIds: suggestion.transactionIds,
+        pattern: suggestion.pattern,
+        accountId: suggestion.accountId,
+        categoryId: draft.categoryId || null,
+        taxEntityId: draft.taxEntityId || null,
+        applyAccountDefault: draft.applyAccountDefault,
+        createRule: true,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error ?? "Unable to accept suggestion");
+    return data;
+  }
+
   async function acceptSuggestion(suggestion: AiReviewSuggestion) {
     const draft = drafts[suggestion.id];
     if (!draft?.categoryId && !draft?.taxEntityId) {
@@ -92,29 +131,61 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
 
     setSavingId(suggestion.id);
     try {
-      const res = await fetch("/api/books/ai-review", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          transactionIds: suggestion.transactionIds,
-          pattern: suggestion.pattern,
-          accountId: suggestion.accountId,
-          categoryId: draft.categoryId || null,
-          taxEntityId: draft.taxEntityId || null,
-          applyAccountDefault: draft.applyAccountDefault,
-          createRule: true,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Unable to accept suggestion");
+      const data = await postSuggestion(suggestion);
 
       setSuggestions((current) => current.filter((item) => item.id !== suggestion.id));
+      setSelectedSuggestionIds((current) => {
+        const next = new Set(current);
+        next.delete(suggestion.id);
+        return next;
+      });
       toast.success(`Applied to ${Math.max(data.updatedTransactions ?? 0, data.assignedTaxViews ?? 0, suggestion.count)} transaction${suggestion.count === 1 ? "" : "s"} and saved future rule${data.accountRuleUpdated ? " + account default" : ""}`);
       router.refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Unable to accept suggestion");
     } finally {
       setSavingId(null);
+    }
+  }
+
+  async function acceptSelectedSuggestions() {
+    if (selectedSuggestions.length === 0) {
+      toast.error("Select suggestions first");
+      return;
+    }
+
+    const missing = selectedSuggestions.filter((suggestion) => {
+      const draft = drafts[suggestion.id];
+      return !draft?.categoryId && !draft?.taxEntityId;
+    });
+    if (missing.length > 0) {
+      toast.error(`Choose category or Tax Entity for ${missing[0].pattern} before bulk accepting`);
+      return;
+    }
+
+    setBulkProgress({ done: 0, total: selectedSuggestions.length });
+    const acceptedIds: string[] = [];
+    try {
+      for (let index = 0; index < selectedSuggestions.length; index += 1) {
+        const suggestion = selectedSuggestions[index];
+        await postSuggestion(suggestion);
+        acceptedIds.push(suggestion.id);
+        setBulkProgress({ done: index + 1, total: selectedSuggestions.length });
+      }
+      setSuggestions((current) => current.filter((suggestion) => !acceptedIds.includes(suggestion.id)));
+      setSelectedSuggestionIds(new Set());
+      toast.success(`Accepted ${acceptedIds.length} AI suggestion${acceptedIds.length === 1 ? "" : "s"} and saved rules`);
+      router.refresh();
+    } catch (error) {
+      setSuggestions((current) => current.filter((suggestion) => !acceptedIds.includes(suggestion.id)));
+      setSelectedSuggestionIds((current) => {
+        const next = new Set(current);
+        acceptedIds.forEach((id) => next.delete(id));
+        return next;
+      });
+      toast.error(error instanceof Error ? error.message : "Bulk accept stopped");
+    } finally {
+      setBulkProgress(null);
     }
   }
 
@@ -331,6 +402,44 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
         </div>
       ) : (
         <div className="space-y-4">
+          <div className="rounded-lg border bg-card p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className="font-medium">Bulk accept reviewed suggestions</div>
+                <p className="text-sm text-muted-foreground">
+                  Select suggestions after confirming their Category / Tax Entity. Cashpile applies each one and saves future rules.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setSelectedSuggestionIds(new Set(selectableSuggestions.map((suggestion) => suggestion.id)))}
+                  disabled={bulkProgress !== null || selectableSuggestions.length === 0}
+                >
+                  Select reviewed
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setSelectedSuggestionIds(new Set())}
+                  disabled={bulkProgress !== null || selectedSuggestionIds.size === 0}
+                >
+                  Clear
+                </Button>
+                <Button onClick={acceptSelectedSuggestions} disabled={bulkProgress !== null || selectedSuggestionIds.size === 0}>
+                  {bulkProgress ? `Applying ${bulkProgress.done}/${bulkProgress.total}…` : `Accept selected (${selectedSuggestionIds.size})`}
+                </Button>
+              </div>
+            </div>
+            {bulkProgress && (
+              <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted">
+                <div
+                  className="h-full bg-emerald-500 transition-all"
+                  style={{ width: `${Math.round((bulkProgress.done / Math.max(bulkProgress.total, 1)) * 100)}%` }}
+                />
+              </div>
+            )}
+          </div>
+
           {suggestions.map((suggestion) => {
             const draft = drafts[suggestion.id] ?? { categoryId: "", taxEntityId: "", applyAccountDefault: false };
             return (
@@ -346,9 +455,20 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
                       <p className="mt-1 text-sm text-muted-foreground">{suggestion.accountLabel} · {formatCurrency(suggestion.totalAmount)} total · {suggestion.firstDate ? formatDate(suggestion.firstDate) : "—"} to {suggestion.lastDate ? formatDate(suggestion.lastDate) : "—"}</p>
                       <p className="mt-1 text-xs text-muted-foreground">{suggestion.reason}</p>
                     </div>
-                    <Button onClick={() => acceptSuggestion(suggestion)} disabled={savingId === suggestion.id}>
-                      {savingId === suggestion.id ? "Applying…" : "Accept & Create Rule"}
-                    </Button>
+                    <div className="flex items-center gap-3">
+                      <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <input
+                          type="checkbox"
+                          checked={selectedSuggestionIds.has(suggestion.id)}
+                          onChange={() => toggleSuggestion(suggestion.id)}
+                          disabled={bulkProgress !== null}
+                        />
+                        Select
+                      </label>
+                      <Button onClick={() => acceptSuggestion(suggestion)} disabled={savingId === suggestion.id || bulkProgress !== null}>
+                        {savingId === suggestion.id ? "Applying…" : "Accept & Create Rule"}
+                      </Button>
+                    </div>
                   </div>
 
                   <div className="grid gap-3 md:grid-cols-2">
