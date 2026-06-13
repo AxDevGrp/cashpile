@@ -75,6 +75,8 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
   );
   const [savingId, setSavingId] = useState<string | null>(null);
   const selectedSuggestions = suggestions.filter((suggestion) => selectedSuggestionIds.has(suggestion.id));
+  const selectedTransactionCount = selectedSuggestions.reduce((sum, suggestion) => sum + suggestion.count, 0);
+  const selectedAccountDefaultCount = selectedSuggestions.filter((suggestion) => drafts[suggestion.id]?.applyAccountDefault).length;
   const totalSuggestedTransactions = suggestions.reduce((sum, suggestion) => sum + suggestion.count, 0);
   const showMoreHref = `${initialData.activeAccount ? `/books/transactions/ai-review?accountId=${encodeURIComponent(initialData.activeAccount.id)}&` : "/books/transactions/ai-review?"}limit=${Math.min(initialData.limit + 100, 500)}`;
   const selectableSuggestions = suggestions.filter((suggestion) => {
@@ -464,7 +466,9 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
                   Clear
                 </Button>
                 <Button onClick={acceptSelectedSuggestions} disabled={bulkProgress !== null || selectedSuggestionIds.size === 0}>
-                  {bulkProgress ? `Applying ${bulkProgress.done}/${bulkProgress.total}…` : `Accept selected & save rules (${selectedSuggestionIds.size})`}
+                  {bulkProgress
+                    ? `Applying ${bulkProgress.done}/${bulkProgress.total}…`
+                    : `Accept selected (${selectedTransactionCount} tx${selectedAccountDefaultCount > 0 ? ` + ${selectedAccountDefaultCount} account default${selectedAccountDefaultCount === 1 ? "" : "s"}` : ""})`}
                 </Button>
                 {suggestions.length < initialData.totalSuggestions && (
                   <Link href={showMoreHref}>
