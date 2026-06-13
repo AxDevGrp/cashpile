@@ -449,7 +449,7 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
                   Clear
                 </Button>
                 <Button onClick={acceptSelectedSuggestions} disabled={bulkProgress !== null || selectedSuggestionIds.size === 0}>
-                  {bulkProgress ? `Applying ${bulkProgress.done}/${bulkProgress.total}…` : `Accept selected (${selectedSuggestionIds.size})`}
+                  {bulkProgress ? `Applying ${bulkProgress.done}/${bulkProgress.total}…` : `Accept selected & save rules (${selectedSuggestionIds.size})`}
                 </Button>
               </div>
             </div>
@@ -495,7 +495,7 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
                         Select
                       </label>
                       <Button onClick={() => acceptSuggestion(suggestion)} disabled={savingId === suggestion.id || bulkProgress !== null}>
-                        {savingId === suggestion.id ? "Applying…" : "Accept & Create Rule"}
+                        {savingId === suggestion.id ? "Applying…" : "Accept & Save Rule"}
                       </Button>
                     </div>
                   </div>
