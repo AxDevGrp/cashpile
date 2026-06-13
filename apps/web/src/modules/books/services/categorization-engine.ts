@@ -43,6 +43,14 @@ interface CategorizationMatch {
   ruleId?: string;
 }
 
+interface CategorySuggestion {
+  transactionId: string;
+  categoryId: string | number;
+  categoryName: string;
+  confidence: number;
+  method: CategorizationMethod;
+}
+
 export interface BulkCategorizationResult {
   scanned: number;
   categorized: number;
@@ -52,6 +60,7 @@ export interface BulkCategorizationResult {
   learnedRulesSaved: number;
   taxAssigned: number;
   needsReview: number;
+  reviewSuggestions: number;
   createdCategories: string[];
   examples: Array<{
     description: string;
@@ -494,6 +503,43 @@ async function applyMatches(supabase: SupabaseLike, userId: string, txById: Map<
   return applied;
 }
 
+async function saveReviewSuggestions(
+  supabase: SupabaseLike,
+  userId: string,
+  txById: Map<string, TransactionRow>,
+  suggestions: CategorySuggestion[]
+) {
+  const now = new Date().toISOString();
+  let saved = 0;
+
+  for (const suggestion of suggestions) {
+    const tx = txById.get(suggestion.transactionId);
+    const { error } = await supabase
+      .from("books_transactions")
+      .update({
+        metadata: {
+          ...(tx?.metadata ?? {}),
+          category_suggestion: {
+            category_id: suggestion.categoryId,
+            category_name: suggestion.categoryName,
+            confidence: suggestion.confidence,
+            method: suggestion.method,
+            suggested_at: now,
+          },
+        },
+        updated_at: now,
+      })
+      .eq("id", suggestion.transactionId)
+      .eq("user_id", userId)
+      .is("category_id", null);
+
+    if (!error) saved += 1;
+    if (error) console.warn("[bulk-categorize] Failed to save review suggestion", tx?.description, error.message);
+  }
+
+  return saved;
+}
+
 async function assignTaxEntitiesForMatches(
   supabase: SupabaseLike,
   userId: string,
@@ -552,6 +598,7 @@ export async function bulkCategorizeTransactions(
   const txById = new Map(uncategorized.map((tx) => [tx.id, tx]));
   const learnedRules = buildLearnedRules(categorized);
   const matches: CategorizationMatch[] = [];
+  const reviewSuggestions: CategorySuggestion[] = [];
   const leftovers: TransactionRow[] = [];
 
   for (const tx of uncategorized) {
@@ -590,9 +637,20 @@ export async function bulkCategorizeTransactions(
       );
 
       for (const result of aiResults) {
-        if (result.confidence < minConfidence) continue;
         const category = categoryByName(categories, result.categoryName);
         if (!category) continue;
+        if (result.confidence < minConfidence) {
+          if (result.confidence >= 0.5) {
+            reviewSuggestions.push({
+              transactionId: result.transactionId,
+              categoryId: category.id,
+              categoryName: category.name,
+              confidence: result.confidence,
+              method: result.method === "rule_based" ? "rule_based" : "ai",
+            });
+          }
+          continue;
+        }
         matches.push({
           transactionId: result.transactionId,
           categoryId: category.id,
@@ -608,6 +666,7 @@ export async function bulkCategorizeTransactions(
 
   const confidentMatches = matches.filter((match) => match.confidence >= minConfidence);
   const applied = await applyMatches(supabase, userId, txById, confidentMatches);
+  const savedReviewSuggestions = await saveReviewSuggestions(supabase, userId, txById, reviewSuggestions);
   await syncExistingTaxViewCategories(supabase, userId, confidentMatches);
   const learnedRulesSaved = await createLearnedRulesFromAiMatches(supabase, userId, txById, confidentMatches);
   const taxAssigned = await assignTaxEntitiesForMatches(supabase, userId, txById, confidentMatches);
@@ -622,6 +681,7 @@ export async function bulkCategorizeTransactions(
     learnedRulesSaved,
     taxAssigned,
     needsReview: Math.max(uncategorized.length - applied, 0),
+    reviewSuggestions: savedReviewSuggestions,
     createdCategories: created,
     examples: confidentMatches.slice(0, 8).map((match) => ({
       description: txById.get(match.transactionId)?.description ?? "Transaction",
@@ -653,6 +713,7 @@ export async function categorizeTransactionsByIds(
   const txById = new Map(uncategorized.map((tx) => [tx.id, tx]));
   const learnedRules = buildLearnedRules(categorized);
   const matches: CategorizationMatch[] = [];
+  const reviewSuggestions: CategorySuggestion[] = [];
   const leftovers: TransactionRow[] = [];
 
   for (const tx of uncategorized) {
@@ -691,9 +752,20 @@ export async function categorizeTransactionsByIds(
       );
 
       for (const result of aiResults) {
-        if (result.confidence < minConfidence) continue;
         const category = categoryByName(categories, result.categoryName);
         if (!category) continue;
+        if (result.confidence < minConfidence) {
+          if (result.confidence >= 0.5) {
+            reviewSuggestions.push({
+              transactionId: result.transactionId,
+              categoryId: category.id,
+              categoryName: category.name,
+              confidence: result.confidence,
+              method: result.method === "rule_based" ? "rule_based" : "ai",
+            });
+          }
+          continue;
+        }
         matches.push({
           transactionId: result.transactionId,
           categoryId: category.id,
@@ -709,6 +781,7 @@ export async function categorizeTransactionsByIds(
 
   const confidentMatches = matches.filter((match) => match.confidence >= minConfidence);
   const applied = await applyMatches(supabase, userId, txById, confidentMatches);
+  const savedReviewSuggestions = await saveReviewSuggestions(supabase, userId, txById, reviewSuggestions);
   await syncExistingTaxViewCategories(supabase, userId, confidentMatches);
   const learnedRulesSaved = await createLearnedRulesFromAiMatches(supabase, userId, txById, confidentMatches);
   const taxAssigned = await assignTaxEntitiesForMatches(supabase, userId, txById, confidentMatches);
@@ -723,6 +796,7 @@ export async function categorizeTransactionsByIds(
     learnedRulesSaved,
     taxAssigned,
     needsReview: Math.max(uncategorized.length - applied, 0),
+    reviewSuggestions: savedReviewSuggestions,
     createdCategories: created,
     examples: confidentMatches.slice(0, 8).map((match) => ({
       description: txById.get(match.transactionId)?.description ?? "Transaction",

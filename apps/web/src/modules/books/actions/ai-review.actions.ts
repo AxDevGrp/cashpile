@@ -179,7 +179,7 @@ export async function listAiReviewSuggestions(limit = 40, accountId?: string | n
 
   let transactionQuery = (supabase as any)
     .from("books_transactions")
-    .select("id, date, description, merchant, amount, category_id, financial_account_id, books_financial_accounts(id, name, institution_name, last_four_digits, tax_entity_id)")
+    .select("id, date, description, merchant, amount, category_id, financial_account_id, metadata, books_financial_accounts(id, name, institution_name, last_four_digits, tax_entity_id)")
     .eq("user_id", user.id)
     .eq("is_transfer", false)
     .order("date", { ascending: false })
@@ -214,6 +214,7 @@ export async function listAiReviewSuggestions(limit = 40, accountId?: string | n
 
   const taxEntityById = new Map<string, any>((taxEntities ?? []).map((entity: any) => [String(entity.id), entity]));
   const categoryByName = new Map<string, any>((categories ?? []).map((category: any) => [String(category.name).toLowerCase(), category]));
+  const categoryById = new Map<string, any>((categories ?? []).map((category: any) => [String(category.id), category]));
 
   const transactionIds = (transactions ?? []).map((tx: any) => tx.id);
   const existingTaxViews = transactionIds.length > 0
@@ -262,7 +263,17 @@ export async function listAiReviewSuggestions(limit = 40, accountId?: string | n
         ? `High-impact transaction needs Category confirmation. Account is assigned to ${taxEntityById.get(String(account.tax_entity_id))?.name ?? "a Tax Entity"}.`
         : "High-impact transaction needs Category or Tax Entity confirmation.");
 
-    if ((!category || defaultCategoryName === "Other") && categories?.length) {
+    const storedSuggestion = representative.metadata?.category_suggestion;
+    const storedCategory = storedSuggestion?.category_id != null
+      ? categoryById.get(String(storedSuggestion.category_id))
+      : null;
+    if (storedCategory && typeof storedSuggestion?.confidence === "number") {
+      category = storedCategory;
+      confidence = Math.min(confidence, storedSuggestion.confidence);
+      reason += ` Cashpile AI suggested ${storedCategory.name} during automation; confirm before applying.`;
+    }
+
+    if ((!storedCategory && (!category || defaultCategoryName === "Other")) && categories?.length) {
       try {
         const aiResults = await aiCategorizeTransactions([
           {

@@ -537,7 +537,7 @@ export default function TransactionsClient({
       if (!res.ok) throw new Error(data.error ?? "Unable to categorize transactions");
 
       const summary = useAI
-        ? `Categorized ${data.categorized} of ${data.scanned} reviewed transactions (${data.learnedMatches} learned, ${data.ruleMatches} rules, ${data.aiMatches} AI). Saved ${data.learnedRulesSaved ?? 0} learned rule${data.learnedRulesSaved === 1 ? "" : "s"} and assigned ${data.taxAssigned ?? 0} to Tax Entities. ${data.needsReview} still need review.`
+        ? `Categorized ${data.categorized} of ${data.scanned} reviewed transactions (${data.learnedMatches} learned, ${data.ruleMatches} rules, ${data.aiMatches} AI). Saved ${data.learnedRulesSaved ?? 0} learned rule${data.learnedRulesSaved === 1 ? "" : "s"}, queued ${data.reviewSuggestions ?? 0} AI suggestion${data.reviewSuggestions === 1 ? "" : "s"} for review, and assigned ${data.taxAssigned ?? 0} to Tax Entities. ${data.needsReview} still need review.`
         : `Applied rules to ${data.categorized} of ${data.scanned} uncategorized transactions (${data.learnedMatches} learned, ${data.ruleMatches} rules) and assigned ${data.taxAssigned ?? 0} to Tax Entities. ${data.needsReview} still need review.`;
       setCategorizeSummary(summary);
       setCategorizeNeedsReview(Number(data.needsReview ?? 0));
