@@ -178,7 +178,7 @@ export function TaxClient({ taxEntities, accounts, summaries, defaultYear }: Pro
         <ExportPanel taxEntity={exportEntity} year={year} onClose={() => setExportEntity(null)} />
       )}
       {rulesOpen && (
-        <RulesModal taxEntities={taxEntities} onClose={() => setRulesOpen(false)} />
+        <RulesModal taxEntities={taxEntities} accounts={accounts} onClose={() => setRulesOpen(false)} />
       )}
     </div>
   );

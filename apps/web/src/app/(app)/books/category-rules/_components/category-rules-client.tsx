@@ -5,20 +5,32 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { ArrowLeft, Trash2 } from "lucide-react";
 import { Button, Card, CardContent, Input, PageHeader, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@cashpile/ui";
-import type { BooksCategory } from "@/modules/books/types";
+import type { BooksAccount, BooksCategory } from "@/modules/books/types";
 import type { BooksCategoryRule } from "@/modules/books/actions/category-rule.actions";
 
 interface Props {
   initialRules: BooksCategoryRule[];
   categories: BooksCategory[];
+  accounts: BooksAccount[];
 }
 
-export default function CategoryRulesClient({ initialRules, categories }: Props) {
+export default function CategoryRulesClient({ initialRules, categories, accounts }: Props) {
   const [rules, setRules] = useState(initialRules);
   const [pattern, setPattern] = useState("");
   const defaultCategory = categories.find((category) => category.name === "Software & Subscriptions") ?? categories[0];
   const [categoryId, setCategoryId] = useState(defaultCategory?.id ? String(defaultCategory.id) : "");
+  const [accountId, setAccountId] = useState("global");
   const [saving, setSaving] = useState(false);
+
+  function accountLabel(account: BooksAccount) {
+    return `${account.name}${account.last_four_digits ? ` - *${account.last_four_digits}` : ""}`;
+  }
+
+  function ruleScopeLabel(rule: BooksCategoryRule) {
+    if (!rule.financial_account_id) return "All accounts";
+    const account = accounts.find((item) => item.id === rule.financial_account_id);
+    return account ? accountLabel(account) : "Account-scoped";
+  }
 
   async function refreshRules() {
     const res = await fetch("/api/books/category-rules", { cache: "no-store" });
@@ -36,7 +48,7 @@ export default function CategoryRulesClient({ initialRules, categories }: Props)
       const res = await fetch("/api/books/category-rules", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pattern, categoryId, matchType: "contains" }),
+        body: JSON.stringify({ pattern, categoryId, matchType: "contains", accountId: accountId === "global" ? null : accountId }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Unable to create rule");
@@ -95,7 +107,7 @@ export default function CategoryRulesClient({ initialRules, categories }: Props)
 
       <Card>
         <CardContent className="pt-6">
-          <div className="grid gap-3 md:grid-cols-[1fr_260px_auto]">
+          <div className="grid gap-3 md:grid-cols-[1fr_240px_240px_auto]">
             <Input
               value={pattern}
               onChange={(event) => setPattern(event.target.value)}
@@ -108,6 +120,17 @@ export default function CategoryRulesClient({ initialRules, categories }: Props)
               <SelectContent>
                 {categories.map((category) => (
                   <SelectItem key={category.id} value={String(category.id)}>{category.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={accountId} onValueChange={setAccountId}>
+              <SelectTrigger aria-label="Rule scope">
+                <SelectValue placeholder="Rule scope" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="global">All accounts</SelectItem>
+                {accounts.map((account) => (
+                  <SelectItem key={account.id} value={account.id}>{accountLabel(account)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -127,6 +150,7 @@ export default function CategoryRulesClient({ initialRules, categories }: Props)
               <tr>
                 <th className="p-3 text-left font-medium">Pattern</th>
                 <th className="p-3 text-left font-medium">Category</th>
+                <th className="p-3 text-left font-medium">Scope</th>
                 <th className="p-3 text-left font-medium">Source</th>
                 <th className="p-3 text-right font-medium">Matches</th>
                 <th className="p-3 text-left font-medium">Status</th>
@@ -136,7 +160,7 @@ export default function CategoryRulesClient({ initialRules, categories }: Props)
             <tbody>
               {rules.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="p-8 text-center text-muted-foreground">
+                  <td colSpan={7} className="p-8 text-center text-muted-foreground">
                     No category rules yet. Add one above or categorize transactions manually to teach Cashpile.
                   </td>
                 </tr>
@@ -144,6 +168,7 @@ export default function CategoryRulesClient({ initialRules, categories }: Props)
                 <tr key={rule.id} className="border-b last:border-0">
                   <td className="p-3 font-medium">{rule.pattern}</td>
                   <td className="p-3 text-muted-foreground">{rule.books_categories?.name ?? "Unknown"}</td>
+                  <td className="p-3 text-muted-foreground">{ruleScopeLabel(rule)}</td>
                   <td className="p-3">
                     <span className={`rounded-full px-2.5 py-1 text-xs font-semibold capitalize ${rule.source === "system" ? "bg-blue-100 text-blue-700" : rule.source === "learned" ? "bg-purple-100 text-purple-700" : "bg-slate-100 text-slate-600"}`}>
                       {rule.source}

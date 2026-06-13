@@ -451,19 +451,23 @@ export async function deleteTaxAssignmentRule(ruleId: string): Promise<void> {
 export async function testRulePattern(
   pattern: string,
   matchType: "contains" | "equals",
-  limit: number = 10
+  limit: number = 10,
+  accountId?: string | null
 ): Promise<Array<{ id: string; description: string; merchant: string | null; amount: number; date: string }>> {
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthenticated");
 
-  const { data, error } = await supabase
+  let query = (supabase as any)
     .from("books_transactions")
     .select("id, description, merchant, amount, date")
     .eq("user_id", user.id)
     .ilike(matchType === "equals" ? "description" : "description", matchType === "equals" ? pattern : `%${pattern}%`)
     .order("date", { ascending: false })
     .limit(limit);
+  if (accountId) query = query.eq("financial_account_id", accountId);
+
+  const { data, error } = await query;
 
   if (error) throw new Error(error.message);
   return data ?? [];

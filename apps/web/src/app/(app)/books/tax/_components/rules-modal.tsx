@@ -11,14 +11,15 @@ import {
   applyRulesToExistingTransactions,
   type TaxAssignmentRule,
 } from "@/modules/books/actions/tax.actions";
-import type { TaxEntity } from "@/modules/books/types";
+import type { BooksAccount, TaxEntity } from "@/modules/books/types";
 
 interface Props {
   taxEntities: TaxEntity[];
+  accounts: BooksAccount[];
   onClose: () => void;
 }
 
-export function RulesModal({ taxEntities, onClose }: Props) {
+export function RulesModal({ taxEntities, accounts, onClose }: Props) {
   const [rules, setRules] = useState<TaxAssignmentRule[]>([]);
   const [loading, setLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
@@ -32,6 +33,7 @@ export function RulesModal({ taxEntities, onClose }: Props) {
   const [businessPct, setBusinessPct] = useState(100);
   const [deductionPct, setDeductionPct] = useState(100);
   const [priority, setPriority] = useState(0);
+  const [accountId, setAccountId] = useState("global");
 
   // Test state
   const [testResults, setTestResults] = useState<Array<{ id: string; description: string; merchant: string | null; amount: number; date: string }>>([]);
@@ -56,7 +58,7 @@ export function RulesModal({ taxEntities, onClose }: Props) {
     if (!pattern) return;
     setIsTesting(true);
     try {
-      const results = await testRulePattern(pattern, matchType, 5);
+      const results = await testRulePattern(pattern, matchType, 5, accountId === "global" ? null : accountId);
       setTestResults(results);
     } catch (err) {
       toast.error("Failed to test pattern");
@@ -80,6 +82,7 @@ export function RulesModal({ taxEntities, onClose }: Props) {
           business_percentage: businessPct,
           deduction_percentage: deductionPct,
           priority,
+          financial_account_id: accountId === "global" ? null : accountId,
         });
         toast.success("Rule updated");
       } else {
@@ -90,6 +93,7 @@ export function RulesModal({ taxEntities, onClose }: Props) {
           business_percentage: businessPct,
           deduction_percentage: deductionPct,
           priority,
+          financial_account_id: accountId === "global" ? null : accountId,
         });
         toast.success("Rule created");
       }
@@ -141,6 +145,7 @@ export function RulesModal({ taxEntities, onClose }: Props) {
     setBusinessPct(rule.business_percentage);
     setDeductionPct(rule.deduction_percentage);
     setPriority(rule.priority);
+    setAccountId(rule.financial_account_id ?? "global");
     setIsCreating(true);
   };
 
@@ -152,12 +157,21 @@ export function RulesModal({ taxEntities, onClose }: Props) {
     setBusinessPct(100);
     setDeductionPct(100);
     setPriority(0);
+    setAccountId("global");
     setTestResults([]);
     setIsCreating(false);
   };
 
   const getEntityName = (id: string) => {
     return taxEntities.find((e) => e.id === id)?.name ?? "Unknown";
+  };
+
+  const accountLabel = (account: BooksAccount) => `${account.name}${account.last_four_digits ? ` - *${account.last_four_digits}` : ""}`;
+
+  const getScopeName = (id?: string | null) => {
+    if (!id) return "All accounts";
+    const account = accounts.find((item) => item.id === id);
+    return account ? accountLabel(account) : "Account-scoped";
   };
 
   return (
@@ -243,6 +257,20 @@ export function RulesModal({ taxEntities, onClose }: Props) {
                     onChange={(e) => setPriority(Number(e.target.value))}
                     className="w-full border border-border rounded-md px-3 py-2 text-sm"
                   />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">Scope</label>
+                  <select
+                    value={accountId}
+                    onChange={(e) => setAccountId(e.target.value)}
+                    className="w-full border border-border rounded-md px-3 py-2 text-sm"
+                  >
+                    <option value="global">All accounts</option>
+                    {accounts.map((account) => (
+                      <option key={account.id} value={account.id}>{accountLabel(account)}</option>
+                    ))}
+                  </select>
                 </div>
 
                 <div className="space-y-1">
@@ -338,6 +366,9 @@ export function RulesModal({ taxEntities, onClose }: Props) {
                     </div>
                     <div className="text-sm text-muted-foreground">
                       → {getEntityName(rule.tax_entity_id)} @ {rule.business_percentage}% business, {rule.deduction_percentage}% deductible
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      Scope: {getScopeName(rule.financial_account_id)}
                     </div>
                   </div>
 
