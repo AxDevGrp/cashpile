@@ -73,7 +73,26 @@ export async function PATCH(req: NextRequest) {
         category_id: body.categoryId ?? null,
         metadata: categoryAudit,
       } as any);
-      return NextResponse.json({ updated: ids.length });
+
+      let learnedRules = 0;
+      let appliedMatches = 0;
+      if (body.learnRule !== false && body.categoryId) {
+        const appliedRuleIds = new Set<string>();
+        for (const id of ids) {
+          try {
+            const rule = await learnCategoryRuleFromTransaction(id, body.categoryId);
+            if (!rule?.id || appliedRuleIds.has(rule.id)) continue;
+            appliedRuleIds.add(rule.id);
+            learnedRules += 1;
+            const applyResult = await applyCategoryRuleToUncategorizedTransactions(rule.id);
+            appliedMatches += applyResult.applied;
+          } catch (learnError) {
+            console.warn("[category-rules] Failed to save bulk learned rule:", learnError);
+          }
+        }
+      }
+
+      return NextResponse.json({ updated: ids.length, learnedRules, appliedMatches });
     }
 
     if (!body?.id) {

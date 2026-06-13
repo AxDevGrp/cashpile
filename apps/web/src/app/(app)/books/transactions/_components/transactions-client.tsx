@@ -427,7 +427,25 @@ export default function TransactionsClient({
 
       setSelected(new Set());
       setBulkCategoryId("");
-      toast.success(`Updated ${data.updated ?? ids.length} selected transaction${ids.length === 1 ? "" : "s"}`);
+      const appliedMatches = Number(data.appliedMatches ?? 0);
+      const learnedRules = Number(data.learnedRules ?? 0);
+      toast.success(
+        nextCategory
+          ? `Updated ${data.updated ?? ids.length} selected transaction${ids.length === 1 ? "" : "s"}, saved ${learnedRules} learned rule${learnedRules === 1 ? "" : "s"}, and applied to ${appliedMatches} other match${appliedMatches === 1 ? "" : "es"}`
+          : `Updated ${data.updated ?? ids.length} selected transaction${ids.length === 1 ? "" : "s"}`
+      );
+      if (appliedMatches > 0) {
+        router.refresh();
+        const params = new URLSearchParams(searchParams.toString());
+        params.set("limit", String(pageSize));
+        const refreshed = await fetch(`/api/books/transactions?${params.toString()}`, { cache: "no-store" });
+        if (refreshed.ok) {
+          const refreshedData = await refreshed.json();
+          setRows(refreshedData.transactions ?? []);
+          setCount(refreshedData.count ?? 0);
+          setCategoryOptions(refreshedData.categories ?? []);
+        }
+      }
     } catch (error) {
       setRows(previousRows);
       toast.error(error instanceof Error ? error.message : "Unable to update selected transactions");
