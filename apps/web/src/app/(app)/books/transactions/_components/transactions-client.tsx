@@ -128,6 +128,12 @@ export default function TransactionsClient({
   const [categorizeMode, setCategorizeMode] = useState<"rules" | "ai" | null>(null);
   const [categorizeSummary, setCategorizeSummary] = useState<string | null>(null);
   const [categorizeNeedsReview, setCategorizeNeedsReview] = useState(0);
+  const [categorizeExamples, setCategorizeExamples] = useState<Array<{
+    description: string;
+    categoryName: string;
+    confidence: number;
+    method: string;
+  }>>([]);
   const [backfillSummary, setBackfillSummary] = useState<string | null>(null);
   const [isBackfilling, setIsBackfilling] = useState(false);
   const [backfillYear, setBackfillYear] = useState("2025");
@@ -509,6 +515,7 @@ export default function TransactionsClient({
     setCategorizeMode(useAI ? "ai" : "rules");
     setCategorizeSummary(null);
     setCategorizeNeedsReview(0);
+    setCategorizeExamples([]);
     try {
       const res = await fetch("/api/books/transactions", {
         method: "POST",
@@ -523,6 +530,7 @@ export default function TransactionsClient({
         : `Applied rules to ${data.categorized} of ${data.scanned} uncategorized transactions (${data.learnedMatches} learned, ${data.ruleMatches} rules) and assigned ${data.taxAssigned ?? 0} to Tax Entities. ${data.needsReview} still need review.`;
       setCategorizeSummary(summary);
       setCategorizeNeedsReview(Number(data.needsReview ?? 0));
+      setCategorizeExamples(Array.isArray(data.examples) ? data.examples : []);
       toast.success(summary);
       router.refresh();
 
@@ -699,16 +707,32 @@ export default function TransactionsClient({
       } />
 
       {categorizeSummary && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-          <span>{categorizeSummary}</span>
-          {categorizeNeedsReview > 0 && (
-            <div className="flex flex-wrap gap-2">
-              <Link href="/books/transactions/ai-review">
-                <Button variant="outline" size="sm">Review suggestions</Button>
-              </Link>
-              <Link href="/books/transactions?filter=uncategorized">
-                <Button variant="outline" size="sm">View Uncategorized</Button>
-              </Link>
+        <div className="space-y-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <span>{categorizeSummary}</span>
+            {categorizeNeedsReview > 0 && (
+              <div className="flex flex-wrap gap-2">
+                <Link href="/books/transactions/ai-review">
+                  <Button variant="outline" size="sm">Review suggestions</Button>
+                </Link>
+                <Link href="/books/transactions?filter=uncategorized">
+                  <Button variant="outline" size="sm">View Uncategorized</Button>
+                </Link>
+              </div>
+            )}
+          </div>
+          {categorizeExamples.length > 0 && (
+            <div className="rounded-lg border border-emerald-200 bg-white/60 p-3 text-xs text-emerald-900">
+              <div className="mb-2 font-medium">Examples Cashpile categorized</div>
+              <div className="space-y-1">
+                {categorizeExamples.map((example, index) => (
+                  <div key={`${example.description}-${index}`} className="grid gap-2 md:grid-cols-[1fr_12rem_9rem]">
+                    <span className="truncate">{example.description}</span>
+                    <span>{example.categoryName}</span>
+                    <span className="text-emerald-700">{example.method.replace(/_/g, " ")} · {Math.round(example.confidence * 100)}%</span>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>
