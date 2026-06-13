@@ -202,6 +202,10 @@ function isMissingAccountScopeColumn(error: any) {
   );
 }
 
+function isUuid(value: string | null | undefined) {
+  return Boolean(value && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value));
+}
+
 async function ensureDefaultCategories(
   supabase: SupabaseLike,
   userId: string,
@@ -425,7 +429,7 @@ async function fetchUncategorizedTransactions(supabase: SupabaseLike, userId: st
     .eq("is_transfer", false)
     .order("date", { ascending: false })
     .limit(limit);
-  if (accountId) query = query.eq("financial_account_id", accountId);
+  if (isUuid(accountId)) query = query.eq("financial_account_id", accountId);
 
   const { data, error } = await query;
   if (error) throw new Error(error.message);

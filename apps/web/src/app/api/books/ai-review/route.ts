@@ -5,7 +5,8 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const limit = Number(searchParams.get("limit") ?? 40);
-    const result = await listAiReviewSuggestions(Number.isFinite(limit) ? limit : 40);
+    const accountId = searchParams.get("accountId");
+    const result = await listAiReviewSuggestions(Number.isFinite(limit) ? limit : 40, accountId);
     return NextResponse.json(result);
   } catch (e: any) {
     return NextResponse.json({ error: e.message ?? "Unable to load AI review suggestions" }, { status: 500 });

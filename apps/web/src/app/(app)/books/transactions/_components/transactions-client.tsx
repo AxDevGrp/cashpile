@@ -178,6 +178,9 @@ export default function TransactionsClient({
   const visibleStart = count === 0 || rows.length === 0 ? 0 : requestedOffset + 1;
   const visibleEnd = Math.min(requestedOffset + rows.length, count);
   const categorizationAccountId = lockedAccountId ?? filters.accountId ?? null;
+  const aiReviewHref = categorizationAccountId
+    ? `/books/transactions/ai-review?accountId=${encodeURIComponent(categorizationAccountId)}`
+    : "/books/transactions/ai-review";
   const uncategorizedHref = categorizationAccountId
     ? `/books/transactions?filter=uncategorized&accountId=${encodeURIComponent(categorizationAccountId)}`
     : "/books/transactions?filter=uncategorized";
@@ -649,7 +652,7 @@ export default function TransactionsClient({
           <Button onClick={() => runBulkCategorization(true)} disabled={isCategorizing} variant="outline">
             {isCategorizing && categorizeMode === "ai" ? "Categorizing…" : "Rules + AI"}
           </Button>
-          <Link href="/books/transactions/ai-review">
+          <Link href={aiReviewHref}>
             <Button variant="outline">AI Review</Button>
           </Link>
           <details className="group relative">
@@ -716,7 +719,7 @@ export default function TransactionsClient({
             <span>{categorizeSummary}</span>
             {categorizeNeedsReview > 0 && (
               <div className="flex flex-wrap gap-2">
-                <Link href="/books/transactions/ai-review">
+                <Link href={aiReviewHref}>
                   <Button variant="outline" size="sm">Review suggestions</Button>
                 </Link>
                 <Link href={uncategorizedHref}>

@@ -84,6 +84,10 @@ function buildInstructionOptions(rows: any[], aliases: (row: any) => string[] = 
   }));
 }
 
+function isUuid(value: string | null | undefined) {
+  return Boolean(value && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value));
+}
+
 async function updateCategoryWithAudit(
   supabase: any,
   userId: string,
@@ -161,7 +165,7 @@ export interface AiReviewSuggestion {
   examples: Array<{ id: string; date: string; description: string; merchant: string | null; amount: number }>;
 }
 
-export async function listAiReviewSuggestions(limit = 40): Promise<{
+export async function listAiReviewSuggestions(limit = 40, accountId?: string | null): Promise<{
   suggestions: AiReviewSuggestion[];
   categories: any[];
   taxEntities: any[];
@@ -170,15 +174,19 @@ export async function listAiReviewSuggestions(limit = 40): Promise<{
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthenticated");
+  const scopedAccountId = isUuid(accountId) ? accountId : null;
+
+  let transactionQuery = (supabase as any)
+    .from("books_transactions")
+    .select("id, date, description, merchant, amount, category_id, financial_account_id, books_financial_accounts(id, name, institution_name, last_four_digits, tax_entity_id)")
+    .eq("user_id", user.id)
+    .eq("is_transfer", false)
+    .order("date", { ascending: false })
+    .limit(5000);
+  if (scopedAccountId) transactionQuery = transactionQuery.eq("financial_account_id", scopedAccountId);
 
   const [{ data: transactions, error: txError }, { data: categories, error: categoryError }, { data: taxEntities, error: entityError }, { data: accounts, error: accountError }] = await Promise.all([
-    (supabase as any)
-      .from("books_transactions")
-      .select("id, date, description, merchant, amount, category_id, financial_account_id, books_financial_accounts(id, name, institution_name, last_four_digits, tax_entity_id)")
-      .eq("user_id", user.id)
-      .eq("is_transfer", false)
-      .order("date", { ascending: false })
-      .limit(5000),
+    transactionQuery,
     (supabase as any)
       .from("books_categories")
       .select("id, name, category_type, parent_category_id")
