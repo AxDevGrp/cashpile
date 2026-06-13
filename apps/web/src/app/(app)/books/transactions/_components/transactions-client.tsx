@@ -198,6 +198,12 @@ export default function TransactionsClient({
   const aiReviewHref = categorizationAccountId
     ? `/books/transactions/ai-review?accountId=${encodeURIComponent(categorizationAccountId)}`
     : "/books/transactions/ai-review";
+  const aiReviewHrefForTransaction = (tx: BooksTransaction) => {
+    const accountId = tx.account_id;
+    return accountId
+      ? `/books/transactions/ai-review?accountId=${encodeURIComponent(accountId)}`
+      : aiReviewHref;
+  };
   const uncategorizedHref = categorizationAccountId
     ? `/books/transactions?filter=uncategorized&accountId=${encodeURIComponent(categorizationAccountId)}`
     : "/books/transactions?filter=uncategorized";
@@ -1036,7 +1042,7 @@ export default function TransactionsClient({
                       const suggestion = categorySuggestion(tx);
                       if (!suggestion) return null;
                       return (
-                        <Link href={aiReviewHref} title={`${suggestion.title}. Open AI Review.`}>
+                        <Link href={aiReviewHrefForTransaction(tx)} title={`${suggestion.title}. Open AI Review.`}>
                           <Badge variant="outline" className="text-xs cursor-pointer border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100">
                             {suggestion.label}
                           </Badge>
