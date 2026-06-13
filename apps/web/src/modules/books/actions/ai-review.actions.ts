@@ -97,14 +97,16 @@ async function updateCategoryWithAudit(
 
   const { data: rows, error: fetchError } = await supabase
     .from("books_transactions")
-    .select("id, metadata")
+    .select("id, metadata, category_id")
     .eq("user_id", userId)
     .in("id", uniqueIds);
   if (fetchError) throw new Error(fetchError.message);
 
   const now = new Date().toISOString();
   let updated = 0;
+  const updatedIds: string[] = [];
   for (const row of rows ?? []) {
+    if (onlyUncategorized && row.category_id) continue;
     let query = supabase
       .from("books_transactions")
       .update({
@@ -125,6 +127,16 @@ async function updateCategoryWithAudit(
     const { error } = await query;
     if (error) throw new Error(error.message);
     updated += 1;
+    updatedIds.push(row.id);
+  }
+
+  if (updatedIds.length > 0) {
+    const { error } = await supabase
+      .from("books_tax_transaction_views")
+      .update({ category_id: Number(categoryId), updated_at: now })
+      .eq("user_id", userId)
+      .in("transaction_id", updatedIds);
+    if (error) console.warn("[ai-review] Failed to sync tax view categories:", error.message);
   }
   return updated;
 }
