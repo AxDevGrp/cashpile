@@ -29,6 +29,7 @@ interface TransactionRow {
   type?: string | null;
   category_id?: string | number | null;
   financial_account_id?: string | null;
+  metadata?: Record<string, unknown> | null;
 }
 
 interface CategorizationMatch {
@@ -356,7 +357,7 @@ async function fetchCategories(supabase: SupabaseLike, userId: string) {
 async function fetchUncategorizedTransactions(supabase: SupabaseLike, userId: string, limit: number) {
   const { data, error } = await supabase
     .from("books_transactions")
-    .select("id, description, merchant, amount, transaction_type, category_id, financial_account_id")
+    .select("id, description, merchant, amount, transaction_type, category_id, financial_account_id, metadata")
     .eq("user_id", userId)
     .is("category_id", null)
     .eq("is_transfer", false)
@@ -370,7 +371,7 @@ async function fetchUncategorizedTransactionsByIds(supabase: SupabaseLike, userI
   if (ids.length === 0) return [] as TransactionRow[];
   const { data, error } = await supabase
     .from("books_transactions")
-    .select("id, description, merchant, amount, transaction_type, category_id, financial_account_id")
+    .select("id, description, merchant, amount, transaction_type, category_id, financial_account_id, metadata")
     .eq("user_id", userId)
     .in("id", ids)
     .is("category_id", null)
@@ -382,7 +383,7 @@ async function fetchUncategorizedTransactionsByIds(supabase: SupabaseLike, userI
 async function fetchCategorizedTransactions(supabase: SupabaseLike, userId: string) {
   const { data, error } = await supabase
     .from("books_transactions")
-    .select("id, description, merchant, amount, transaction_type, category_id, financial_account_id")
+    .select("id, description, merchant, amount, transaction_type, category_id, financial_account_id, metadata")
     .eq("user_id", userId)
     .not("category_id", "is", null)
     .order("date", { ascending: false })
@@ -399,7 +400,20 @@ async function applyMatches(supabase: SupabaseLike, userId: string, txById: Map<
     const tx = txById.get(match.transactionId);
     const { error } = await supabase
       .from("books_transactions")
-      .update({ category_id: match.categoryId, updated_at: now })
+      .update({
+        category_id: match.categoryId,
+        metadata: {
+          ...(tx?.metadata ?? {}),
+          category_assignment: {
+            method: match.method,
+            confidence: match.confidence,
+            category_name: match.categoryName,
+            rule_id: match.ruleId ?? null,
+            assigned_at: now,
+          },
+        },
+        updated_at: now,
+      })
       .eq("id", match.transactionId)
       .eq("user_id", userId)
       .is("category_id", null);

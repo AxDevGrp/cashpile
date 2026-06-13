@@ -76,6 +76,51 @@ function extractInstructionPattern(instruction: string) {
   return "";
 }
 
+async function updateCategoryWithAudit(
+  supabase: any,
+  userId: string,
+  transactionIds: string[],
+  categoryId: string | number,
+  audit: Record<string, unknown>,
+  onlyUncategorized = false
+) {
+  const uniqueIds = [...new Set(transactionIds)].filter(Boolean);
+  if (uniqueIds.length === 0) return 0;
+
+  const { data: rows, error: fetchError } = await supabase
+    .from("books_transactions")
+    .select("id, metadata")
+    .eq("user_id", userId)
+    .in("id", uniqueIds);
+  if (fetchError) throw new Error(fetchError.message);
+
+  const now = new Date().toISOString();
+  let updated = 0;
+  for (const row of rows ?? []) {
+    let query = supabase
+      .from("books_transactions")
+      .update({
+        category_id: Number(categoryId),
+        metadata: {
+          ...(row.metadata ?? {}),
+          category_assignment: {
+            ...audit,
+            assigned_at: now,
+          },
+        },
+        updated_at: now,
+      })
+      .eq("user_id", userId)
+      .eq("id", row.id);
+    if (onlyUncategorized) query = query.is("category_id", null);
+
+    const { error } = await query;
+    if (error) throw new Error(error.message);
+    updated += 1;
+  }
+  return updated;
+}
+
 export interface AiReviewSuggestion {
   id: string;
   pattern: string;
@@ -257,16 +302,12 @@ export async function acceptAiReviewSuggestion(input: {
 
   let updatedTransactions = 0;
   if (input.categoryId) {
-    const { error } = await (supabase as any)
-      .from("books_transactions")
-      .update({
-        category_id: Number(input.categoryId),
-        updated_at: new Date().toISOString(),
-      })
-      .eq("user_id", user.id)
-      .in("id", transactionIds);
-    if (error) throw new Error(error.message);
-    updatedTransactions = transactionIds.length;
+    updatedTransactions = await updateCategoryWithAudit(supabase as any, user.id, transactionIds, input.categoryId, {
+      method: "ai_review",
+      pattern: input.pattern,
+      confidence: 1,
+      rule_scope: input.accountId ? "account" : "global",
+    });
   }
 
   let assignedTaxViews = 0;
@@ -436,18 +477,16 @@ export async function applyAiInstruction(input: {
       categoryRuleCreated = true;
     }
     if (!input.dryRun && input.applyToExisting !== false && uncategorizedMatchingTransactionIds.length > 0) {
-      const now = new Date().toISOString();
       const chunkSize = 500;
       for (let i = 0; i < uncategorizedMatchingTransactionIds.length; i += chunkSize) {
         const ids = uncategorizedMatchingTransactionIds.slice(i, i + chunkSize);
-        const { error } = await (supabase as any)
-          .from("books_transactions")
-          .update({ category_id: Number(category.id), updated_at: now })
-          .eq("user_id", user.id)
-          .in("id", ids)
-          .is("category_id", null);
-        if (error) throw new Error(error.message);
-        categorizedTransactions += ids.length;
+        categorizedTransactions += await updateCategoryWithAudit(supabase as any, user.id, ids, category.id, {
+          method: "ai_instruction",
+          pattern: pattern || null,
+          confidence: 1,
+          rule_scope: ruleScope,
+          instruction: instruction.slice(0, 180),
+        }, true);
       }
     }
   }

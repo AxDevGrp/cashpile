@@ -70,6 +70,33 @@ function categoryLabel(category: BooksCategory, categories: BooksCategory[]) {
   return parent ? `${parent.name} / ${category.name}` : category.name;
 }
 
+function categoryAudit(tx: BooksTransaction) {
+  const audit = tx.metadata?.category_assignment as {
+    method?: string;
+    confidence?: number;
+    category_name?: string;
+    pattern?: string | null;
+    rule_scope?: string;
+    assigned_at?: string;
+  } | undefined;
+  if (!audit?.method) return null;
+  const label = audit.method === "ai"
+    ? "AI category"
+    : audit.method === "ai_review"
+      ? "AI review"
+      : audit.method === "ai_instruction"
+        ? "AI instruction"
+        : audit.method === "category_rule"
+          ? "Category rule"
+          : audit.method === "learned_rule"
+            ? "Learned rule"
+            : audit.method.replace(/_/g, " ");
+  const confidence = typeof audit.confidence === "number" ? ` · ${Math.round(audit.confidence * 100)}% confidence` : "";
+  const scope = audit.rule_scope ? ` · ${audit.rule_scope === "account" ? "account-scoped" : "global"}` : "";
+  const pattern = audit.pattern ? ` · pattern: ${audit.pattern}` : "";
+  return { label, title: `${label}${confidence}${scope}${pattern}` };
+}
+
 export default function TransactionsClient({
   transactions,
   totalCount,
@@ -905,6 +932,15 @@ export default function TransactionsClient({
                   </td>
                   <td className="p-3 flex gap-1 flex-wrap">
                     {tx.is_transfer && <Badge variant="outline" className="text-xs">Transfer</Badge>}
+                    {(() => {
+                      const audit = categoryAudit(tx);
+                      if (!audit) return null;
+                      return (
+                        <Badge variant="outline" className="text-xs cursor-help" title={audit.title}>
+                          {audit.label}
+                        </Badge>
+                      );
+                    })()}
                     {(() => {
                       const ruleAssignment = getRuleAssignment(tx);
                       if (ruleAssignment) {

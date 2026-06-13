@@ -60,8 +60,18 @@ export async function PATCH(req: NextRequest) {
       if (ids.length === 0) {
         return NextResponse.json({ error: "At least one transaction id is required" }, { status: 400 });
       }
+      const categoryAudit = body.categoryId
+        ? {
+          category_assignment: {
+            method: "manual_bulk",
+            confidence: 1,
+            assigned_at: new Date().toISOString(),
+          },
+        }
+        : undefined;
       await bulkUpdateTransactions(ids, {
         category_id: body.categoryId ?? null,
+        metadata: categoryAudit,
       } as any);
       return NextResponse.json({ updated: ids.length });
     }
@@ -69,8 +79,18 @@ export async function PATCH(req: NextRequest) {
     if (!body?.id) {
       return NextResponse.json({ error: "Transaction id is required" }, { status: 400 });
     }
+    const categoryAudit = body.categoryId
+      ? {
+        category_assignment: {
+          method: "manual",
+          confidence: 1,
+          assigned_at: new Date().toISOString(),
+        },
+      }
+      : undefined;
     const updated = await updateTransaction(body.id, {
       category_id: body.categoryId ?? null,
+      metadata: categoryAudit,
     } as any);
     let rule = null;
     let appliedMatches = 0;

@@ -172,9 +172,21 @@ export async function updateTransaction(id: string, input: Partial<BooksTransact
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthenticated");
 
+  let update: Record<string, unknown> = { ...input, updated_at: new Date().toISOString() };
+  if (input.metadata) {
+    const { data: current, error: currentError } = await (supabase as any)
+      .from("books_transactions")
+      .select("metadata")
+      .eq("id", id)
+      .eq("user_id", user.id)
+      .single();
+    if (currentError) throw new Error(currentError.message);
+    update = { ...update, metadata: { ...(current?.metadata ?? {}), ...input.metadata } };
+  }
+
   const { data, error } = await supabase
     .from("books_transactions")
-    .update({ ...input, updated_at: new Date().toISOString() })
+    .update(update)
     .eq("id", id)
     .eq("user_id", user.id)
     .select()
@@ -202,15 +214,40 @@ export async function deleteTransaction(id: string) {
 
 export async function bulkUpdateTransactions(
   ids: string[],
-  input: Pick<Partial<BooksTransaction>, "category_id" | "is_transfer" | "notes">
+  input: Pick<Partial<BooksTransaction>, "category_id" | "is_transfer" | "notes" | "metadata">
 ) {
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthenticated");
 
+  const now = new Date().toISOString();
+  if (input.metadata) {
+    const { data: rows, error: fetchError } = await (supabase as any)
+      .from("books_transactions")
+      .select("id, metadata")
+      .eq("user_id", user.id)
+      .in("id", ids);
+    if (fetchError) throw new Error(fetchError.message);
+
+    for (const row of rows ?? []) {
+      const { error } = await (supabase as any)
+        .from("books_transactions")
+        .update({
+          ...input,
+          metadata: { ...(row.metadata ?? {}), ...input.metadata },
+          updated_at: now,
+        })
+        .eq("id", row.id)
+        .eq("user_id", user.id);
+      if (error) throw new Error(error.message);
+    }
+    revalidatePath("/books/transactions");
+    return;
+  }
+
   const { error } = await supabase
     .from("books_transactions")
-    .update({ ...input, updated_at: new Date().toISOString() })
+    .update({ ...input, updated_at: now })
     .in("id", ids)
     .eq("user_id", user.id);
 
