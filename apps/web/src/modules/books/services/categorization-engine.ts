@@ -48,6 +48,7 @@ export interface BulkCategorizationResult {
   ruleMatches: number;
   learnedMatches: number;
   aiMatches: number;
+  learnedRulesSaved: number;
   needsReview: number;
   createdCategories: string[];
   examples: Array<{
@@ -338,6 +339,71 @@ async function updateRuleMatchCounts(supabase: SupabaseLike, ruleIds: string[]) 
   }
 }
 
+async function createLearnedRulesFromAiMatches(
+  supabase: SupabaseLike,
+  userId: string,
+  txById: Map<string, TransactionRow>,
+  matches: CategorizationMatch[]
+) {
+  const now = new Date().toISOString();
+  let saved = 0;
+
+  for (const match of matches) {
+    if (match.method !== "ai") continue;
+
+    const tx = txById.get(match.transactionId);
+    const pattern = merchantKey(tx ?? { merchant: null, description: "" });
+    if (pattern.length < 3) continue;
+
+    let existingQuery = supabase
+      .from("books_category_rules")
+      .select("id, source, financial_account_id")
+      .eq("user_id", userId)
+      .eq("pattern", pattern);
+    existingQuery = tx?.financial_account_id
+      ? existingQuery.eq("financial_account_id", tx.financial_account_id)
+      : existingQuery.is("financial_account_id", null);
+
+    const { data: existing, error: existingError } = await existingQuery.maybeSingle();
+    if (existingError) {
+      if (isMissingAccountScopeColumn(existingError) && tx?.financial_account_id) continue;
+      if (!isMissingAccountScopeColumn(existingError)) continue;
+    }
+
+    const row: Record<string, unknown> = {
+      user_id: userId,
+      pattern,
+      category_id: Number(match.categoryId),
+      match_type: "contains",
+      source: "learned",
+      priority: tx?.financial_account_id ? 85 : 65,
+      is_active: true,
+      updated_at: now,
+    };
+    if (!isMissingAccountScopeColumn(existingError)) {
+      row.financial_account_id = tx?.financial_account_id ?? null;
+    }
+
+    if (existing) {
+      if (existing.source !== "learned") continue;
+      const { error } = await supabase
+        .from("books_category_rules")
+        .update(row)
+        .eq("id", existing.id)
+        .eq("user_id", userId);
+      if (!error) saved += 1;
+      continue;
+    }
+
+    const { error } = await supabase
+      .from("books_category_rules")
+      .insert({ ...row, created_at: now });
+    if (!error) saved += 1;
+  }
+
+  return saved;
+}
+
 async function fetchCategories(supabase: SupabaseLike, userId: string) {
   const { data, error } = await supabase
     .from("books_categories")
@@ -495,6 +561,7 @@ export async function bulkCategorizeTransactions(
 
   const confidentMatches = matches.filter((match) => match.confidence >= minConfidence);
   const applied = await applyMatches(supabase, userId, txById, confidentMatches);
+  const learnedRulesSaved = await createLearnedRulesFromAiMatches(supabase, userId, txById, confidentMatches);
   await updateRuleMatchCounts(supabase, confidentMatches.map((match) => match.ruleId).filter(Boolean) as string[]);
 
   return {
@@ -503,6 +570,7 @@ export async function bulkCategorizeTransactions(
     ruleMatches: confidentMatches.filter((match) => match.method === "category_rule" || match.method === "default_rule" || match.method === "rule_based").length,
     learnedMatches: confidentMatches.filter((match) => match.method === "learned_rule").length,
     aiMatches: confidentMatches.filter((match) => match.method === "ai").length,
+    learnedRulesSaved,
     needsReview: Math.max(uncategorized.length - applied, 0),
     createdCategories: created,
     examples: confidentMatches.slice(0, 8).map((match) => ({
@@ -591,6 +659,7 @@ export async function categorizeTransactionsByIds(
 
   const confidentMatches = matches.filter((match) => match.confidence >= minConfidence);
   const applied = await applyMatches(supabase, userId, txById, confidentMatches);
+  const learnedRulesSaved = await createLearnedRulesFromAiMatches(supabase, userId, txById, confidentMatches);
   await updateRuleMatchCounts(supabase, confidentMatches.map((match) => match.ruleId).filter(Boolean) as string[]);
 
   return {
@@ -599,6 +668,7 @@ export async function categorizeTransactionsByIds(
     ruleMatches: confidentMatches.filter((match) => match.method === "category_rule" || match.method === "default_rule" || match.method === "rule_based").length,
     learnedMatches: confidentMatches.filter((match) => match.method === "learned_rule").length,
     aiMatches: confidentMatches.filter((match) => match.method === "ai").length,
+    learnedRulesSaved,
     needsReview: Math.max(uncategorized.length - applied, 0),
     createdCategories: created,
     examples: confidentMatches.slice(0, 8).map((match) => ({
