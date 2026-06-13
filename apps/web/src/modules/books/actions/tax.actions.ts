@@ -2,6 +2,19 @@
 
 import { createServerSupabaseClient } from "@cashpile/db";
 
+function isMissingAccountScopeColumn(error: any) {
+  const message = String(error?.message ?? "").toLowerCase();
+  return message.includes("financial_account_id") && (
+    message.includes("does not exist") ||
+    message.includes("schema cache") ||
+    message.includes("column")
+  );
+}
+
+function accountScopeMigrationError() {
+  return new Error("Account-scoped tax rules require database migration 020_account_scoped_book_rules.sql to be applied.");
+}
+
 // ─── Tax View Types ────────────────────────────────────────────────────────
 // Tax views link transactions to Tax Entities for tax reporting purposes.
 
@@ -381,7 +394,21 @@ export async function createTaxAssignmentRule(
     ? existingQuery.eq("financial_account_id", input.financial_account_id)
     : existingQuery.is("financial_account_id", null);
   const { data: existing, error: existingError } = await existingQuery.maybeSingle();
-  if (existingError) throw new Error(existingError.message);
+  if (existingError) {
+    if (isMissingAccountScopeColumn(existingError)) {
+      if (input.financial_account_id) throw accountScopeMigrationError();
+      const legacyRow = { ...row } as any;
+      delete legacyRow.financial_account_id;
+      const { data, error } = await supabase
+        .from("books_tax_assignment_rules")
+        .insert(legacyRow)
+        .select()
+        .single();
+      if (error) throw new Error(error.message);
+      return data;
+    }
+    throw new Error(existingError.message);
+  }
 
   const query = existing
     ? supabase
@@ -397,7 +424,10 @@ export async function createTaxAssignmentRule(
     .select()
     .single();
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    if (isMissingAccountScopeColumn(error)) throw accountScopeMigrationError();
+    throw new Error(error.message);
+  }
   return data;
 }
 
@@ -423,7 +453,25 @@ export async function updateTaxAssignmentRule(
     .select()
     .single();
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    if (isMissingAccountScopeColumn(error)) {
+      if (input.financial_account_id) throw accountScopeMigrationError();
+      const { financial_account_id: _ignored, ...legacyInput } = input as any;
+      const retry = await supabase
+        .from("books_tax_assignment_rules")
+        .update({
+          ...legacyInput,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", ruleId)
+        .eq("user_id", user.id)
+        .select()
+        .single();
+      if (retry.error) throw new Error(retry.error.message);
+      return retry.data;
+    }
+    throw new Error(error.message);
+  }
   return data;
 }
 

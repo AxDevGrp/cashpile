@@ -189,6 +189,15 @@ function categoryByName(categories: CategoryRow[], name: string) {
   return categories.find((category) => category.name.toLowerCase() === target);
 }
 
+function isMissingAccountScopeColumn(error: any) {
+  const message = String(error?.message ?? "").toLowerCase();
+  return message.includes("financial_account_id") && (
+    message.includes("does not exist") ||
+    message.includes("schema cache") ||
+    message.includes("column")
+  );
+}
+
 async function ensureDefaultCategories(
   supabase: SupabaseLike,
   userId: string,
@@ -290,6 +299,20 @@ async function fetchCategoryRules(supabase: SupabaseLike, userId: string) {
     .order("created_at", { ascending: true });
 
   if (error) {
+    if (isMissingAccountScopeColumn(error)) {
+      const fallback = await supabase
+        .from("books_category_rules")
+        .select("id, pattern, match_type, category_id, priority")
+        .eq("user_id", userId)
+        .eq("is_active", true)
+        .order("priority", { ascending: false })
+        .order("created_at", { ascending: true });
+      if (fallback.error) {
+        if (fallback.error.message?.includes("books_category_rules")) return [] as CategoryRuleRow[];
+        throw new Error(fallback.error.message);
+      }
+      return (fallback.data ?? []).map((rule: CategoryRuleRow) => ({ ...rule, financial_account_id: null }));
+    }
     if (error.message?.includes("books_category_rules")) return [] as CategoryRuleRow[];
     throw new Error(error.message);
   }

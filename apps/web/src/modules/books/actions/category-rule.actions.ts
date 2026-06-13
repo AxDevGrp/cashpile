@@ -66,6 +66,19 @@ function matchesRule(values: string[], pattern: string, matchType: "contains" | 
   ));
 }
 
+function isMissingAccountScopeColumn(error: any) {
+  const message = String(error?.message ?? "").toLowerCase();
+  return message.includes("financial_account_id") && (
+    message.includes("does not exist") ||
+    message.includes("schema cache") ||
+    message.includes("column")
+  );
+}
+
+function accountScopeMigrationError() {
+  return new Error("Account-scoped rules require database migration 020_account_scoped_book_rules.sql to be applied.");
+}
+
 export async function seedSystemCategoryRules() {
   await ensureDefaultBookCategories();
 
@@ -100,18 +113,31 @@ export async function seedSystemCategoryRules() {
 
   if (rows.length === 0) return { seeded: 0 };
 
+  const patterns = rows.map((row: any) => row.pattern);
+  const { data: existingRows, error: existingError } = await (supabase as any)
+    .from("books_category_rules")
+    .select("pattern")
+    .eq("user_id", user.id)
+    .in("pattern", patterns);
+
+  if (existingError) {
+    if (existingError.message?.includes("books_category_rules")) return { seeded: 0 };
+    throw new Error(existingError.message);
+  }
+
+  const existingPatterns = new Set((existingRows ?? []).map((row: any) => row.pattern));
+  const missingRows = rows.filter((row: any) => !existingPatterns.has(row.pattern));
+  if (missingRows.length === 0) return { seeded: 0 };
+
   const { error } = await (supabase as any)
     .from("books_category_rules")
-    .upsert(rows, { onConflict: "user_id,pattern", ignoreDuplicates: true });
+    .insert(missingRows);
 
-  if (error) {
-    if (error.message?.includes("books_category_rules")) return { seeded: 0 };
-    throw new Error(error.message);
-  }
+  if (error) throw new Error(error.message);
 
   revalidatePath("/books/category-rules");
   revalidatePath("/books/transactions");
-  return { seeded: rows.length };
+  return { seeded: missingRows.length };
 }
 
 export async function listCategoryRules(): Promise<BooksCategoryRule[]> {
@@ -167,7 +193,23 @@ export async function createCategoryRule(input: {
     .eq("pattern", pattern);
   existingQuery = input.accountId ? existingQuery.eq("financial_account_id", input.accountId) : existingQuery.is("financial_account_id", null);
   const { data: existing, error: existingError } = await existingQuery.maybeSingle();
-  if (existingError) throw new Error(existingError.message);
+  if (existingError) {
+    if (isMissingAccountScopeColumn(existingError)) {
+      if (input.accountId) throw accountScopeMigrationError();
+      const legacyRow = { ...row } as any;
+      delete legacyRow.financial_account_id;
+      const { data, error } = await (supabase as any)
+        .from("books_category_rules")
+        .upsert(legacyRow, { onConflict: "user_id,pattern" })
+        .select("*, books_categories(id, name)")
+        .single();
+      if (error) throw new Error(error.message);
+      revalidatePath("/books/category-rules");
+      revalidatePath("/books/transactions");
+      return data as BooksCategoryRule;
+    }
+    throw new Error(existingError.message);
+  }
 
   const query = existing
     ? (supabase as any)
@@ -183,7 +225,10 @@ export async function createCategoryRule(input: {
     .select("*, books_categories(id, name)")
     .single();
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    if (isMissingAccountScopeColumn(error)) throw accountScopeMigrationError();
+    throw new Error(error.message);
+  }
   revalidatePath("/books/category-rules");
   revalidatePath("/books/transactions");
   return data as BooksCategoryRule;
@@ -217,7 +262,24 @@ export async function updateCategoryRule(id: string, input: Partial<{
     .select("*, books_categories(id, name)")
     .single();
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    if (isMissingAccountScopeColumn(error)) {
+      if (input.accountId) throw accountScopeMigrationError();
+      const { financial_account_id: _ignored, ...legacyUpdate } = update;
+      const retry = await (supabase as any)
+        .from("books_category_rules")
+        .update(legacyUpdate)
+        .eq("id", id)
+        .eq("user_id", user.id)
+        .select("*, books_categories(id, name)")
+        .single();
+      if (retry.error) throw new Error(retry.error.message);
+      revalidatePath("/books/category-rules");
+      revalidatePath("/books/transactions");
+      return retry.data as BooksCategoryRule;
+    }
+    throw new Error(error.message);
+  }
   revalidatePath("/books/category-rules");
   revalidatePath("/books/transactions");
   return data as BooksCategoryRule;
@@ -262,13 +324,24 @@ export async function applyCategoryRuleToUncategorizedTransactions(ruleId: strin
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthenticated");
 
-  const { data: rule, error: ruleError } = await (supabase as any)
+  let ruleQuery = (supabase as any)
     .from("books_category_rules")
     .select("id, pattern, match_type, category_id, match_count, financial_account_id")
     .eq("id", ruleId)
     .eq("user_id", user.id)
-    .eq("is_active", true)
-    .single();
+    .eq("is_active", true);
+  let { data: rule, error: ruleError } = await ruleQuery.single();
+  if (ruleError && isMissingAccountScopeColumn(ruleError)) {
+    const fallback = await (supabase as any)
+      .from("books_category_rules")
+      .select("id, pattern, match_type, category_id, match_count")
+      .eq("id", ruleId)
+      .eq("user_id", user.id)
+      .eq("is_active", true)
+      .single();
+    rule = fallback.data ? { ...fallback.data, financial_account_id: null } : null;
+    ruleError = fallback.error;
+  }
 
   if (ruleError) throw new Error(ruleError.message);
 
