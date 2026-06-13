@@ -482,6 +482,7 @@ async function applyMatches(supabase: SupabaseLike, userId: string, txById: Map<
         category_id: match.categoryId,
         metadata: {
           ...(tx?.metadata ?? {}),
+          category_suggestion: null,
           category_assignment: {
             method: match.method,
             confidence: match.confidence,

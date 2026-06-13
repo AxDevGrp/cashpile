@@ -63,6 +63,7 @@ export async function PATCH(req: NextRequest) {
       }
       const categoryAudit = body.categoryId
         ? {
+          category_suggestion: null,
           category_assignment: {
             method: "manual_bulk",
             confidence: 1,
@@ -103,6 +104,7 @@ export async function PATCH(req: NextRequest) {
     }
     const categoryAudit = body.categoryId
       ? {
+        category_suggestion: null,
         category_assignment: {
           method: "manual",
           confidence: 1,

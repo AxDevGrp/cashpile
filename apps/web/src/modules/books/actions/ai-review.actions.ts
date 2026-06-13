@@ -117,6 +117,7 @@ async function updateCategoryWithAudit(
         category_id: Number(categoryId),
         metadata: {
           ...(row.metadata ?? {}),
+          category_suggestion: null,
           category_assignment: {
             ...audit,
             assigned_at: now,
