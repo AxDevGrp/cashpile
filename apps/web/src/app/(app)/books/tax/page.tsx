@@ -2,6 +2,7 @@ import { createServerSupabaseClient } from "@cashpile/db";
 import { TaxClient } from "./_components/tax-client";
 import { getTaxSummaryForEntities } from "@/modules/books/actions/tax.actions";
 import { backfillAssignedAccountTaxViews } from "@/modules/books/actions/account.actions";
+import { listAiInstructionOptions } from "@/modules/books/actions/ai-review.actions";
 import type { BooksAccount, TaxEntity } from "@/modules/books/types";
 
 export default async function TaxPage() {
@@ -28,7 +29,10 @@ export default async function TaxPage() {
   const year = new Date().getFullYear();
   const entityList = (taxEntities ?? []) as TaxEntity[];
   const accountList = (accounts ?? []) as BooksAccount[];
-  const summaries = await getTaxSummaryForEntities(entityList.map((e) => e.id), year);
+  const [summaries, aiOptions] = await Promise.all([
+    getTaxSummaryForEntities(entityList.map((e) => e.id), year),
+    listAiInstructionOptions(),
+  ]);
 
-  return <TaxClient taxEntities={entityList} accounts={accountList} summaries={summaries} defaultYear={year} />;
+  return <TaxClient taxEntities={entityList} accounts={accountList} summaries={summaries} defaultYear={year} aiOptions={aiOptions} />;
 }

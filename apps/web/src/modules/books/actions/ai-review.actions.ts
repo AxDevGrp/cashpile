@@ -166,6 +166,46 @@ export interface AiReviewSuggestion {
   examples: Array<{ id: string; date: string; description: string; merchant: string | null; amount: number }>;
 }
 
+export async function listAiInstructionOptions(): Promise<{
+  categories: any[];
+  taxEntities: any[];
+  accounts: any[];
+}> {
+  const supabase = await createServerSupabaseClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Unauthenticated");
+
+  const [{ data: categories, error: categoryError }, { data: taxEntities, error: entityError }, { data: accounts, error: accountError }] = await Promise.all([
+    (supabase as any)
+      .from("books_categories")
+      .select("id, name, category_type, parent_category_id")
+      .eq("user_id", user.id)
+      .order("name"),
+    (supabase as any)
+      .from("books_business_entities")
+      .select("id, name, entity_type")
+      .eq("user_id", user.id)
+      .eq("is_active", true)
+      .order("name"),
+    (supabase as any)
+      .from("books_financial_accounts")
+      .select("id, name, institution_name, last_four_digits, tax_entity_id")
+      .eq("user_id", user.id)
+      .eq("is_active", true)
+      .order("name"),
+  ]);
+
+  if (categoryError) throw new Error(categoryError.message);
+  if (entityError) throw new Error(entityError.message);
+  if (accountError) throw new Error(accountError.message);
+
+  return {
+    categories: categories ?? [],
+    taxEntities: taxEntities ?? [],
+    accounts: accounts ?? [],
+  };
+}
+
 export async function listAiReviewSuggestions(limit = 40, accountId?: string | null): Promise<{
   suggestions: AiReviewSuggestion[];
   totalSuggestions: number;

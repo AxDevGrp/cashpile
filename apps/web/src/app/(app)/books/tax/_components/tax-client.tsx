@@ -8,15 +8,22 @@ import { ExportPanel } from "./export-panel";
 import { RulesModal } from "./rules-modal";
 import { AccountAssignmentModal } from "./account-assignment-modal";
 import { AddTaxEntityModal } from "./add-tax-entity-modal";
+import { AskCashpilePanel } from "../../_components/ask-cashpile-panel";
 import type { BooksAccount, TaxEntity } from "@/modules/books/types";
 
 type Summary = { totalIncome: number; totalExpenses: number; transactionCount: number };
+type AiOptions = {
+  categories: Array<{ id: string | number; name: string; parent_category_id?: string | number | null }>;
+  taxEntities: Array<{ id: string; name: string; entity_type?: string | null }>;
+  accounts: Array<{ id: string; name: string; institution_name?: string | null; last_four_digits?: string | null }>;
+};
 
 interface Props {
   taxEntities: TaxEntity[];
   accounts: BooksAccount[];
   summaries: Record<string, Summary>;
   defaultYear: number;
+  aiOptions: AiOptions;
 }
 
 const ENTITY_TYPE_LABELS: Record<string, string> = {
@@ -32,7 +39,7 @@ function fmt(n: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
 }
 
-export function TaxClient({ taxEntities, accounts, summaries, defaultYear }: Props) {
+export function TaxClient({ taxEntities, accounts, summaries, defaultYear, aiOptions }: Props) {
   const [year, setYear] = useState(defaultYear);
   const [addEntityOpen, setAddEntityOpen] = useState(false);
   const [assignEntity, setAssignEntity] = useState<TaxEntity | null>(null);
@@ -82,6 +89,14 @@ export function TaxClient({ taxEntities, accounts, summaries, defaultYear }: Pro
           </button>
         </div>
       </div>
+
+      <AskCashpilePanel
+        categories={aiOptions.categories}
+        taxEntities={aiOptions.taxEntities}
+        accounts={aiOptions.accounts}
+        title="Ask Cashpile for tax assignment"
+        description="Tell Cashpile which accounts, merchants, or charges belong to a Tax Entity. Preview the affected transactions, then apply and save the assignment rules."
+      />
 
       {taxEntities.length === 0 && (
         <div className="text-center py-20 text-muted-foreground">

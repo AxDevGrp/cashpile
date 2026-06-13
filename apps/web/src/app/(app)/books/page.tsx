@@ -2,6 +2,8 @@ import { BookOpen, Upload, Building2, Landmark, Tags, ArrowRight, ListChecks, Se
 import { createServerSupabaseClient } from "@cashpile/db";
 import { PageHeader, Card, CardContent } from "@cashpile/ui";
 import Link from "next/link";
+import { listAiInstructionOptions } from "@/modules/books/actions/ai-review.actions";
+import { AskCashpilePanel } from "./_components/ask-cashpile-panel";
 
 async function getBooksDataStatus(userId: string) {
   const supabase = await createServerSupabaseClient();
@@ -45,7 +47,10 @@ export default async function BooksPage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const status = await getBooksDataStatus(user.id);
+  const [status, aiOptions] = await Promise.all([
+    getBooksDataStatus(user.id),
+    listAiInstructionOptions(),
+  ]);
 
   const workingTasks = [
     {
@@ -119,6 +124,13 @@ export default async function BooksPage() {
           Use <span className="font-medium text-foreground">Transactions</span> as the daily workspace: pick an account to view its ledger, or search globally when you need to find something. Accounts, Entities, and Rules are setup/data-cleanup tools.
         </p>
       </div>
+
+      <AskCashpilePanel
+        categories={aiOptions.categories}
+        taxEntities={aiOptions.taxEntities}
+        accounts={aiOptions.accounts}
+        description="Use plain English to categorize transactions, assign Tax Entities, set account defaults, and save rules so Cashpile does the bookkeeping work going forward."
+      />
 
       <section className="space-y-3">
         <div className="flex items-center gap-2">
