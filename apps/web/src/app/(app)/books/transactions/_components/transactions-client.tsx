@@ -702,9 +702,14 @@ export default function TransactionsClient({
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
           <span>{categorizeSummary}</span>
           {categorizeNeedsReview > 0 && (
-            <Link href="/books/transactions/ai-review">
-              <Button variant="outline" size="sm">Review suggestions</Button>
-            </Link>
+            <div className="flex flex-wrap gap-2">
+              <Link href="/books/transactions/ai-review">
+                <Button variant="outline" size="sm">Review suggestions</Button>
+              </Link>
+              <Link href="/books/transactions?filter=uncategorized">
+                <Button variant="outline" size="sm">View Uncategorized</Button>
+              </Link>
+            </div>
           )}
         </div>
       )}
