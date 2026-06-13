@@ -498,6 +498,7 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
                         <h2 className="text-lg font-semibold">{suggestion.pattern}</h2>
                         <Badge variant="secondary">{suggestion.count} transactions</Badge>
                         <Badge variant={suggestion.confidence >= 0.9 ? "default" : "outline"}>{confidenceLabel(suggestion.confidence)} confidence</Badge>
+                        <Badge variant="outline">{suggestion.accountId ? "Account-scoped rule" : "Global rule"}</Badge>
                         {suggestion.suggestedCategoryName && (
                           <Badge variant="outline">Suggested category: {suggestion.suggestedCategoryName}</Badge>
                         )}
