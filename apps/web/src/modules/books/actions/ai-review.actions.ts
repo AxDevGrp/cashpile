@@ -219,18 +219,27 @@ export async function listAiReviewSuggestions(limit = 40): Promise<{
 
   const suggestions: AiReviewSuggestion[] = [];
   for (const [key, rows] of groups) {
-    if (rows.length < 2) continue;
     const [accountId, pattern] = key.split("|");
     const rawAccount = rows[0].books_financial_accounts;
     const account = (Array.isArray(rawAccount) ? rawAccount[0] : rawAccount) as any;
     const totalAmount = rows.reduce((sum: number, tx: any) => sum + Number(tx.amount ?? 0), 0);
+    const isRepeatedPattern = rows.length >= 2;
+    const isHighImpactSingle = rows.length === 1 && Math.abs(totalAmount) >= 250;
+    if (!isRepeatedPattern && !isHighImpactSingle) continue;
+
     const representative = rows[0];
     const defaultCategoryName = defaultCategoryNameForPattern(pattern, Number(representative.amount ?? 0));
     let category = categoryByName.get(defaultCategoryName.toLowerCase()) ?? null;
-    let confidence = account?.tax_entity_id ? 0.92 : 0.78;
-    let reason = account?.tax_entity_id
-      ? `Grouped by account and merchant/description pattern. Account is assigned to ${taxEntityById.get(String(account.tax_entity_id))?.name ?? "a Tax Entity"}.`
-      : "Grouped by repeated merchant/description pattern. Needs Tax Entity confirmation.";
+    let confidence = isRepeatedPattern
+      ? (account?.tax_entity_id ? 0.92 : 0.78)
+      : (account?.tax_entity_id ? 0.82 : 0.66);
+    let reason = isRepeatedPattern
+      ? (account?.tax_entity_id
+        ? `Grouped by account and merchant/description pattern. Account is assigned to ${taxEntityById.get(String(account.tax_entity_id))?.name ?? "a Tax Entity"}.`
+        : "Grouped by repeated merchant/description pattern. Needs Tax Entity confirmation.")
+      : (account?.tax_entity_id
+        ? `High-impact transaction needs Category confirmation. Account is assigned to ${taxEntityById.get(String(account.tax_entity_id))?.name ?? "a Tax Entity"}.`
+        : "High-impact transaction needs Category or Tax Entity confirmation.");
 
     if (!category && categories?.length) {
       try {

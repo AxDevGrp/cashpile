@@ -251,7 +251,7 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
 
       <PageHeader
         title="AI Transaction Review"
-        description="Review grouped transaction patterns. Accept once to apply current assignments and create future rules."
+        description="Review grouped patterns and high-impact one-off transactions. Accept once to apply current assignments and create future rules."
         actions={<Button variant="outline" onClick={() => router.refresh()}>Refresh suggestions</Button>}
       />
 
@@ -403,8 +403,8 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
 
       {suggestions.length === 0 ? (
         <div className="rounded-lg border border-dashed bg-muted/20 p-10 text-center text-muted-foreground">
-          <div className="font-medium text-foreground">No grouped suggestions right now</div>
-          <p className="mt-2 text-sm">Cashpile did not find repeated unassigned or uncategorized transaction patterns needing review.</p>
+          <div className="font-medium text-foreground">No AI review suggestions right now</div>
+          <p className="mt-2 text-sm">Cashpile did not find repeated or high-impact unassigned/uncategorized transactions needing review.</p>
         </div>
       ) : (
         <div className="space-y-4">
