@@ -51,6 +51,7 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
   const [isApplyingInstruction, setIsApplyingInstruction] = useState(false);
   const [isPreviewingInstruction, setIsPreviewingInstruction] = useState(false);
   const [instructionPreview, setInstructionPreview] = useState<InstructionPreview | null>(null);
+  const [previewSignature, setPreviewSignature] = useState("");
   const [drafts, setDrafts] = useState<Record<string, { categoryId: string; taxEntityId: string; applyAccountDefault: boolean }>>(() =>
     Object.fromEntries(initialData.suggestions.map((suggestion) => [
       suggestion.id,
@@ -62,6 +63,20 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
     ]))
   );
   const [savingId, setSavingId] = useState<string | null>(null);
+  const currentInstructionSignature = JSON.stringify({
+    instruction: instruction.trim(),
+    accountId: instructionAccountId,
+    pattern: instructionPattern.trim(),
+    categoryId: instructionCategoryId,
+    taxEntityId: instructionTaxEntityId,
+    setAccountDefault,
+  });
+  const hasFreshInstructionPreview = Boolean(instructionPreview && previewSignature === currentInstructionSignature);
+
+  function clearInstructionPreview() {
+    setInstructionPreview(null);
+    setPreviewSignature("");
+  }
 
   function updateDraft(id: string, patch: Partial<{ categoryId: string; taxEntityId: string; applyAccountDefault: boolean }>) {
     setDrafts((current) => ({ ...current, [id]: { ...current[id], ...patch } }));
@@ -131,6 +146,7 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
 
       if (dryRun) {
         setInstructionPreview(data);
+        setPreviewSignature(currentInstructionSignature);
         toast.success("Preview ready. Confirm before applying.");
         return;
       }
@@ -141,6 +157,7 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
       setInstruction("");
       setInstructionPattern("");
       setInstructionPreview(null);
+      setPreviewSignature("");
       router.refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Unable to apply instruction");
@@ -178,7 +195,10 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
             <textarea
               className="min-h-20 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
               value={instruction}
-              onChange={(event) => setInstruction(event.target.value)}
+              onChange={(event) => {
+                setInstruction(event.target.value);
+                clearInstructionPreview();
+              }}
               placeholder={'Example: Charges from "ANTHROPIC" on Amex Blue Plus AxDevGrp belong to Axial Development Group and Software & Subscriptions.'}
             />
           </label>
@@ -189,7 +209,10 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
               <select
                 className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
                 value={instructionAccountId}
-                onChange={(event) => setInstructionAccountId(event.target.value)}
+                onChange={(event) => {
+                  setInstructionAccountId(event.target.value);
+                  clearInstructionPreview();
+                }}
               >
                 <option value="">Infer or all accounts</option>
                 {initialData.accounts.map((account) => (
@@ -205,7 +228,10 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
               <input
                 className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
                 value={instructionPattern}
-                onChange={(event) => setInstructionPattern(event.target.value)}
+                onChange={(event) => {
+                  setInstructionPattern(event.target.value);
+                  clearInstructionPreview();
+                }}
                 placeholder="e.g. ANTHROPIC"
               />
             </label>
@@ -215,7 +241,10 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
               <select
                 className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
                 value={instructionCategoryId}
-                onChange={(event) => setInstructionCategoryId(event.target.value)}
+                onChange={(event) => {
+                  setInstructionCategoryId(event.target.value);
+                  clearInstructionPreview();
+                }}
               >
                 <option value="">Infer / leave unchanged</option>
                 {initialData.categories.map((category) => (
@@ -229,7 +258,10 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
               <select
                 className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
                 value={instructionTaxEntityId}
-                onChange={(event) => setInstructionTaxEntityId(event.target.value)}
+                onChange={(event) => {
+                  setInstructionTaxEntityId(event.target.value);
+                  clearInstructionPreview();
+                }}
               >
                 <option value="">Infer / leave unchanged</option>
                 {initialData.taxEntities.map((entity) => (
@@ -244,7 +276,10 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
               <input
                 type="checkbox"
                 checked={setAccountDefault}
-                onChange={(event) => setSetAccountDefault(event.target.checked)}
+                onChange={(event) => {
+                  setSetAccountDefault(event.target.checked);
+                  clearInstructionPreview();
+                }}
               />
               <span>Make this Tax Entity the default for all current and future transactions in this account.</span>
             </label>
@@ -275,11 +310,13 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
             <Button variant="outline" onClick={() => submitInstruction(true)} disabled={isPreviewingInstruction || isApplyingInstruction}>
               {isPreviewingInstruction ? "Previewing…" : "Preview Instruction"}
             </Button>
-            <Button onClick={() => submitInstruction(false)} disabled={isApplyingInstruction || isPreviewingInstruction}>
+            <Button onClick={() => submitInstruction(false)} disabled={isApplyingInstruction || isPreviewingInstruction || !hasFreshInstructionPreview}>
               {isApplyingInstruction ? "Applying instruction…" : "Apply Instruction & Save Rules"}
             </Button>
             <p className="text-xs text-muted-foreground">
-              Tip: quote a merchant name like "ANTHROPIC" when you want a merchant-specific rule.
+              {hasFreshInstructionPreview
+                ? "Preview confirmed. Apply only if the impact looks right."
+                : 'Preview is required before applying. Tip: quote a merchant name like "ANTHROPIC" for merchant-specific rules.'}
             </p>
           </div>
         </CardContent>
