@@ -429,9 +429,10 @@ export default function TransactionsClient({
       setBulkCategoryId("");
       const appliedMatches = Number(data.appliedMatches ?? 0);
       const learnedRules = Number(data.learnedRules ?? 0);
+      const taxAssigned = Number(data.taxAssigned ?? 0);
       toast.success(
         nextCategory
-          ? `Updated ${data.updated ?? ids.length} selected transaction${ids.length === 1 ? "" : "s"}, saved ${learnedRules} learned rule${learnedRules === 1 ? "" : "s"}, and applied to ${appliedMatches} other match${appliedMatches === 1 ? "" : "es"}`
+          ? `Updated ${data.updated ?? ids.length} selected transaction${ids.length === 1 ? "" : "s"}, saved ${learnedRules} learned rule${learnedRules === 1 ? "" : "s"}, applied to ${appliedMatches} other match${appliedMatches === 1 ? "" : "es"}, and assigned ${taxAssigned} to Tax Entities`
           : `Updated ${data.updated ?? ids.length} selected transaction${ids.length === 1 ? "" : "s"}`
       );
       if (appliedMatches > 0) {
@@ -561,9 +562,10 @@ export default function TransactionsClient({
       if (!res.ok) throw new Error(data.error ?? "Unable to update category");
       if (nextCategory) {
         const appliedMatches = Number(data.appliedMatches ?? 0);
+        const taxAssigned = Number(data.taxAssigned ?? 0);
         toast.success(
           appliedMatches > 0
-            ? `Categorized as ${nextCategory.name}; rule applied to ${appliedMatches} matching uncategorized transaction${appliedMatches === 1 ? "" : "s"}`
+            ? `Categorized as ${nextCategory.name}; rule applied to ${appliedMatches} matching uncategorized transaction${appliedMatches === 1 ? "" : "s"} and assigned ${taxAssigned} to Tax Entities`
             : `Categorized as ${nextCategory.name}; scanned existing Uncategorized transactions and found no other matches`
         );
         if (appliedMatches > 0) {

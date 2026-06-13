@@ -76,6 +76,7 @@ export async function PATCH(req: NextRequest) {
 
       let learnedRules = 0;
       let appliedMatches = 0;
+      let taxAssigned = 0;
       if (body.learnRule !== false && body.categoryId) {
         const appliedRuleIds = new Set<string>();
         for (const id of ids) {
@@ -86,13 +87,14 @@ export async function PATCH(req: NextRequest) {
             learnedRules += 1;
             const applyResult = await applyCategoryRuleToUncategorizedTransactions(rule.id);
             appliedMatches += applyResult.applied;
+            taxAssigned += applyResult.taxAssigned ?? 0;
           } catch (learnError) {
             console.warn("[category-rules] Failed to save bulk learned rule:", learnError);
           }
         }
       }
 
-      return NextResponse.json({ updated: ids.length, learnedRules, appliedMatches });
+      return NextResponse.json({ updated: ids.length, learnedRules, appliedMatches, taxAssigned });
     }
 
     if (!body?.id) {
@@ -113,18 +115,20 @@ export async function PATCH(req: NextRequest) {
     } as any);
     let rule = null;
     let appliedMatches = 0;
+    let taxAssigned = 0;
     if (body.learnRule !== false && body.categoryId) {
       try {
         rule = await learnCategoryRuleFromTransaction(body.id, body.categoryId);
         if (rule?.id) {
           const applyResult = await applyCategoryRuleToUncategorizedTransactions(rule.id);
           appliedMatches = applyResult.applied;
+          taxAssigned = applyResult.taxAssigned ?? 0;
         }
       } catch (learnError) {
         console.warn("[category-rules] Failed to save learned rule:", learnError);
       }
     }
-    return NextResponse.json({ transaction: updated, rule, appliedMatches });
+    return NextResponse.json({ transaction: updated, rule, appliedMatches, taxAssigned });
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 });
   }

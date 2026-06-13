@@ -350,7 +350,7 @@ export async function applyCategoryRuleToUncategorizedTransactions(ruleId: strin
 
   let candidateQuery = (supabase as any)
     .from("books_transactions")
-    .select("id, merchant, description, financial_account_id")
+    .select("id, merchant, description, amount, date, transaction_type, financial_account_id")
     .eq("user_id", user.id)
     .is("category_id", null)
     .eq("is_transfer", false)
@@ -361,14 +361,14 @@ export async function applyCategoryRuleToUncategorizedTransactions(ruleId: strin
 
   if (candidateError) throw new Error(candidateError.message);
 
-  const matchingIds = (candidates ?? [])
+  const matchingTransactions = (candidates ?? [])
     .filter((tx: any) => {
       const values = transactionSearchValues(tx);
       return matchesRule(values, pattern, rule.match_type);
-    })
-    .map((tx: any) => tx.id);
+    });
+  const matchingIds = matchingTransactions.map((tx: any) => tx.id);
 
-  if (matchingIds.length === 0) return { applied: 0 };
+  if (matchingIds.length === 0) return { applied: 0, taxAssigned: 0 };
 
   const now = new Date().toISOString();
   let applied = 0;
@@ -392,7 +392,14 @@ export async function applyCategoryRuleToUncategorizedTransactions(ruleId: strin
     .eq("id", rule.id)
     .eq("user_id", user.id);
 
+  const { autoAssignTaxEntities } = await import("../services/tax-rule-engine");
+  const taxAssigned = await autoAssignTaxEntities(supabase as any, user.id, matchingTransactions.map((tx: any) => ({
+    ...tx,
+    category_id: rule.category_id,
+  })));
+
   revalidatePath("/books/category-rules");
   revalidatePath("/books/transactions");
-  return { applied };
+  revalidatePath("/books/tax");
+  return { applied, taxAssigned };
 }
