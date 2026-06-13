@@ -97,6 +97,21 @@ function categoryAudit(tx: BooksTransaction) {
   return { label, title: `${label}${confidence}${scope}${pattern}` };
 }
 
+function categorySuggestion(tx: BooksTransaction) {
+  const suggestion = tx.metadata?.category_suggestion as {
+    category_name?: string;
+    confidence?: number;
+    method?: string;
+  } | undefined;
+  if (!suggestion?.category_name) return null;
+  const confidence = typeof suggestion.confidence === "number" ? ` · ${Math.round(suggestion.confidence * 100)}% confidence` : "";
+  const method = suggestion.method ? ` · ${suggestion.method.replace(/_/g, " ")}` : "";
+  return {
+    label: `AI suggested: ${suggestion.category_name}`,
+    title: `Review before applying${confidence}${method}`,
+  };
+}
+
 export default function TransactionsClient({
   transactions,
   totalCount,
@@ -1014,6 +1029,15 @@ export default function TransactionsClient({
                       return (
                         <Badge variant="outline" className="text-xs cursor-help" title={audit.title}>
                           {audit.label}
+                        </Badge>
+                      );
+                    })()}
+                    {(() => {
+                      const suggestion = categorySuggestion(tx);
+                      if (!suggestion) return null;
+                      return (
+                        <Badge variant="outline" className="text-xs cursor-help border-amber-300 bg-amber-50 text-amber-800" title={suggestion.title}>
+                          {suggestion.label}
                         </Badge>
                       );
                     })()}
