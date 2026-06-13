@@ -28,6 +28,40 @@ async function syncTaxViewCategories(
   if (error) console.warn("[books/transactions] tax view category sync failed:", error.message);
 }
 
+async function autoAssignTaxEntitiesForTransactions(
+  supabase: any,
+  userId: string,
+  transactionIds: string[],
+  categoryId: string | number | null | undefined
+) {
+  const ids = [...new Set(transactionIds)].filter(Boolean);
+  if (ids.length === 0 || categoryId == null) return;
+
+  const { data, error } = await (supabase as any)
+    .from("books_transactions")
+    .select("id, description, merchant, amount, date, financial_account_id")
+    .eq("user_id", userId)
+    .in("id", ids);
+  if (error) {
+    console.warn("[books/transactions] tax assignment fetch failed:", error.message);
+    return;
+  }
+
+  await autoAssignTaxEntities(
+    supabase as any,
+    userId,
+    (data ?? []).map((tx: any) => ({
+      id: tx.id,
+      description: tx.description,
+      merchant: tx.merchant ?? null,
+      amount: Number(tx.amount ?? 0),
+      date: tx.date ?? null,
+      category_id: Number(categoryId),
+      financial_account_id: tx.financial_account_id ?? null,
+    }))
+  );
+}
+
 export async function listTransactions(params: {
   taxEntityId?: string; // NEW: Filter by Tax Entity
   udaId?: string; // DEPRECATED: Use taxEntityId instead
@@ -281,6 +315,7 @@ export async function bulkUpdateTransactions(
     }
     if (hasOwn(input, "category_id")) {
       await syncTaxViewCategories(supabase as any, user.id, ids, (input as any).category_id, now);
+      await autoAssignTaxEntitiesForTransactions(supabase as any, user.id, ids, (input as any).category_id);
     }
     revalidatePath("/books/transactions");
     revalidatePath("/books/tax");
@@ -296,6 +331,7 @@ export async function bulkUpdateTransactions(
   if (error) throw new Error(error.message);
   if (hasOwn(input, "category_id")) {
     await syncTaxViewCategories(supabase as any, user.id, ids, (input as any).category_id, now);
+    await autoAssignTaxEntitiesForTransactions(supabase as any, user.id, ids, (input as any).category_id);
   }
   revalidatePath("/books/transactions");
   revalidatePath("/books/tax");
