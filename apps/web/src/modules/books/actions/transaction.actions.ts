@@ -4,6 +4,7 @@ import { createServerSupabaseClient } from "@cashpile/db";
 import { revalidatePath } from "next/cache";
 import type { BooksTransaction } from "../types";
 import { buildTransactionFingerprint, isUniqueViolation } from "../services/duplicate-detection";
+import { autoAssignTaxEntities } from "../services/tax-rule-engine";
 
 function hasOwn(input: object, key: string) {
   return Object.prototype.hasOwnProperty.call(input, key);
@@ -217,6 +218,17 @@ export async function updateTransaction(id: string, input: Partial<BooksTransact
   if (error) throw new Error(error.message);
   if (hasOwn(input, "category_id")) {
     await syncTaxViewCategories(supabase as any, user.id, [id], (input as any).category_id, new Date().toISOString());
+    if ((input as any).category_id != null && data) {
+      await autoAssignTaxEntities(supabase as any, user.id, [{
+        id: data.id,
+        description: data.description,
+        merchant: data.merchant ?? null,
+        amount: Number(data.amount ?? 0),
+        date: data.date ?? null,
+        category_id: Number((input as any).category_id),
+        financial_account_id: (data as any).financial_account_id ?? data.account_id ?? null,
+      }]);
+    }
   }
   revalidatePath("/books/transactions");
   revalidatePath("/books/tax");
