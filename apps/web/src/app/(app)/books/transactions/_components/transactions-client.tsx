@@ -127,6 +127,7 @@ export default function TransactionsClient({
   const [isCategorizing, setIsCategorizing] = useState(false);
   const [categorizeMode, setCategorizeMode] = useState<"rules" | "ai" | null>(null);
   const [categorizeSummary, setCategorizeSummary] = useState<string | null>(null);
+  const [categorizeNeedsReview, setCategorizeNeedsReview] = useState(0);
   const [backfillSummary, setBackfillSummary] = useState<string | null>(null);
   const [isBackfilling, setIsBackfilling] = useState(false);
   const [backfillYear, setBackfillYear] = useState("2025");
@@ -507,6 +508,7 @@ export default function TransactionsClient({
     setIsCategorizing(true);
     setCategorizeMode(useAI ? "ai" : "rules");
     setCategorizeSummary(null);
+    setCategorizeNeedsReview(0);
     try {
       const res = await fetch("/api/books/transactions", {
         method: "POST",
@@ -520,6 +522,7 @@ export default function TransactionsClient({
         ? `Categorized ${data.categorized} of ${data.scanned} reviewed transactions (${data.learnedMatches} learned, ${data.ruleMatches} rules, ${data.aiMatches} AI). Saved ${data.learnedRulesSaved ?? 0} learned rule${data.learnedRulesSaved === 1 ? "" : "s"} and assigned ${data.taxAssigned ?? 0} to Tax Entities. ${data.needsReview} still need review.`
         : `Applied rules to ${data.categorized} of ${data.scanned} uncategorized transactions (${data.learnedMatches} learned, ${data.ruleMatches} rules) and assigned ${data.taxAssigned ?? 0} to Tax Entities. ${data.needsReview} still need review.`;
       setCategorizeSummary(summary);
+      setCategorizeNeedsReview(Number(data.needsReview ?? 0));
       toast.success(summary);
       router.refresh();
 
@@ -696,8 +699,13 @@ export default function TransactionsClient({
       } />
 
       {categorizeSummary && (
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-          {categorizeSummary}
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          <span>{categorizeSummary}</span>
+          {categorizeNeedsReview > 0 && (
+            <Link href="/books/transactions/ai-review">
+              <Button variant="outline" size="sm">Review suggestions</Button>
+            </Link>
+          )}
         </div>
       )}
 
