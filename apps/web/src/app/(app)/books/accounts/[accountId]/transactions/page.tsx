@@ -35,7 +35,7 @@ export default async function AccountTransactionsPage({
   searchParams,
 }: {
   params: { accountId: string };
-  searchParams: { categoryId?: string; from?: string; to?: string; offset?: string; search?: string };
+  searchParams: { categoryId?: string; from?: string; to?: string; offset?: string; search?: string; filter?: "uncategorized" | "categorized" };
 }) {
   const account = await getAccount(params.accountId);
   if (!account) notFound();
@@ -48,7 +48,13 @@ export default async function AccountTransactionsPage({
   const offset = searchParams.offset ? Number(searchParams.offset) : 0;
 
   const [{ data: transactions, count }, entities, categories, udas] = await Promise.all([
-    listTransactions({ ...filters, limit: 100, offset: Number.isFinite(offset) ? offset : 0 }),
+    listTransactions({
+      ...filters,
+      dateFrom: searchParams.from,
+      dateTo: searchParams.to,
+      limit: 100,
+      offset: Number.isFinite(offset) ? offset : 0,
+    }),
     listTaxEntities(),
     listCategories(),
     listUdas(),

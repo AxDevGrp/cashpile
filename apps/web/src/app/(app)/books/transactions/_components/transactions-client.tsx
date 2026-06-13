@@ -37,7 +37,7 @@ interface Props {
   categories: BooksCategory[];
   udas: (BooksUda & { books_financial_accounts?: { id: string; name: string }[] })[];
   accounts?: { id: string; name: string; institution_name?: string | null; institution?: string | null; last_four_digits?: string | null }[];
-  filters: { udaId?: string; accountId?: string; categoryId?: string; from?: string; to?: string; search?: string; filter?: "uncategorized" | "categorized" };
+  filters: { taxEntityId?: string; udaId?: string; accountId?: string; categoryId?: string; from?: string; to?: string; search?: string; filter?: "uncategorized" | "categorized" };
   loadError?: string;
   title?: string;
   description?: string;
@@ -161,6 +161,7 @@ export default function TransactionsClient({
       : "all";
   const hasActiveQuery = Boolean(
     filters.search?.trim() ||
+    filters.taxEntityId ||
     filters.accountId ||
     filters.udaId ||
     filters.categoryId ||
@@ -211,6 +212,7 @@ export default function TransactionsClient({
       setClientError(undefined);
       try {
         const params = new URLSearchParams(searchParams.toString());
+        if (filters.taxEntityId && !params.has("taxEntityId")) params.set("taxEntityId", filters.taxEntityId);
         if (filters.accountId && !params.has("accountId")) params.set("accountId", filters.accountId);
         if (filters.udaId && !params.has("udaId")) params.set("udaId", filters.udaId);
         if (filters.categoryId && !params.has("categoryId")) params.set("categoryId", filters.categoryId);
@@ -247,7 +249,7 @@ export default function TransactionsClient({
     return () => {
       cancelled = true;
     };
-  }, [filters.accountId, filters.categoryId, filters.filter, filters.from, filters.search, filters.to, filters.udaId, searchParams, shouldLoadTransactions]);
+  }, [filters.accountId, filters.categoryId, filters.filter, filters.from, filters.search, filters.taxEntityId, filters.to, filters.udaId, searchParams, shouldLoadTransactions]);
 
   useEffect(() => {
     setSearchDraft(filters.search ?? "");
