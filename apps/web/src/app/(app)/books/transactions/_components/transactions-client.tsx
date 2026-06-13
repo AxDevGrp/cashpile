@@ -1069,7 +1069,7 @@ export default function TransactionsClient({
                               categoryOptions.find((category) => String(category.id) === String(suggestion.categoryId))
                             )}
                           >
-                            Apply suggestion
+                            Apply & learn
                           </button>
                         </>
                       );
