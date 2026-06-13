@@ -474,6 +474,12 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
                         <h2 className="text-lg font-semibold">{suggestion.pattern}</h2>
                         <Badge variant="secondary">{suggestion.count} transactions</Badge>
                         <Badge variant={suggestion.confidence >= 0.9 ? "default" : "outline"}>{confidenceLabel(suggestion.confidence)} confidence</Badge>
+                        {suggestion.suggestedCategoryName && (
+                          <Badge variant="outline">Suggested category: {suggestion.suggestedCategoryName}</Badge>
+                        )}
+                        {suggestion.suggestedTaxEntityName && (
+                          <Badge variant="outline">Suggested entity: {suggestion.suggestedTaxEntityName}</Badge>
+                        )}
                       </div>
                       <p className="mt-1 text-sm text-muted-foreground">{suggestion.accountLabel} · {formatCurrency(suggestion.totalAmount)} total · {suggestion.firstDate ? formatDate(suggestion.firstDate) : "—"} to {suggestion.lastDate ? formatDate(suggestion.lastDate) : "—"}</p>
                       <p className="mt-1 text-xs text-muted-foreground">{suggestion.reason}</p>
