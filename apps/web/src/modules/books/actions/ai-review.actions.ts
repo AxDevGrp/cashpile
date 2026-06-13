@@ -168,6 +168,8 @@ export interface AiReviewSuggestion {
 
 export async function listAiReviewSuggestions(limit = 40, accountId?: string | null): Promise<{
   suggestions: AiReviewSuggestion[];
+  totalSuggestions: number;
+  limit: number;
   categories: any[];
   taxEntities: any[];
   accounts: any[];
@@ -334,10 +336,12 @@ export async function listAiReviewSuggestions(limit = 40, accountId?: string | n
     });
   }
 
+  const sortedSuggestions = suggestions.sort((a, b) => (b.confidence - a.confidence) || (b.count - a.count));
+
   return {
-    suggestions: suggestions
-      .sort((a, b) => (b.confidence - a.confidence) || (b.count - a.count))
-      .slice(0, limit),
+    suggestions: sortedSuggestions.slice(0, limit),
+    totalSuggestions: sortedSuggestions.length,
+    limit,
     categories: categories ?? [],
     taxEntities: taxEntities ?? [],
     accounts: accounts ?? [],

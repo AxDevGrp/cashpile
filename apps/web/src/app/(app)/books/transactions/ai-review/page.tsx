@@ -3,7 +3,9 @@ import AiReviewClient from "./_components/ai-review-client";
 
 export const metadata = { title: "AI Review — Transactions | Cashpile" };
 
-export default async function AiReviewPage({ searchParams }: { searchParams?: { accountId?: string } }) {
-  const data = await listAiReviewSuggestions(40, searchParams?.accountId ?? null);
+export default async function AiReviewPage({ searchParams }: { searchParams?: { accountId?: string; limit?: string } }) {
+  const requestedLimit = Number(searchParams?.limit ?? 100);
+  const limit = Number.isFinite(requestedLimit) ? Math.min(Math.max(requestedLimit, 40), 500) : 100;
+  const data = await listAiReviewSuggestions(limit, searchParams?.accountId ?? null);
   return <AiReviewClient initialData={data} />;
 }

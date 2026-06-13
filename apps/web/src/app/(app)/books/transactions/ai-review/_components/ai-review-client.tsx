@@ -9,6 +9,8 @@ import type { AiReviewSuggestion } from "@/modules/books/actions/ai-review.actio
 
 type Data = {
   suggestions: AiReviewSuggestion[];
+  totalSuggestions: number;
+  limit: number;
   categories: Array<{ id: string | number; name: string; parent_category_id?: string | number | null }>;
   taxEntities: Array<{ id: string; name: string; entity_type?: string }>;
   accounts: Array<{ id: string; name: string; institution_name?: string | null; last_four_digits?: string | null }>;
@@ -74,6 +76,7 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
   const [savingId, setSavingId] = useState<string | null>(null);
   const selectedSuggestions = suggestions.filter((suggestion) => selectedSuggestionIds.has(suggestion.id));
   const totalSuggestedTransactions = suggestions.reduce((sum, suggestion) => sum + suggestion.count, 0);
+  const showMoreHref = `${initialData.activeAccount ? `/books/transactions/ai-review?accountId=${encodeURIComponent(initialData.activeAccount.id)}&` : "/books/transactions/ai-review?"}limit=${Math.min(initialData.limit + 100, 500)}`;
   const selectableSuggestions = suggestions.filter((suggestion) => {
     const draft = drafts[suggestion.id];
     return Boolean(draft?.categoryId || draft?.taxEntityId);
@@ -434,7 +437,7 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
                   Select suggestions after confirming their Category / Tax Entity. Cashpile applies each one and saves future rules.
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  {suggestions.length} suggestion{suggestions.length === 1 ? "" : "s"} covering {totalSuggestedTransactions} transaction{totalSuggestedTransactions === 1 ? "" : "s"}; {selectableSuggestions.length} ready to accept.
+                  Showing {suggestions.length} of {initialData.totalSuggestions} suggestion{initialData.totalSuggestions === 1 ? "" : "s"}, covering {totalSuggestedTransactions} displayed transaction{totalSuggestedTransactions === 1 ? "" : "s"}; {selectableSuggestions.length} ready to accept.
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -455,6 +458,11 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
                 <Button onClick={acceptSelectedSuggestions} disabled={bulkProgress !== null || selectedSuggestionIds.size === 0}>
                   {bulkProgress ? `Applying ${bulkProgress.done}/${bulkProgress.total}…` : `Accept selected & save rules (${selectedSuggestionIds.size})`}
                 </Button>
+                {suggestions.length < initialData.totalSuggestions && (
+                  <Link href={showMoreHref}>
+                    <Button variant="outline" disabled={bulkProgress !== null}>Show more</Button>
+                  </Link>
+                )}
               </div>
             </div>
             {bulkProgress && (
