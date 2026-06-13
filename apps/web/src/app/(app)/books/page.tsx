@@ -64,6 +64,14 @@ export default async function BooksPage() {
       valueLabel: "need review",
       icon: Tags,
     },
+    {
+      href: "/books/transactions/ai-review",
+      label: "AI Review",
+      desc: "Accept grouped Cashpile suggestions once, then save rules that apply to matching current and future transactions.",
+      value: "Smart",
+      valueLabel: "rule builder",
+      icon: ListChecks,
+    },
   ];
 
   const setupTasks = [

@@ -579,6 +579,9 @@ export default function TransactionsClient({
           <Button onClick={() => runBulkCategorization(true)} disabled={isCategorizing} variant="outline">
             {isCategorizing && categorizeMode === "ai" ? "Categorizing…" : "Rules + AI"}
           </Button>
+          <Link href="/books/transactions/ai-review">
+            <Button variant="outline">AI Review</Button>
+          </Link>
           <details className="group relative">
             <summary className="flex h-10 cursor-pointer list-none items-center gap-2 rounded-md border border-input bg-background px-4 py-2 text-sm font-medium ring-offset-background transition-colors hover:bg-accent hover:text-accent-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 [&::-webkit-details-marker]:hidden">
               Category
