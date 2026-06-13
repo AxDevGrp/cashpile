@@ -24,6 +24,7 @@ export async function POST(req: NextRequest) {
         taxEntityId: body.taxEntityId ?? null,
         applyToExisting: body.applyToExisting !== false,
         setAccountDefault: body.setAccountDefault !== false,
+        dryRun: body.dryRun === true,
       });
       return NextResponse.json(result);
     }

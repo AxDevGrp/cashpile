@@ -14,6 +14,18 @@ type Data = {
   accounts: Array<{ id: string; name: string; institution_name?: string | null; last_four_digits?: string | null }>;
 };
 
+type InstructionPreview = {
+  inferredAccountName: string | null;
+  inferredPattern: string | null;
+  inferredCategoryName: string | null;
+  inferredTaxEntityName: string | null;
+  matchedTransactions: number;
+  uncategorizedMatches: number;
+  willSetAccountDefault: boolean;
+  willCreateCategoryRule: boolean;
+  willCreateTaxRule: boolean;
+};
+
 function categoryLabel(category: Data["categories"][number], categories: Data["categories"]) {
   const parent = category.parent_category_id
     ? categories.find((item) => String(item.id) === String(category.parent_category_id))
@@ -37,6 +49,8 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
   const [instructionTaxEntityId, setInstructionTaxEntityId] = useState("");
   const [setAccountDefault, setSetAccountDefault] = useState(true);
   const [isApplyingInstruction, setIsApplyingInstruction] = useState(false);
+  const [isPreviewingInstruction, setIsPreviewingInstruction] = useState(false);
+  const [instructionPreview, setInstructionPreview] = useState<InstructionPreview | null>(null);
   const [drafts, setDrafts] = useState<Record<string, { categoryId: string; taxEntityId: string; applyAccountDefault: boolean }>>(() =>
     Object.fromEntries(initialData.suggestions.map((suggestion) => [
       suggestion.id,
@@ -88,19 +102,21 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
     }
   }
 
-  async function applyInstruction() {
+  async function submitInstruction(dryRun: boolean) {
     if (!instruction.trim()) {
       toast.error("Tell Cashpile what rule to create");
       return;
     }
 
-    setIsApplyingInstruction(true);
+    if (dryRun) setIsPreviewingInstruction(true);
+    else setIsApplyingInstruction(true);
     try {
       const res = await fetch("/api/books/ai-review", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           mode: "instruction",
+          dryRun,
           instruction,
           accountId: instructionAccountId || null,
           pattern: instructionPattern || null,
@@ -113,16 +129,24 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Unable to apply instruction");
 
+      if (dryRun) {
+        setInstructionPreview(data);
+        toast.success("Preview ready. Confirm before applying.");
+        return;
+      }
+
       toast.success(
         `Instruction applied: ${data.categorizedTransactions ?? 0} categorized, ${data.assignedTaxViews ?? 0} assigned${data.accountDefaultApplied ? ", account default saved" : ""}`
       );
       setInstruction("");
       setInstructionPattern("");
+      setInstructionPreview(null);
       router.refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Unable to apply instruction");
     } finally {
-      setIsApplyingInstruction(false);
+      if (dryRun) setIsPreviewingInstruction(false);
+      else setIsApplyingInstruction(false);
     }
   }
 
@@ -226,8 +250,32 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
             </label>
           )}
 
+          {instructionPreview && (
+            <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-950">
+              <div className="font-medium">Preview</div>
+              <div className="mt-1 grid gap-1 md:grid-cols-2">
+                <div>Account: {instructionPreview.inferredAccountName ?? "All / not specified"}</div>
+                <div>Pattern: {instructionPreview.inferredPattern ?? "Account-wide"}</div>
+                <div>Category: {instructionPreview.inferredCategoryName ?? "No category change"}</div>
+                <div>Tax Entity: {instructionPreview.inferredTaxEntityName ?? "No Tax Entity change"}</div>
+                <div>Matches: {instructionPreview.matchedTransactions} transaction{instructionPreview.matchedTransactions === 1 ? "" : "s"}</div>
+                <div>Uncategorized to update: {instructionPreview.uncategorizedMatches}</div>
+              </div>
+              <div className="mt-2 text-xs">
+                Will save: {[
+                  instructionPreview.willCreateCategoryRule ? "category rule" : null,
+                  instructionPreview.willCreateTaxRule ? "Tax Entity rule" : null,
+                  instructionPreview.willSetAccountDefault ? "account default" : null,
+                ].filter(Boolean).join(", ") || "current transaction updates only"}
+              </div>
+            </div>
+          )}
+
           <div className="flex flex-wrap items-center gap-3">
-            <Button onClick={applyInstruction} disabled={isApplyingInstruction}>
+            <Button variant="outline" onClick={() => submitInstruction(true)} disabled={isPreviewingInstruction || isApplyingInstruction}>
+              {isPreviewingInstruction ? "Previewing…" : "Preview Instruction"}
+            </Button>
+            <Button onClick={() => submitInstruction(false)} disabled={isApplyingInstruction || isPreviewingInstruction}>
               {isApplyingInstruction ? "Applying instruction…" : "Apply Instruction & Save Rules"}
             </Button>
             <p className="text-xs text-muted-foreground">

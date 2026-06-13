@@ -315,12 +315,18 @@ export async function applyAiInstruction(input: {
   taxEntityId?: string | null;
   applyToExisting?: boolean;
   setAccountDefault?: boolean;
+  dryRun?: boolean;
 }): Promise<{
   instruction: string;
   inferredAccountName: string | null;
   inferredPattern: string | null;
   inferredCategoryName: string | null;
   inferredTaxEntityName: string | null;
+  matchedTransactions: number;
+  uncategorizedMatches: number;
+  willSetAccountDefault: boolean;
+  willCreateCategoryRule: boolean;
+  willCreateTaxRule: boolean;
   accountDefaultApplied: boolean;
   categoryRuleCreated: boolean;
   taxRuleCreated: boolean;
@@ -378,7 +384,8 @@ export async function applyAiInstruction(input: {
 
   let accountDefaultApplied = false;
   let assignedTaxViews = 0;
-  if (account && taxEntity && input.setAccountDefault !== false) {
+  const willSetAccountDefault = Boolean(account && taxEntity && input.setAccountDefault !== false);
+  if (!input.dryRun && willSetAccountDefault) {
     const result = await assignAccountToTaxEntity(account.id, taxEntity.id);
     assignedTaxViews += result.assigned_transaction_count ?? 0;
     accountDefaultApplied = true;
@@ -418,12 +425,15 @@ export async function applyAiInstruction(input: {
     }
   }
 
+  const willCreateCategoryRule = Boolean(category && pattern);
+  const willCreateTaxRule = Boolean(taxEntity && pattern);
+
   if (category) {
-    if (pattern) {
+    if (!input.dryRun && willCreateCategoryRule) {
       await createCategoryRule({ pattern, categoryId: category.id, source: "manual", priority: account ? 120 : 90 });
       categoryRuleCreated = true;
     }
-    if (input.applyToExisting !== false && uncategorizedMatchingTransactionIds.length > 0) {
+    if (!input.dryRun && input.applyToExisting !== false && uncategorizedMatchingTransactionIds.length > 0) {
       const now = new Date().toISOString();
       const chunkSize = 500;
       for (let i = 0; i < uncategorizedMatchingTransactionIds.length; i += chunkSize) {
@@ -440,11 +450,11 @@ export async function applyAiInstruction(input: {
     }
   }
 
-  if (taxEntity && pattern) {
+  if (!input.dryRun && willCreateTaxRule) {
     await createTaxAssignmentRule({ pattern, match_type: "contains", tax_entity_id: taxEntity.id, priority: account ? 120 : 90 });
     taxRuleCreated = true;
   }
-  if (taxEntity && input.applyToExisting !== false && matchingTransactionIds.length > 0 && !accountDefaultApplied) {
+  if (!input.dryRun && taxEntity && input.applyToExisting !== false && matchingTransactionIds.length > 0 && !accountDefaultApplied) {
     const result = await assignTransactions({
       transactionIds: matchingTransactionIds,
       taxEntityId: taxEntity.id,
@@ -455,11 +465,13 @@ export async function applyAiInstruction(input: {
     assignedTaxViews += result.assigned;
   }
 
-  revalidatePath("/books/transactions");
-  revalidatePath("/books/transactions/ai-review");
-  revalidatePath("/books/category-rules");
-  revalidatePath("/books/tax");
-  revalidatePath("/books/accounts");
+  if (!input.dryRun) {
+    revalidatePath("/books/transactions");
+    revalidatePath("/books/transactions/ai-review");
+    revalidatePath("/books/category-rules");
+    revalidatePath("/books/tax");
+    revalidatePath("/books/accounts");
+  }
 
   return {
     instruction,
@@ -467,6 +479,11 @@ export async function applyAiInstruction(input: {
     inferredPattern: pattern || null,
     inferredCategoryName: category?.name ?? null,
     inferredTaxEntityName: taxEntity?.name ?? null,
+    matchedTransactions: matchingTransactionIds.length,
+    uncategorizedMatches: uncategorizedMatchingTransactionIds.length,
+    willSetAccountDefault,
+    willCreateCategoryRule,
+    willCreateTaxRule,
     accountDefaultApplied,
     categoryRuleCreated,
     taxRuleCreated,
