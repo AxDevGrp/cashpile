@@ -17,6 +17,7 @@ interface CategoryRuleRow {
   match_type: "contains" | "equals";
   category_id: string | number;
   priority: number;
+  financial_account_id?: string | null;
 }
 
 interface TransactionRow {
@@ -27,6 +28,7 @@ interface TransactionRow {
   transaction_type?: string | null;
   type?: string | null;
   category_id?: string | number | null;
+  financial_account_id?: string | null;
 }
 
 interface CategorizationMatch {
@@ -280,7 +282,7 @@ function getLearnedMatch(
 async function fetchCategoryRules(supabase: SupabaseLike, userId: string) {
   const { data, error } = await supabase
     .from("books_category_rules")
-    .select("id, pattern, match_type, category_id, priority")
+    .select("id, pattern, match_type, category_id, priority, financial_account_id")
     .eq("user_id", userId)
     .eq("is_active", true)
     .order("priority", { ascending: false })
@@ -301,6 +303,7 @@ function getCategoryRuleMatch(
   const normalized = normalizeText(`${tx.merchant ?? ""} ${tx.description}`);
 
   for (const rule of rules) {
+    if (rule.financial_account_id && rule.financial_account_id !== tx.financial_account_id) continue;
     const pattern = normalizeText(rule.pattern);
     if (!pattern) continue;
     const isMatch = rule.match_type === "equals" ? normalized === pattern : normalized.includes(pattern);
@@ -353,7 +356,7 @@ async function fetchCategories(supabase: SupabaseLike, userId: string) {
 async function fetchUncategorizedTransactions(supabase: SupabaseLike, userId: string, limit: number) {
   const { data, error } = await supabase
     .from("books_transactions")
-    .select("id, description, merchant, amount, transaction_type, category_id")
+    .select("id, description, merchant, amount, transaction_type, category_id, financial_account_id")
     .eq("user_id", userId)
     .is("category_id", null)
     .eq("is_transfer", false)
@@ -367,7 +370,7 @@ async function fetchUncategorizedTransactionsByIds(supabase: SupabaseLike, userI
   if (ids.length === 0) return [] as TransactionRow[];
   const { data, error } = await supabase
     .from("books_transactions")
-    .select("id, description, merchant, amount, transaction_type, category_id")
+    .select("id, description, merchant, amount, transaction_type, category_id, financial_account_id")
     .eq("user_id", userId)
     .in("id", ids)
     .is("category_id", null)
@@ -379,7 +382,7 @@ async function fetchUncategorizedTransactionsByIds(supabase: SupabaseLike, userI
 async function fetchCategorizedTransactions(supabase: SupabaseLike, userId: string) {
   const { data, error } = await supabase
     .from("books_transactions")
-    .select("id, description, merchant, amount, transaction_type, category_id")
+    .select("id, description, merchant, amount, transaction_type, category_id, financial_account_id")
     .eq("user_id", userId)
     .not("category_id", "is", null)
     .order("date", { ascending: false })

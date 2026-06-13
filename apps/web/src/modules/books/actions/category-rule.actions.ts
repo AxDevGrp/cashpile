@@ -13,6 +13,7 @@ export interface BooksCategoryRule {
   category_id: number;
   is_active: boolean;
   priority: number;
+  financial_account_id?: string | null;
   source: "manual" | "learned" | "system";
   match_count: number;
   last_matched_at?: string | null;
@@ -138,6 +139,7 @@ export async function createCategoryRule(input: {
   matchType?: "contains" | "equals";
   source?: "manual" | "learned" | "system";
   priority?: number;
+  accountId?: string | null;
 }) {
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -149,6 +151,7 @@ export async function createCategoryRule(input: {
   const row = {
     user_id: user.id,
     pattern,
+    financial_account_id: input.accountId ?? null,
     category_id: Number(input.categoryId),
     match_type: input.matchType ?? "contains",
     source: input.source ?? "manual",
@@ -157,9 +160,26 @@ export async function createCategoryRule(input: {
     updated_at: new Date().toISOString(),
   };
 
-  const { data, error } = await (supabase as any)
+  let existingQuery = (supabase as any)
     .from("books_category_rules")
-    .upsert(row, { onConflict: "user_id,pattern" })
+    .select("*, books_categories(id, name)")
+    .eq("user_id", user.id)
+    .eq("pattern", pattern);
+  existingQuery = input.accountId ? existingQuery.eq("financial_account_id", input.accountId) : existingQuery.is("financial_account_id", null);
+  const { data: existing, error: existingError } = await existingQuery.maybeSingle();
+  if (existingError) throw new Error(existingError.message);
+
+  const query = existing
+    ? (supabase as any)
+      .from("books_category_rules")
+      .update(row)
+      .eq("id", existing.id)
+      .eq("user_id", user.id)
+    : (supabase as any)
+      .from("books_category_rules")
+      .insert(row);
+
+  const { data, error } = await query
     .select("*, books_categories(id, name)")
     .single();
 
@@ -175,6 +195,7 @@ export async function updateCategoryRule(id: string, input: Partial<{
   matchType: "contains" | "equals";
   isActive: boolean;
   priority: number;
+  accountId: string | null;
 }>) {
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -186,6 +207,7 @@ export async function updateCategoryRule(id: string, input: Partial<{
   if (input.matchType !== undefined) update.match_type = input.matchType;
   if (input.isActive !== undefined) update.is_active = input.isActive;
   if (input.priority !== undefined) update.priority = input.priority;
+  if (input.accountId !== undefined) update.financial_account_id = input.accountId;
 
   const { data, error } = await (supabase as any)
     .from("books_category_rules")
@@ -224,7 +246,7 @@ export async function learnCategoryRuleFromTransaction(transactionId: string, ca
 
   const { data: tx, error } = await (supabase as any)
     .from("books_transactions")
-    .select("merchant, description")
+    .select("merchant, description, financial_account_id")
     .eq("id", transactionId)
     .eq("user_id", user.id)
     .single();
@@ -232,7 +254,7 @@ export async function learnCategoryRuleFromTransaction(transactionId: string, ca
   if (error) throw new Error(error.message);
   const pattern = deriveLearnedPattern(tx?.merchant, tx?.description);
   if (!pattern) return null;
-  return createCategoryRule({ pattern, categoryId, source: "learned" });
+  return createCategoryRule({ pattern, categoryId, source: "learned", accountId: tx?.financial_account_id ?? null });
 }
 
 export async function applyCategoryRuleToUncategorizedTransactions(ruleId: string) {
@@ -242,7 +264,7 @@ export async function applyCategoryRuleToUncategorizedTransactions(ruleId: strin
 
   const { data: rule, error: ruleError } = await (supabase as any)
     .from("books_category_rules")
-    .select("id, pattern, match_type, category_id, match_count")
+    .select("id, pattern, match_type, category_id, match_count, financial_account_id")
     .eq("id", ruleId)
     .eq("user_id", user.id)
     .eq("is_active", true)
@@ -253,13 +275,16 @@ export async function applyCategoryRuleToUncategorizedTransactions(ruleId: strin
   const pattern = normalizePattern(rule?.pattern);
   if (!pattern) return { applied: 0 };
 
-  const { data: candidates, error: candidateError } = await (supabase as any)
+  let candidateQuery = (supabase as any)
     .from("books_transactions")
-    .select("id, merchant, description")
+    .select("id, merchant, description, financial_account_id")
     .eq("user_id", user.id)
     .is("category_id", null)
     .eq("is_transfer", false)
     .limit(10000);
+  if (rule.financial_account_id) candidateQuery = candidateQuery.eq("financial_account_id", rule.financial_account_id);
+
+  const { data: candidates, error: candidateError } = await candidateQuery;
 
   if (candidateError) throw new Error(candidateError.message);
 

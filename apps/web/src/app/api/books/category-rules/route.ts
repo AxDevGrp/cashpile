@@ -37,6 +37,7 @@ export async function POST(req: NextRequest) {
         matchType: body.matchType,
         source: "manual",
         priority: body.priority,
+        accountId: body.accountId ?? null,
       }));
     }
 

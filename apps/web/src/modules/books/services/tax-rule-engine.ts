@@ -18,6 +18,7 @@ export interface TaxAssignmentRule {
   deduction_percentage: number;
   is_active: boolean;
   priority: number;
+  financial_account_id?: string | null;
 }
 
 export interface TransactionForRuleMatching {
@@ -103,6 +104,10 @@ function transactionMatchesRule(
   transaction: TransactionForRuleMatching,
   rule: TaxAssignmentRule
 ): boolean {
+  if (rule.financial_account_id && rule.financial_account_id !== transaction.financial_account_id) {
+    return false;
+  }
+
   const text = `${transaction.description} ${transaction.merchant ?? ""}`.toLowerCase();
   const pattern = rule.pattern.toLowerCase();
 

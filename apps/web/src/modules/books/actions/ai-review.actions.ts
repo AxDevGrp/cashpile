@@ -286,11 +286,11 @@ export async function acceptAiReviewSuggestion(input: {
   let accountRuleUpdated = false;
   if (input.createRule !== false) {
     if (input.categoryId) {
-      await createCategoryRule({ pattern: input.pattern, categoryId: input.categoryId, source: "manual", priority: input.accountId ? 100 : 80 });
+      await createCategoryRule({ pattern: input.pattern, categoryId: input.categoryId, source: "manual", priority: input.accountId ? 100 : 80, accountId: input.accountId ?? null });
       categoryRuleCreated = true;
     }
     if (input.taxEntityId) {
-      await createTaxAssignmentRule({ pattern: input.pattern, match_type: "contains", tax_entity_id: input.taxEntityId, priority: input.accountId ? 100 : 80 });
+      await createTaxAssignmentRule({ pattern: input.pattern, match_type: "contains", tax_entity_id: input.taxEntityId, priority: input.accountId ? 100 : 80, financial_account_id: input.accountId ?? null });
       taxRuleCreated = true;
     }
   }
@@ -327,6 +327,7 @@ export async function applyAiInstruction(input: {
   willSetAccountDefault: boolean;
   willCreateCategoryRule: boolean;
   willCreateTaxRule: boolean;
+  ruleScope: "account" | "global";
   accountDefaultApplied: boolean;
   categoryRuleCreated: boolean;
   taxRuleCreated: boolean;
@@ -385,6 +386,7 @@ export async function applyAiInstruction(input: {
   let accountDefaultApplied = false;
   let assignedTaxViews = 0;
   const willSetAccountDefault = Boolean(account && taxEntity && input.setAccountDefault !== false);
+  const ruleScope = account ? "account" : "global";
   if (!input.dryRun && willSetAccountDefault) {
     const result = await assignAccountToTaxEntity(account.id, taxEntity.id);
     assignedTaxViews += result.assigned_transaction_count ?? 0;
@@ -430,7 +432,7 @@ export async function applyAiInstruction(input: {
 
   if (category) {
     if (!input.dryRun && willCreateCategoryRule) {
-      await createCategoryRule({ pattern, categoryId: category.id, source: "manual", priority: account ? 120 : 90 });
+      await createCategoryRule({ pattern, categoryId: category.id, source: "manual", priority: account ? 120 : 90, accountId: account?.id ?? null });
       categoryRuleCreated = true;
     }
     if (!input.dryRun && input.applyToExisting !== false && uncategorizedMatchingTransactionIds.length > 0) {
@@ -451,7 +453,7 @@ export async function applyAiInstruction(input: {
   }
 
   if (!input.dryRun && willCreateTaxRule) {
-    await createTaxAssignmentRule({ pattern, match_type: "contains", tax_entity_id: taxEntity.id, priority: account ? 120 : 90 });
+    await createTaxAssignmentRule({ pattern, match_type: "contains", tax_entity_id: taxEntity.id, priority: account ? 120 : 90, financial_account_id: account?.id ?? null });
     taxRuleCreated = true;
   }
   if (!input.dryRun && taxEntity && input.applyToExisting !== false && matchingTransactionIds.length > 0 && !accountDefaultApplied) {
@@ -484,6 +486,7 @@ export async function applyAiInstruction(input: {
     willSetAccountDefault,
     willCreateCategoryRule,
     willCreateTaxRule,
+    ruleScope,
     accountDefaultApplied,
     categoryRuleCreated,
     taxRuleCreated,

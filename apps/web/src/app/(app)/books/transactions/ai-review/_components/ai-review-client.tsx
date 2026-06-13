@@ -24,6 +24,7 @@ type InstructionPreview = {
   willSetAccountDefault: boolean;
   willCreateCategoryRule: boolean;
   willCreateTaxRule: boolean;
+  ruleScope: "account" | "global";
 };
 
 function categoryLabel(category: Data["categories"][number], categories: Data["categories"]) {
@@ -295,6 +296,7 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
                 <div>Tax Entity: {instructionPreview.inferredTaxEntityName ?? "No Tax Entity change"}</div>
                 <div>Matches: {instructionPreview.matchedTransactions} transaction{instructionPreview.matchedTransactions === 1 ? "" : "s"}</div>
                 <div>Uncategorized to update: {instructionPreview.uncategorizedMatches}</div>
+                <div>Rule scope: {instructionPreview.ruleScope === "account" ? "This account only" : "All accounts"}</div>
               </div>
               <div className="mt-2 text-xs">
                 Will save: {[

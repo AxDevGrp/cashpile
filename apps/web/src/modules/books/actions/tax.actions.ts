@@ -311,6 +311,7 @@ export type TaxAssignmentRule = {
   deduction_percentage: number;
   is_active: boolean;
   priority: number;
+  financial_account_id?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -322,6 +323,7 @@ export type CreateRuleInput = {
   business_percentage?: number;
   deduction_percentage?: number;
   priority?: number;
+  financial_account_id?: string | null;
 };
 
 export type UpdateRuleInput = Partial<CreateRuleInput> & {
@@ -356,18 +358,42 @@ export async function createTaxAssignmentRule(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthenticated");
 
-  const { data, error } = await supabase
+  const row = {
+    user_id: user.id,
+    pattern: input.pattern,
+    financial_account_id: input.financial_account_id ?? null,
+    match_type: input.match_type,
+    tax_entity_id: input.tax_entity_id,
+    business_percentage: input.business_percentage ?? 100,
+    deduction_percentage: input.deduction_percentage ?? 100,
+    priority: input.priority ?? 0,
+    is_active: true,
+    updated_at: new Date().toISOString(),
+  };
+
+  let existingQuery = (supabase as any)
     .from("books_tax_assignment_rules")
-    .insert({
-      user_id: user.id,
-      pattern: input.pattern,
-      match_type: input.match_type,
-      tax_entity_id: input.tax_entity_id,
-      business_percentage: input.business_percentage ?? 100,
-      deduction_percentage: input.deduction_percentage ?? 100,
-      priority: input.priority ?? 0,
-      is_active: true,
-    })
+    .select("id")
+    .eq("user_id", user.id)
+    .eq("pattern", input.pattern)
+    .eq("tax_entity_id", input.tax_entity_id);
+  existingQuery = input.financial_account_id
+    ? existingQuery.eq("financial_account_id", input.financial_account_id)
+    : existingQuery.is("financial_account_id", null);
+  const { data: existing, error: existingError } = await existingQuery.maybeSingle();
+  if (existingError) throw new Error(existingError.message);
+
+  const query = existing
+    ? supabase
+      .from("books_tax_assignment_rules")
+      .update(row)
+      .eq("id", existing.id)
+      .eq("user_id", user.id)
+    : supabase
+      .from("books_tax_assignment_rules")
+      .insert(row);
+
+  const { data, error } = await query
     .select()
     .single();
 
