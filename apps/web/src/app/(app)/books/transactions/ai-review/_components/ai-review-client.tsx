@@ -25,6 +25,8 @@ type InstructionPreview = {
   willCreateCategoryRule: boolean;
   willCreateTaxRule: boolean;
   ruleScope: "account" | "global";
+  interpretationSource: "explicit" | "deterministic" | "ai";
+  interpretationReason: string | null;
 };
 
 function categoryLabel(category: Data["categories"][number], categories: Data["categories"]) {
@@ -368,7 +370,11 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
                 <div>Matches: {instructionPreview.matchedTransactions} transaction{instructionPreview.matchedTransactions === 1 ? "" : "s"}</div>
                 <div>Uncategorized to update: {instructionPreview.uncategorizedMatches}</div>
                 <div>Rule scope: {instructionPreview.ruleScope === "account" ? "This account only" : "All accounts"}</div>
+                <div>Interpreted by: {instructionPreview.interpretationSource === "ai" ? "AI" : instructionPreview.interpretationSource === "explicit" ? "Your selected fields" : "Cashpile rules"}</div>
               </div>
+              {instructionPreview.interpretationReason && (
+                <div className="mt-2 text-xs">Reason: {instructionPreview.interpretationReason}</div>
+              )}
               <div className="mt-2 text-xs">
                 Will save: {[
                   instructionPreview.willCreateCategoryRule ? "category rule" : null,

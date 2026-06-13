@@ -2,7 +2,7 @@
 
 import { createServerSupabaseClient } from "@cashpile/db";
 import { revalidatePath } from "next/cache";
-import { categorizeTransactions as aiCategorizeTransactions } from "@cashpile/ai";
+import { categorizeTransactions as aiCategorizeTransactions, parseBooksInstruction } from "@cashpile/ai";
 import { createCategoryRule } from "./category-rule.actions";
 import { assignTransactions, createTaxAssignmentRule } from "./tax.actions";
 import { assignAccountToTaxEntity } from "./account.actions";
@@ -74,6 +74,14 @@ function extractInstructionPattern(instruction: string) {
   if (vendor) return normalizePattern(vendor);
 
   return "";
+}
+
+function buildInstructionOptions(rows: any[], aliases: (row: any) => string[] = () => []) {
+  return (rows ?? []).map((row: any) => ({
+    id: row.id,
+    name: row.name,
+    aliases: aliases(row).filter(Boolean),
+  }));
 }
 
 async function updateCategoryWithAudit(
@@ -374,6 +382,8 @@ export async function applyAiInstruction(input: {
   taxRuleCreated: boolean;
   categorizedTransactions: number;
   assignedTaxViews: number;
+  interpretationSource: "explicit" | "deterministic" | "ai";
+  interpretationReason: string | null;
 }> {
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -402,20 +412,63 @@ export async function applyAiInstruction(input: {
   if (categoryError) throw new Error(categoryError.message);
   if (entityError) throw new Error(entityError.message);
 
-  const account = input.accountId
+  let account = input.accountId
     ? (accounts ?? []).find((row: any) => String(row.id) === String(input.accountId))
     : findMentionedRow(instruction, accounts ?? [], (row: any) => [
       row.institution_name ?? "",
       row.last_four_digits ? `*${row.last_four_digits}` : "",
       row.last_four_digits ?? "",
     ]);
-  const category = input.categoryId
+  let category = input.categoryId
     ? (categories ?? []).find((row: any) => String(row.id) === String(input.categoryId))
     : findMentionedRow(instruction, categories ?? []);
-  const taxEntity = input.taxEntityId
+  let taxEntity = input.taxEntityId
     ? (taxEntities ?? []).find((row: any) => String(row.id) === String(input.taxEntityId))
     : findMentionedRow(instruction, taxEntities ?? []);
-  const pattern = normalizePattern(input.pattern) || extractInstructionPattern(instruction);
+  let pattern = normalizePattern(input.pattern) || extractInstructionPattern(instruction);
+  let interpretationSource: "explicit" | "deterministic" | "ai" =
+    input.accountId || input.pattern || input.categoryId || input.taxEntityId ? "explicit" : "deterministic";
+  let interpretationReason: string | null = null;
+
+  if (!account || !pattern || !category || !taxEntity) {
+    try {
+      const categoryById = new Map((categories ?? []).map((row: any) => [String(row.id), row]));
+      const taxEntityById = new Map((taxEntities ?? []).map((row: any) => [String(row.id), row]));
+      const accountById = new Map((accounts ?? []).map((row: any) => [String(row.id), row]));
+      const parentById = new Map((categories ?? []).map((row: any) => [String(row.id), row.name]));
+      const parsed = await parseBooksInstruction({
+        instruction,
+        accounts: buildInstructionOptions(accounts ?? [], (row: any) => [
+          row.institution_name ?? "",
+          row.last_four_digits ? `*${row.last_four_digits}` : "",
+          row.last_four_digits ?? "",
+        ]),
+        categories: buildInstructionOptions(categories ?? [], (row: any) => [
+          row.parent_category_id ? `${parentById.get(String(row.parent_category_id)) ?? ""} / ${row.name}` : "",
+        ]),
+        taxEntities: buildInstructionOptions(taxEntities ?? [], (row: any) => [row.entity_type ?? ""]),
+      });
+
+      if (parsed && parsed.confidence >= 0.65) {
+        if (!input.accountId && !account && parsed.accountId && accountById.has(String(parsed.accountId))) {
+          account = accountById.get(String(parsed.accountId));
+        }
+        if (!input.pattern && !pattern && parsed.pattern) {
+          pattern = normalizePattern(parsed.pattern);
+        }
+        if (!input.categoryId && !category && parsed.categoryId != null && categoryById.has(String(parsed.categoryId))) {
+          category = categoryById.get(String(parsed.categoryId));
+        }
+        if (!input.taxEntityId && !taxEntity && parsed.taxEntityId && taxEntityById.has(String(parsed.taxEntityId))) {
+          taxEntity = taxEntityById.get(String(parsed.taxEntityId));
+        }
+        interpretationSource = "ai";
+        interpretationReason = parsed.reason || null;
+      }
+    } catch {
+      // AI interpretation is best-effort. Deterministic fields and explicit picks still work without AI credentials.
+    }
+  }
 
   if (!account && !pattern) {
     throw new Error("Choose an account or include a quoted merchant/pattern, e.g. \"ANTHROPIC\".");
@@ -531,5 +584,7 @@ export async function applyAiInstruction(input: {
     taxRuleCreated,
     categorizedTransactions,
     assignedTaxViews,
+    interpretationSource,
+    interpretationReason,
   };
 }
