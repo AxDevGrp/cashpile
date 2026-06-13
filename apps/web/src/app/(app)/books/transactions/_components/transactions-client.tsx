@@ -1036,9 +1036,11 @@ export default function TransactionsClient({
                       const suggestion = categorySuggestion(tx);
                       if (!suggestion) return null;
                       return (
-                        <Badge variant="outline" className="text-xs cursor-help border-amber-300 bg-amber-50 text-amber-800" title={suggestion.title}>
-                          {suggestion.label}
-                        </Badge>
+                        <Link href={aiReviewHref} title={`${suggestion.title}. Open AI Review.`}>
+                          <Badge variant="outline" className="text-xs cursor-pointer border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100">
+                            {suggestion.label}
+                          </Badge>
+                        </Link>
                       );
                     })()}
                     {getTaxAssignments(tx).map((assignment, index) => (
