@@ -45,6 +45,7 @@ export async function POST(req: NextRequest) {
       limit: typeof body.limit === "number" ? body.limit : 5000,
       useAI: body.useAI !== false,
       minConfidence: typeof body.minConfidence === "number" ? body.minConfidence : 0.85,
+      accountId: typeof body.accountId === "string" && body.accountId.length > 0 ? body.accountId : null,
     });
     return NextResponse.json(result);
   } catch (e: any) {

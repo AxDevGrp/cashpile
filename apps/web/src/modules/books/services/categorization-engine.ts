@@ -416,8 +416,8 @@ async function fetchCategories(supabase: SupabaseLike, userId: string) {
   return (data ?? []) as CategoryRow[];
 }
 
-async function fetchUncategorizedTransactions(supabase: SupabaseLike, userId: string, limit: number) {
-  const { data, error } = await supabase
+async function fetchUncategorizedTransactions(supabase: SupabaseLike, userId: string, limit: number, accountId?: string | null) {
+  let query = supabase
     .from("books_transactions")
     .select("id, description, merchant, amount, transaction_type, category_id, financial_account_id, metadata")
     .eq("user_id", userId)
@@ -425,6 +425,9 @@ async function fetchUncategorizedTransactions(supabase: SupabaseLike, userId: st
     .eq("is_transfer", false)
     .order("date", { ascending: false })
     .limit(limit);
+  if (accountId) query = query.eq("financial_account_id", accountId);
+
+  const { data, error } = await query;
   if (error) throw new Error(error.message);
   return (data ?? []) as TransactionRow[];
 }
@@ -528,7 +531,7 @@ async function syncExistingTaxViewCategories(
 export async function bulkCategorizeTransactions(
   supabase: SupabaseLike,
   userId: string,
-  options?: { limit?: number; useAI?: boolean; minConfidence?: number }
+  options?: { limit?: number; useAI?: boolean; minConfidence?: number; accountId?: string | null }
 ): Promise<BulkCategorizationResult> {
   const limit = options?.limit ?? 5000;
   const minConfidence = options?.minConfidence ?? 0.85;
@@ -537,7 +540,7 @@ export async function bulkCategorizeTransactions(
   const initialCategories = await fetchCategories(supabase, userId);
   const { categories, created } = await ensureDefaultCategories(supabase, userId, initialCategories);
   const [uncategorized, categorized, categoryRules] = await Promise.all([
-    fetchUncategorizedTransactions(supabase, userId, limit),
+    fetchUncategorizedTransactions(supabase, userId, limit, options?.accountId ?? null),
     fetchCategorizedTransactions(supabase, userId),
     fetchCategoryRules(supabase, userId),
   ]);

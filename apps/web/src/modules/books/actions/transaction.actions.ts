@@ -293,6 +293,7 @@ export async function bulkCategorizeUncategorizedTransactions(options?: {
   limit?: number;
   useAI?: boolean;
   minConfidence?: number;
+  accountId?: string | null;
 }) {
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();

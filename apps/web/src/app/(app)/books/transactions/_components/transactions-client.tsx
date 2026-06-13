@@ -177,6 +177,10 @@ export default function TransactionsClient({
   const pageNumbers = buildPageNumbers(currentPage, totalPages);
   const visibleStart = count === 0 || rows.length === 0 ? 0 : requestedOffset + 1;
   const visibleEnd = Math.min(requestedOffset + rows.length, count);
+  const categorizationAccountId = lockedAccountId ?? filters.accountId ?? null;
+  const uncategorizedHref = categorizationAccountId
+    ? `/books/transactions?filter=uncategorized&accountId=${encodeURIComponent(categorizationAccountId)}`
+    : "/books/transactions?filter=uncategorized";
   const headerDescription = !shouldLoadTransactions
     ? description ?? emptyQueryMessage
     : isLoading
@@ -520,7 +524,7 @@ export default function TransactionsClient({
       const res = await fetch("/api/books/transactions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ limit: 5000, useAI, minConfidence: 0.85 }),
+        body: JSON.stringify({ limit: 5000, useAI, minConfidence: 0.85, accountId: categorizationAccountId }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Unable to categorize transactions");
@@ -715,7 +719,7 @@ export default function TransactionsClient({
                 <Link href="/books/transactions/ai-review">
                   <Button variant="outline" size="sm">Review suggestions</Button>
                 </Link>
-                <Link href="/books/transactions?filter=uncategorized">
+                <Link href={uncategorizedHref}>
                   <Button variant="outline" size="sm">View Uncategorized</Button>
                 </Link>
               </div>
