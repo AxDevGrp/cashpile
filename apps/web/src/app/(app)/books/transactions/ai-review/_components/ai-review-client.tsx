@@ -81,6 +81,7 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
     const draft = drafts[suggestion.id];
     return Boolean(draft?.categoryId || draft?.taxEntityId);
   });
+  const highConfidenceSuggestions = selectableSuggestions.filter((suggestion) => suggestion.confidence >= 0.9);
   const currentInstructionSignature = JSON.stringify({
     instruction: instruction.trim(),
     accountId: instructionAccountId,
@@ -443,10 +444,17 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
               <div className="flex flex-wrap gap-2">
                 <Button
                   variant="outline"
+                  onClick={() => setSelectedSuggestionIds(new Set(highConfidenceSuggestions.map((suggestion) => suggestion.id)))}
+                  disabled={bulkProgress !== null || highConfidenceSuggestions.length === 0}
+                >
+                  Select high confidence ({highConfidenceSuggestions.length})
+                </Button>
+                <Button
+                  variant="outline"
                   onClick={() => setSelectedSuggestionIds(new Set(selectableSuggestions.map((suggestion) => suggestion.id)))}
                   disabled={bulkProgress !== null || selectableSuggestions.length === 0}
                 >
-                  Select reviewed
+                  Select all ready ({selectableSuggestions.length})
                 </Button>
                 <Button
                   variant="outline"
