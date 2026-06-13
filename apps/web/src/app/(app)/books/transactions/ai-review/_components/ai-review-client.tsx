@@ -69,7 +69,7 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
       {
         categoryId: suggestion.suggestedCategoryId ? String(suggestion.suggestedCategoryId) : "",
         taxEntityId: suggestion.suggestedTaxEntityId ?? "",
-        applyAccountDefault: false,
+        applyAccountDefault: Boolean(suggestion.suggestedTaxEntityId && suggestion.accountId),
       },
     ]))
   );
@@ -484,7 +484,7 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
           </div>
 
           {suggestions.map((suggestion) => {
-            const draft = drafts[suggestion.id] ?? { categoryId: "", taxEntityId: "", applyAccountDefault: false };
+            const draft = drafts[suggestion.id] ?? { categoryId: "", taxEntityId: "", applyAccountDefault: Boolean(suggestion.suggestedTaxEntityId && suggestion.accountId) };
             return (
               <Card key={suggestion.id}>
                 <CardContent className="space-y-4 pt-5">
