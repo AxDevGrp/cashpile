@@ -426,7 +426,7 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
       {suggestions.length === 0 ? (
         <div className="rounded-lg border border-dashed bg-muted/20 p-10 text-center text-muted-foreground">
           <div className="font-medium text-foreground">No AI review suggestions right now</div>
-          <p className="mt-2 text-sm">Cashpile did not find repeated or high-impact unassigned/uncategorized transactions needing review.</p>
+          <p className="mt-2 text-sm">Cashpile did not find queued AI suggestions, repeated patterns, or high-impact unassigned/uncategorized transactions needing review.</p>
         </div>
       ) : (
         <div className="space-y-4">
