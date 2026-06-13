@@ -7,6 +7,7 @@
         "./src/*"
       ]
     },
+    "allowImportingTsExtensions": true,
     "incremental": true
   },
   "include": [

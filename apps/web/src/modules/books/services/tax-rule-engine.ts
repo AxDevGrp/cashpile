@@ -7,6 +7,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@cashpile/db";
+import { transactionMatchesTaxRule } from "./rule-matching";
 
 export interface TaxAssignmentRule {
   id: string;
@@ -104,19 +105,7 @@ export function transactionMatchesRule(
   transaction: TransactionForRuleMatching,
   rule: TaxAssignmentRule
 ): boolean {
-  if (rule.financial_account_id && rule.financial_account_id !== transaction.financial_account_id) {
-    return false;
-  }
-
-  const text = `${transaction.description} ${transaction.merchant ?? ""}`.toLowerCase();
-  const pattern = rule.pattern.toLowerCase();
-
-  if (rule.match_type === "equals") {
-    return text === pattern;
-  }
-
-  // contains
-  return text.includes(pattern);
+  return transactionMatchesTaxRule(transaction, rule);
 }
 
 /**

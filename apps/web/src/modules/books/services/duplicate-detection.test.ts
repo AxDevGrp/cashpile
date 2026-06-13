@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { buildTransactionFingerprint } from "./duplicate-detection";
+import { buildTransactionFingerprint } from "./duplicate-detection.ts";
 
 describe("buildTransactionFingerprint", () => {
   it("normalizes whitespace, case, and amount formatting", () => {

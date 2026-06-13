@@ -1,4 +1,5 @@
 import { categorizeTransactions as aiCategorizeTransactions } from "@cashpile/ai";
+import { getCategoryRuleMatch } from "./rule-matching";
 
 type SupabaseLike = any;
 
@@ -317,36 +318,6 @@ async function fetchCategoryRules(supabase: SupabaseLike, userId: string) {
     throw new Error(error.message);
   }
   return (data ?? []) as CategoryRuleRow[];
-}
-
-export function getCategoryRuleMatch(
-  tx: TransactionRow,
-  rules: CategoryRuleRow[],
-  categories: CategoryRow[]
-): CategorizationMatch | null {
-  const normalized = normalizeText(`${tx.merchant ?? ""} ${tx.description}`);
-
-  for (const rule of rules) {
-    if (rule.financial_account_id && rule.financial_account_id !== tx.financial_account_id) continue;
-    const pattern = normalizeText(rule.pattern);
-    if (!pattern) continue;
-    const isMatch = rule.match_type === "equals" ? normalized === pattern : normalized.includes(pattern);
-    if (!isMatch) continue;
-
-    const category = categories.find((item) => String(item.id) === String(rule.category_id));
-    if (!category) continue;
-
-    return {
-      transactionId: tx.id,
-      categoryId: category.id,
-      categoryName: category.name,
-      confidence: 0.99,
-      method: "category_rule",
-      ruleId: rule.id,
-    };
-  }
-
-  return null;
 }
 
 async function updateRuleMatchCounts(supabase: SupabaseLike, ruleIds: string[]) {

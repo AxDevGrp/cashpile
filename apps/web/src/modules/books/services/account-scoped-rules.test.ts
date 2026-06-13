@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { getCategoryRuleMatch } from "./categorization-engine";
-import { transactionMatchesRule } from "./tax-rule-engine";
+import { getCategoryRuleMatch, transactionMatchesTaxRule } from "./rule-matching.ts";
 
 describe("account-scoped category rules", () => {
   const categories = [{ id: 1, name: "Software & Subscriptions", category_type: "expense" }];
@@ -20,7 +19,6 @@ describe("account-scoped category rules", () => {
       {
         id: "tx_1",
         description: "ANTHROPIC CLAUDE",
-        amount: -20,
         financial_account_id: "acct_blue",
       },
       [rule],
@@ -31,7 +29,6 @@ describe("account-scoped category rules", () => {
       {
         id: "tx_2",
         description: "ANTHROPIC CLAUDE",
-        amount: -20,
         financial_account_id: "acct_plum",
       },
       [rule],
@@ -56,7 +53,6 @@ describe("account-scoped category rules", () => {
       {
         id: "tx_3",
         description: "OPENAI API",
-        amount: -100,
         financial_account_id: "acct_any",
       },
       [rule],
@@ -83,11 +79,9 @@ describe("account-scoped tax assignment rules", () => {
 
   it("matches scoped tax rules only within the matching account", () => {
     assert.equal(
-      transactionMatchesRule(
+      transactionMatchesTaxRule(
         {
-          id: "tx_4",
           description: "LOWES HOME IMPROVEMENT",
-          amount: -250,
           financial_account_id: "acct_rental_card",
         },
         rule
@@ -96,11 +90,9 @@ describe("account-scoped tax assignment rules", () => {
     );
 
     assert.equal(
-      transactionMatchesRule(
+      transactionMatchesTaxRule(
         {
-          id: "tx_5",
           description: "LOWES HOME IMPROVEMENT",
-          amount: -250,
           financial_account_id: "acct_personal_card",
         },
         rule
