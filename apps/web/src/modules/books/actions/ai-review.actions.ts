@@ -249,7 +249,11 @@ export async function listAiReviewSuggestions(limit = 40, accountId?: string | n
     const isRepeatedPattern = rows.length >= 2;
     const isHighImpactSingle = rows.length === 1 && Math.abs(totalAmount) >= 250;
     const representative = rows[0];
-    const storedSuggestion = representative.metadata?.category_suggestion;
+    const storedSuggestionRow = rows.find((tx: any) => {
+      const categoryId = tx.metadata?.category_suggestion?.category_id;
+      return categoryId != null && categoryById.has(String(categoryId));
+    });
+    const storedSuggestion = storedSuggestionRow?.metadata?.category_suggestion;
     const storedCategory = storedSuggestion?.category_id != null
       ? categoryById.get(String(storedSuggestion.category_id))
       : null;
