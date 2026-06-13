@@ -12,6 +12,7 @@ type Data = {
   categories: Array<{ id: string | number; name: string; parent_category_id?: string | number | null }>;
   taxEntities: Array<{ id: string; name: string; entity_type?: string }>;
   accounts: Array<{ id: string; name: string; institution_name?: string | null; last_four_digits?: string | null }>;
+  activeAccount: { id: string; name: string; institution_name?: string | null; last_four_digits?: string | null } | null;
 };
 
 type InstructionPreview = {
@@ -44,9 +45,12 @@ function confidenceLabel(confidence: number) {
 
 export default function AiReviewClient({ initialData }: { initialData: Data }) {
   const router = useRouter();
+  const activeAccountLabel = initialData.activeAccount
+    ? `${initialData.activeAccount.name}${initialData.activeAccount.last_four_digits ? ` - *${initialData.activeAccount.last_four_digits}` : ""}`
+    : null;
   const [suggestions, setSuggestions] = useState(initialData.suggestions);
   const [instruction, setInstruction] = useState("");
-  const [instructionAccountId, setInstructionAccountId] = useState("");
+  const [instructionAccountId, setInstructionAccountId] = useState(initialData.activeAccount?.id ?? "");
   const [instructionPattern, setInstructionPattern] = useState("");
   const [instructionCategoryId, setInstructionCategoryId] = useState("");
   const [instructionTaxEntityId, setInstructionTaxEntityId] = useState("");
@@ -251,9 +255,22 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
 
       <PageHeader
         title="AI Transaction Review"
-        description="Review grouped patterns and high-impact one-off transactions. Accept once to apply current assignments and create future rules."
+        description={activeAccountLabel
+          ? `Review suggestions for ${activeAccountLabel}. Accept once to apply current assignments and create future rules.`
+          : "Review grouped patterns and high-impact one-off transactions. Accept once to apply current assignments and create future rules."}
         actions={<Button variant="outline" onClick={() => router.refresh()}>Refresh suggestions</Button>}
       />
+
+      {activeAccountLabel && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-card p-3 text-sm">
+          <Badge variant="secondary">Account scoped</Badge>
+          <span className="text-muted-foreground">Showing only transactions from</span>
+          <span className="font-medium">{activeAccountLabel}</span>
+          <Link href={`/books/accounts/${initialData.activeAccount!.id}/transactions`} className="ml-auto">
+            <Button variant="outline" size="sm">View account transactions</Button>
+          </Link>
+        </div>
+      )}
 
       <Card>
         <CardContent className="space-y-4 pt-5">

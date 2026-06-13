@@ -170,6 +170,7 @@ export async function listAiReviewSuggestions(limit = 40, accountId?: string | n
   categories: any[];
   taxEntities: any[];
   accounts: any[];
+  activeAccount: { id: string; name: string; institution_name?: string | null; last_four_digits?: string | null } | null;
 }> {
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -320,6 +321,9 @@ export async function listAiReviewSuggestions(limit = 40, accountId?: string | n
     categories: categories ?? [],
     taxEntities: taxEntities ?? [],
     accounts: accounts ?? [],
+    activeAccount: scopedAccountId
+      ? (accounts ?? []).find((account: any) => String(account.id) === scopedAccountId) ?? null
+      : null,
   };
 }
 
