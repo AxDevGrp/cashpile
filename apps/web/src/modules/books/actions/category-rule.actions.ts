@@ -389,8 +389,7 @@ export async function applyCategoryRuleToUncategorizedTransactions(ruleId: strin
       .from("books_tax_transaction_views")
       .update({ category_id: rule.category_id, updated_at: now })
       .eq("user_id", user.id)
-      .in("transaction_id", ids)
-      .is("category_id", null);
+      .in("transaction_id", ids);
     if (taxViewError) console.warn("[category-rules] Failed to sync tax view category:", taxViewError.message);
   }
 

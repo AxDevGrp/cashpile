@@ -5,6 +5,28 @@ import { revalidatePath } from "next/cache";
 import type { BooksTransaction } from "../types";
 import { buildTransactionFingerprint, isUniqueViolation } from "../services/duplicate-detection";
 
+function hasOwn(input: object, key: string) {
+  return Object.prototype.hasOwnProperty.call(input, key);
+}
+
+async function syncTaxViewCategories(
+  supabase: any,
+  userId: string,
+  transactionIds: string[],
+  categoryId: string | number | null | undefined,
+  updatedAt: string
+) {
+  const ids = [...new Set(transactionIds)].filter(Boolean);
+  if (ids.length === 0) return;
+
+  const { error } = await supabase
+    .from("books_tax_transaction_views")
+    .update({ category_id: categoryId == null ? null : Number(categoryId), updated_at: updatedAt })
+    .eq("user_id", userId)
+    .in("transaction_id", ids);
+  if (error) console.warn("[books/transactions] tax view category sync failed:", error.message);
+}
+
 export async function listTransactions(params: {
   taxEntityId?: string; // NEW: Filter by Tax Entity
   udaId?: string; // DEPRECATED: Use taxEntityId instead
@@ -193,7 +215,11 @@ export async function updateTransaction(id: string, input: Partial<BooksTransact
     .single();
 
   if (error) throw new Error(error.message);
+  if (hasOwn(input, "category_id")) {
+    await syncTaxViewCategories(supabase as any, user.id, [id], (input as any).category_id, new Date().toISOString());
+  }
   revalidatePath("/books/transactions");
+  revalidatePath("/books/tax");
   return data;
 }
 
@@ -241,7 +267,11 @@ export async function bulkUpdateTransactions(
         .eq("user_id", user.id);
       if (error) throw new Error(error.message);
     }
+    if (hasOwn(input, "category_id")) {
+      await syncTaxViewCategories(supabase as any, user.id, ids, (input as any).category_id, now);
+    }
     revalidatePath("/books/transactions");
+    revalidatePath("/books/tax");
     return;
   }
 
@@ -252,7 +282,11 @@ export async function bulkUpdateTransactions(
     .eq("user_id", user.id);
 
   if (error) throw new Error(error.message);
+  if (hasOwn(input, "category_id")) {
+    await syncTaxViewCategories(supabase as any, user.id, ids, (input as any).category_id, now);
+  }
   revalidatePath("/books/transactions");
+  revalidatePath("/books/tax");
 }
 
 export async function bulkCategorizeUncategorizedTransactions(options?: {

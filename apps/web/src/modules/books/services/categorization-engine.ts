@@ -519,8 +519,7 @@ async function syncExistingTaxViewCategories(
       .from("books_tax_transaction_views")
       .update({ category_id: Number(match.categoryId), updated_at: new Date().toISOString() })
       .eq("user_id", userId)
-      .eq("transaction_id", match.transactionId)
-      .is("category_id", null);
+      .eq("transaction_id", match.transactionId);
     if (!error) synced += 1;
   }
   return synced;
