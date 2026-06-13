@@ -99,14 +99,16 @@ function categoryAudit(tx: BooksTransaction) {
 
 function categorySuggestion(tx: BooksTransaction) {
   const suggestion = tx.metadata?.category_suggestion as {
+    category_id?: string | number;
     category_name?: string;
     confidence?: number;
     method?: string;
   } | undefined;
-  if (!suggestion?.category_name) return null;
+  if (!suggestion?.category_id || !suggestion?.category_name) return null;
   const confidence = typeof suggestion.confidence === "number" ? ` · ${Math.round(suggestion.confidence * 100)}% confidence` : "";
   const method = suggestion.method ? ` · ${suggestion.method.replace(/_/g, " ")}` : "";
   return {
+    categoryId: suggestion.category_id,
     label: `AI suggested: ${suggestion.category_name}`,
     title: `Review before applying${confidence}${method}`,
   };
@@ -594,7 +596,12 @@ export default function TransactionsClient({
     const nextCategory = categoryOverride ?? categoryOptions.find((category) => String(category.id) === String(nextCategoryId));
 
     setRows((current) => current.map((tx) => tx.id === transactionId
-      ? { ...tx, category_id: nextCategoryId, books_categories: nextCategory ? { name: nextCategory.name } : null }
+      ? {
+        ...tx,
+        category_id: nextCategoryId,
+        books_categories: nextCategory ? { name: nextCategory.name } : null,
+        metadata: { ...(tx.metadata ?? {}), category_suggestion: null },
+      }
       : tx
     ));
 
@@ -1047,11 +1054,24 @@ export default function TransactionsClient({
                       const suggestion = categorySuggestion(tx);
                       if (!suggestion) return null;
                       return (
-                        <Link href={aiReviewHrefForTransaction(tx)} title={`${suggestion.title}. Open AI Review.`}>
-                          <Badge variant="outline" className="text-xs cursor-pointer border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100">
-                            {suggestion.label}
-                          </Badge>
-                        </Link>
+                        <>
+                          <Link href={aiReviewHrefForTransaction(tx)} title={`${suggestion.title}. Open AI Review.`}>
+                            <Badge variant="outline" className="text-xs cursor-pointer border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100">
+                              {suggestion.label}
+                            </Badge>
+                          </Link>
+                          <button
+                            type="button"
+                            className="rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900 hover:bg-amber-200"
+                            onClick={() => assignCategory(
+                              tx.id,
+                              String(suggestion.categoryId),
+                              categoryOptions.find((category) => String(category.id) === String(suggestion.categoryId))
+                            )}
+                          >
+                            Apply suggestion
+                          </button>
+                        </>
                       );
                     })()}
                     {getTaxAssignments(tx).map((assignment, index) => (
