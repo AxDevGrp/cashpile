@@ -11,6 +11,7 @@ type Data = {
   suggestions: AiReviewSuggestion[];
   categories: Array<{ id: string | number; name: string; parent_category_id?: string | number | null }>;
   taxEntities: Array<{ id: string; name: string; entity_type?: string }>;
+  accounts: Array<{ id: string; name: string; institution_name?: string | null; last_four_digits?: string | null }>;
 };
 
 function categoryLabel(category: Data["categories"][number], categories: Data["categories"]) {
@@ -29,6 +30,13 @@ function confidenceLabel(confidence: number) {
 export default function AiReviewClient({ initialData }: { initialData: Data }) {
   const router = useRouter();
   const [suggestions, setSuggestions] = useState(initialData.suggestions);
+  const [instruction, setInstruction] = useState("");
+  const [instructionAccountId, setInstructionAccountId] = useState("");
+  const [instructionPattern, setInstructionPattern] = useState("");
+  const [instructionCategoryId, setInstructionCategoryId] = useState("");
+  const [instructionTaxEntityId, setInstructionTaxEntityId] = useState("");
+  const [setAccountDefault, setSetAccountDefault] = useState(true);
+  const [isApplyingInstruction, setIsApplyingInstruction] = useState(false);
   const [drafts, setDrafts] = useState<Record<string, { categoryId: string; taxEntityId: string; applyAccountDefault: boolean }>>(() =>
     Object.fromEntries(initialData.suggestions.map((suggestion) => [
       suggestion.id,
@@ -80,6 +88,44 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
     }
   }
 
+  async function applyInstruction() {
+    if (!instruction.trim()) {
+      toast.error("Tell Cashpile what rule to create");
+      return;
+    }
+
+    setIsApplyingInstruction(true);
+    try {
+      const res = await fetch("/api/books/ai-review", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: "instruction",
+          instruction,
+          accountId: instructionAccountId || null,
+          pattern: instructionPattern || null,
+          categoryId: instructionCategoryId || null,
+          taxEntityId: instructionTaxEntityId || null,
+          applyToExisting: true,
+          setAccountDefault,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Unable to apply instruction");
+
+      toast.success(
+        `Instruction applied: ${data.categorizedTransactions ?? 0} categorized, ${data.assignedTaxViews ?? 0} assigned${data.accountDefaultApplied ? ", account default saved" : ""}`
+      );
+      setInstruction("");
+      setInstructionPattern("");
+      router.refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to apply instruction");
+    } finally {
+      setIsApplyingInstruction(false);
+    }
+  }
+
   return (
     <div className="space-y-6 p-6">
       <div>
@@ -93,6 +139,103 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
         description="Review grouped transaction patterns. Accept once to apply current assignments and create future rules."
         actions={<Button variant="outline" onClick={() => router.refresh()}>Refresh suggestions</Button>}
       />
+
+      <Card>
+        <CardContent className="space-y-4 pt-5">
+          <div>
+            <h2 className="text-lg font-semibold">Teach Cashpile a rule</h2>
+            <p className="text-sm text-muted-foreground">
+              Tell Cashpile where an account, merchant, or repeated charge belongs. Confirm the fields below, then Cashpile applies it now and saves the rule for future transactions.
+            </p>
+          </div>
+
+          <label className="space-y-1 text-sm">
+            <span className="font-medium">Instruction</span>
+            <textarea
+              className="min-h-20 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+              value={instruction}
+              onChange={(event) => setInstruction(event.target.value)}
+              placeholder={'Example: Charges from "ANTHROPIC" on Amex Blue Plus AxDevGrp belong to Axial Development Group and Software & Subscriptions.'}
+            />
+          </label>
+
+          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+            <label className="space-y-1 text-sm">
+              <span className="font-medium">Account</span>
+              <select
+                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                value={instructionAccountId}
+                onChange={(event) => setInstructionAccountId(event.target.value)}
+              >
+                <option value="">Infer or all accounts</option>
+                {initialData.accounts.map((account) => (
+                  <option key={account.id} value={account.id}>
+                    {account.name}{account.last_four_digits ? ` - *${account.last_four_digits}` : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="space-y-1 text-sm">
+              <span className="font-medium">Merchant / pattern</span>
+              <input
+                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                value={instructionPattern}
+                onChange={(event) => setInstructionPattern(event.target.value)}
+                placeholder="e.g. ANTHROPIC"
+              />
+            </label>
+
+            <label className="space-y-1 text-sm">
+              <span className="font-medium">Category</span>
+              <select
+                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                value={instructionCategoryId}
+                onChange={(event) => setInstructionCategoryId(event.target.value)}
+              >
+                <option value="">Infer / leave unchanged</option>
+                {initialData.categories.map((category) => (
+                  <option key={category.id} value={String(category.id)}>{categoryLabel(category, initialData.categories)}</option>
+                ))}
+              </select>
+            </label>
+
+            <label className="space-y-1 text-sm">
+              <span className="font-medium">Tax Entity</span>
+              <select
+                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                value={instructionTaxEntityId}
+                onChange={(event) => setInstructionTaxEntityId(event.target.value)}
+              >
+                <option value="">Infer / leave unchanged</option>
+                {initialData.taxEntities.map((entity) => (
+                  <option key={entity.id} value={entity.id}>{entity.name}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          {instructionAccountId && instructionTaxEntityId && (
+            <label className="flex items-center gap-2 text-sm text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={setAccountDefault}
+                onChange={(event) => setSetAccountDefault(event.target.checked)}
+              />
+              <span>Make this Tax Entity the default for all current and future transactions in this account.</span>
+            </label>
+          )}
+
+          <div className="flex flex-wrap items-center gap-3">
+            <Button onClick={applyInstruction} disabled={isApplyingInstruction}>
+              {isApplyingInstruction ? "Applying instruction…" : "Apply Instruction & Save Rules"}
+            </Button>
+            <p className="text-xs text-muted-foreground">
+              Tip: quote a merchant name like "ANTHROPIC" when you want a merchant-specific rule.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
 
       {suggestions.length === 0 ? (
         <div className="rounded-lg border border-dashed bg-muted/20 p-10 text-center text-muted-foreground">

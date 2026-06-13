@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { categorizeTransactions as aiCategorizeTransactions } from "@cashpile/ai";
 import { createCategoryRule } from "./category-rule.actions";
 import { assignTransactions, createTaxAssignmentRule } from "./tax.actions";
-import { updateAccount } from "./account.actions";
+import { assignAccountToTaxEntity } from "./account.actions";
 
 function normalizePattern(value: string | null | undefined) {
   return (value ?? "")
@@ -44,6 +44,38 @@ function defaultCategoryNameForPattern(pattern: string, amount: number) {
   return amount > 0 ? "Income" : "Other";
 }
 
+function normalizeMention(value: string | null | undefined) {
+  return (value ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9 ]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function findMentionedRow<T extends { id: string | number; name: string }>(
+  instruction: string,
+  rows: T[],
+  aliases: (row: T) => string[] = () => []
+) {
+  const text = normalizeMention(instruction);
+  return [...rows]
+    .sort((a, b) => b.name.length - a.name.length)
+    .find((row) => [row.name, ...aliases(row)]
+      .map(normalizeMention)
+      .filter((value) => value.length >= 3)
+      .some((value) => text.includes(value)));
+}
+
+function extractInstructionPattern(instruction: string) {
+  const quoted = instruction.match(/["“](.+?)["”]/)?.[1] ?? instruction.match(/'(.+?)'/)?.[1];
+  if (quoted) return normalizePattern(quoted);
+
+  const vendor = instruction.match(/\b(?:merchant|vendor|payee|from|at)\s+([A-Za-z0-9 .&'-]{3,50})/i)?.[1];
+  if (vendor) return normalizePattern(vendor);
+
+  return "";
+}
+
 export interface AiReviewSuggestion {
   id: string;
   pattern: string;
@@ -68,12 +100,13 @@ export async function listAiReviewSuggestions(limit = 40): Promise<{
   suggestions: AiReviewSuggestion[];
   categories: any[];
   taxEntities: any[];
+  accounts: any[];
 }> {
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthenticated");
 
-  const [{ data: transactions, error: txError }, { data: categories, error: categoryError }, { data: taxEntities, error: entityError }] = await Promise.all([
+  const [{ data: transactions, error: txError }, { data: categories, error: categoryError }, { data: taxEntities, error: entityError }, { data: accounts, error: accountError }] = await Promise.all([
     (supabase as any)
       .from("books_transactions")
       .select("id, date, description, merchant, amount, category_id, financial_account_id, books_financial_accounts(id, name, institution_name, last_four_digits, tax_entity_id)")
@@ -92,11 +125,18 @@ export async function listAiReviewSuggestions(limit = 40): Promise<{
       .eq("user_id", user.id)
       .eq("is_active", true)
       .order("name"),
+    (supabase as any)
+      .from("books_financial_accounts")
+      .select("id, name, institution_name, last_four_digits, tax_entity_id")
+      .eq("user_id", user.id)
+      .eq("is_active", true)
+      .order("name"),
   ]);
 
   if (txError) throw new Error(txError.message);
   if (categoryError) throw new Error(categoryError.message);
   if (entityError) throw new Error(entityError.message);
+  if (accountError) throw new Error(accountError.message);
 
   const taxEntityById = new Map<string, any>((taxEntities ?? []).map((entity: any) => [String(entity.id), entity]));
   const categoryByName = new Map<string, any>((categories ?? []).map((category: any) => [String(category.name).toLowerCase(), category]));
@@ -194,6 +234,7 @@ export async function listAiReviewSuggestions(limit = 40): Promise<{
       .slice(0, limit),
     categories: categories ?? [],
     taxEntities: taxEntities ?? [],
+    accounts: accounts ?? [],
   };
 }
 
@@ -255,7 +296,8 @@ export async function acceptAiReviewSuggestion(input: {
   }
 
   if (input.applyAccountDefault && input.accountId && input.taxEntityId) {
-    await updateAccount(input.accountId, { tax_entity_id: input.taxEntityId } as any);
+    const result = await assignAccountToTaxEntity(input.accountId, input.taxEntityId);
+    assignedTaxViews = Math.max(assignedTaxViews, result.assigned_transaction_count ?? 0);
     accountRuleUpdated = true;
   }
 
@@ -263,4 +305,172 @@ export async function acceptAiReviewSuggestion(input: {
   revalidatePath("/books/transactions/ai-review");
   revalidatePath("/books/tax");
   return { updatedTransactions, assignedTaxViews, categoryRuleCreated, taxRuleCreated, accountRuleUpdated };
+}
+
+export async function applyAiInstruction(input: {
+  instruction: string;
+  accountId?: string | null;
+  pattern?: string | null;
+  categoryId?: string | number | null;
+  taxEntityId?: string | null;
+  applyToExisting?: boolean;
+  setAccountDefault?: boolean;
+}): Promise<{
+  instruction: string;
+  inferredAccountName: string | null;
+  inferredPattern: string | null;
+  inferredCategoryName: string | null;
+  inferredTaxEntityName: string | null;
+  accountDefaultApplied: boolean;
+  categoryRuleCreated: boolean;
+  taxRuleCreated: boolean;
+  categorizedTransactions: number;
+  assignedTaxViews: number;
+}> {
+  const supabase = await createServerSupabaseClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Unauthenticated");
+
+  const instruction = input.instruction.trim();
+  if (instruction.length < 8) throw new Error("Tell Cashpile what should go where.");
+
+  const [{ data: accounts, error: accountError }, { data: categories, error: categoryError }, { data: taxEntities, error: entityError }] = await Promise.all([
+    (supabase as any)
+      .from("books_financial_accounts")
+      .select("id, name, institution_name, last_four_digits, tax_entity_id")
+      .eq("user_id", user.id)
+      .eq("is_active", true),
+    (supabase as any)
+      .from("books_categories")
+      .select("id, name, category_type, parent_category_id")
+      .eq("user_id", user.id),
+    (supabase as any)
+      .from("books_business_entities")
+      .select("id, name, entity_type")
+      .eq("user_id", user.id)
+      .eq("is_active", true),
+  ]);
+  if (accountError) throw new Error(accountError.message);
+  if (categoryError) throw new Error(categoryError.message);
+  if (entityError) throw new Error(entityError.message);
+
+  const account = input.accountId
+    ? (accounts ?? []).find((row: any) => String(row.id) === String(input.accountId))
+    : findMentionedRow(instruction, accounts ?? [], (row: any) => [
+      row.institution_name ?? "",
+      row.last_four_digits ? `*${row.last_four_digits}` : "",
+      row.last_four_digits ?? "",
+    ]);
+  const category = input.categoryId
+    ? (categories ?? []).find((row: any) => String(row.id) === String(input.categoryId))
+    : findMentionedRow(instruction, categories ?? []);
+  const taxEntity = input.taxEntityId
+    ? (taxEntities ?? []).find((row: any) => String(row.id) === String(input.taxEntityId))
+    : findMentionedRow(instruction, taxEntities ?? []);
+  const pattern = normalizePattern(input.pattern) || extractInstructionPattern(instruction);
+
+  if (!account && !pattern) {
+    throw new Error("Choose an account or include a quoted merchant/pattern, e.g. \"ANTHROPIC\".");
+  }
+  if (!category && !taxEntity) {
+    throw new Error("Choose or mention a Category or Tax Entity.");
+  }
+
+  let accountDefaultApplied = false;
+  let assignedTaxViews = 0;
+  if (account && taxEntity && input.setAccountDefault !== false) {
+    const result = await assignAccountToTaxEntity(account.id, taxEntity.id);
+    assignedTaxViews += result.assigned_transaction_count ?? 0;
+    accountDefaultApplied = true;
+  }
+
+  let categoryRuleCreated = false;
+  let taxRuleCreated = false;
+  let categorizedTransactions = 0;
+  const matchingTransactionIds: string[] = [];
+  const uncategorizedMatchingTransactionIds: string[] = [];
+
+  if (pattern || (account && category)) {
+    let q = (supabase as any)
+      .from("books_transactions")
+      .select("id, merchant, description, category_id")
+      .eq("user_id", user.id)
+      .eq("is_transfer", false)
+      .limit(10000);
+    if (account) q = q.eq("financial_account_id", account.id);
+
+    const { data: candidates, error: candidateError } = await q;
+    if (candidateError) throw new Error(candidateError.message);
+
+    for (const tx of candidates ?? []) {
+      let isMatch = false;
+      if (!pattern) {
+        isMatch = true;
+      } else {
+        const values = [normalizePattern(tx.merchant), normalizePattern(tx.description)].filter(Boolean);
+        isMatch = values.some((value) => value.includes(pattern) || pattern.split(" ").every((token) => value.split(" ").includes(token)));
+      }
+
+      if (isMatch) {
+        matchingTransactionIds.push(tx.id);
+        if (!tx.category_id) uncategorizedMatchingTransactionIds.push(tx.id);
+      }
+    }
+  }
+
+  if (category) {
+    if (pattern) {
+      await createCategoryRule({ pattern, categoryId: category.id, source: "manual", priority: account ? 120 : 90 });
+      categoryRuleCreated = true;
+    }
+    if (input.applyToExisting !== false && uncategorizedMatchingTransactionIds.length > 0) {
+      const now = new Date().toISOString();
+      const chunkSize = 500;
+      for (let i = 0; i < uncategorizedMatchingTransactionIds.length; i += chunkSize) {
+        const ids = uncategorizedMatchingTransactionIds.slice(i, i + chunkSize);
+        const { error } = await (supabase as any)
+          .from("books_transactions")
+          .update({ category_id: Number(category.id), updated_at: now })
+          .eq("user_id", user.id)
+          .in("id", ids)
+          .is("category_id", null);
+        if (error) throw new Error(error.message);
+        categorizedTransactions += ids.length;
+      }
+    }
+  }
+
+  if (taxEntity && pattern) {
+    await createTaxAssignmentRule({ pattern, match_type: "contains", tax_entity_id: taxEntity.id, priority: account ? 120 : 90 });
+    taxRuleCreated = true;
+  }
+  if (taxEntity && input.applyToExisting !== false && matchingTransactionIds.length > 0 && !accountDefaultApplied) {
+    const result = await assignTransactions({
+      transactionIds: matchingTransactionIds,
+      taxEntityId: taxEntity.id,
+      categoryId: category ? Number(category.id) : undefined,
+      isDeductible: true,
+      notes: `AI instruction: ${instruction.slice(0, 180)}`,
+    });
+    assignedTaxViews += result.assigned;
+  }
+
+  revalidatePath("/books/transactions");
+  revalidatePath("/books/transactions/ai-review");
+  revalidatePath("/books/category-rules");
+  revalidatePath("/books/tax");
+  revalidatePath("/books/accounts");
+
+  return {
+    instruction,
+    inferredAccountName: account?.name ?? null,
+    inferredPattern: pattern || null,
+    inferredCategoryName: category?.name ?? null,
+    inferredTaxEntityName: taxEntity?.name ?? null,
+    accountDefaultApplied,
+    categoryRuleCreated,
+    taxRuleCreated,
+    categorizedTransactions,
+    assignedTaxViews,
+  };
 }

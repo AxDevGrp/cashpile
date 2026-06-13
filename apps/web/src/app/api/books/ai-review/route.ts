@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { acceptAiReviewSuggestion, listAiReviewSuggestions } from "@/modules/books/actions/ai-review.actions";
+import { acceptAiReviewSuggestion, applyAiInstruction, listAiReviewSuggestions } from "@/modules/books/actions/ai-review.actions";
 
 export async function GET(req: NextRequest) {
   try {
@@ -15,6 +15,19 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
+    if (body.mode === "instruction") {
+      const result = await applyAiInstruction({
+        instruction: String(body.instruction ?? ""),
+        accountId: body.accountId ?? null,
+        pattern: body.pattern ?? null,
+        categoryId: body.categoryId ?? null,
+        taxEntityId: body.taxEntityId ?? null,
+        applyToExisting: body.applyToExisting !== false,
+        setAccountDefault: body.setAccountDefault !== false,
+      });
+      return NextResponse.json(result);
+    }
+
     const result = await acceptAiReviewSuggestion({
       transactionIds: Array.isArray(body.transactionIds) ? body.transactionIds : [],
       pattern: String(body.pattern ?? ""),
