@@ -37,7 +37,7 @@ interface Props {
   categories: BooksCategory[];
   udas: (BooksUda & { books_financial_accounts?: { id: string; name: string }[] })[];
   accounts?: { id: string; name: string; institution_name?: string | null; institution?: string | null; last_four_digits?: string | null }[];
-  filters: { udaId?: string; accountId?: string; categoryId?: string; from?: string; to?: string; search?: string };
+  filters: { udaId?: string; accountId?: string; categoryId?: string; from?: string; to?: string; search?: string; filter?: "uncategorized" | "categorized" };
   loadError?: string;
   title?: string;
   description?: string;
@@ -164,6 +164,7 @@ export default function TransactionsClient({
     filters.accountId ||
     filters.udaId ||
     filters.categoryId ||
+    filters.filter ||
     filters.from ||
     filters.to ||
     lockedAccountId
@@ -213,6 +214,7 @@ export default function TransactionsClient({
         if (filters.accountId && !params.has("accountId")) params.set("accountId", filters.accountId);
         if (filters.udaId && !params.has("udaId")) params.set("udaId", filters.udaId);
         if (filters.categoryId && !params.has("categoryId")) params.set("categoryId", filters.categoryId);
+        if (filters.filter && !params.has("filter")) params.set("filter", filters.filter);
         if (filters.from && !params.has("from")) params.set("from", filters.from);
         if (filters.to && !params.has("to")) params.set("to", filters.to);
         if (filters.search && !params.has("search")) params.set("search", filters.search);
@@ -245,7 +247,7 @@ export default function TransactionsClient({
     return () => {
       cancelled = true;
     };
-  }, [filters.accountId, filters.categoryId, filters.from, filters.search, filters.to, filters.udaId, searchParams, shouldLoadTransactions]);
+  }, [filters.accountId, filters.categoryId, filters.filter, filters.from, filters.search, filters.to, filters.udaId, searchParams, shouldLoadTransactions]);
 
   useEffect(() => {
     setSearchDraft(filters.search ?? "");

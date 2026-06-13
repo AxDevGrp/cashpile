@@ -8,7 +8,7 @@ export const metadata = { title: "Transactions — Books | Cashpile" };
 export default async function TransactionsPage({
   searchParams,
 }: {
-  searchParams: { taxEntityId?: string; accountId?: string; categoryId?: string; from?: string; to?: string; search?: string };
+  searchParams: { taxEntityId?: string; accountId?: string; categoryId?: string; from?: string; to?: string; search?: string; filter?: "uncategorized" | "categorized" };
 }) {
   const [accounts, categories, entities, udas] = await Promise.all([
     listAccounts(),
