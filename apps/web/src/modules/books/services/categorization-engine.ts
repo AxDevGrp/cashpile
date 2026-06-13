@@ -1,12 +1,13 @@
 import { categorizeTransactions as aiCategorizeTransactions } from "@cashpile/ai";
 import { getCategoryRuleMatch } from "./rule-matching";
 import { autoAssignTaxEntities } from "./tax-rule-engine";
+import { toReviewSuggestion, type CategorySuggestion } from "./ai-review-suggestions";
 
 type SupabaseLike = any;
 
 export type CategorizationMethod = "category_rule" | "learned_rule" | "default_rule" | "ai" | "rule_based";
 
-interface CategoryRow {
+export interface CategoryRow {
   id: string | number;
   name: string;
   category_type?: string | null;
@@ -41,14 +42,6 @@ interface CategorizationMatch {
   confidence: number;
   method: CategorizationMethod;
   ruleId?: string;
-}
-
-interface CategorySuggestion {
-  transactionId: string;
-  categoryId: string | number;
-  categoryName: string;
-  confidence: number;
-  method: CategorizationMethod;
 }
 
 export interface BulkCategorizationResult {
@@ -641,15 +634,8 @@ export async function bulkCategorizeTransactions(
         const category = categoryByName(categories, result.categoryName);
         if (!category) continue;
         if (result.confidence < minConfidence) {
-          if (result.confidence >= 0.5) {
-            reviewSuggestions.push({
-              transactionId: result.transactionId,
-              categoryId: category.id,
-              categoryName: category.name,
-              confidence: result.confidence,
-              method: result.method === "rule_based" ? "rule_based" : "ai",
-            });
-          }
+          const suggestion = toReviewSuggestion(result, category, minConfidence);
+          if (suggestion) reviewSuggestions.push(suggestion);
           continue;
         }
         matches.push({
@@ -756,15 +742,8 @@ export async function categorizeTransactionsByIds(
         const category = categoryByName(categories, result.categoryName);
         if (!category) continue;
         if (result.confidence < minConfidence) {
-          if (result.confidence >= 0.5) {
-            reviewSuggestions.push({
-              transactionId: result.transactionId,
-              categoryId: category.id,
-              categoryName: category.name,
-              confidence: result.confidence,
-              method: result.method === "rule_based" ? "rule_based" : "ai",
-            });
-          }
+          const suggestion = toReviewSuggestion(result, category, minConfidence);
+          if (suggestion) reviewSuggestions.push(suggestion);
           continue;
         }
         matches.push({
