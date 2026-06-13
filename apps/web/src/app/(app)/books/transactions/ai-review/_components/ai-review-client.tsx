@@ -73,6 +73,7 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
   );
   const [savingId, setSavingId] = useState<string | null>(null);
   const selectedSuggestions = suggestions.filter((suggestion) => selectedSuggestionIds.has(suggestion.id));
+  const totalSuggestedTransactions = suggestions.reduce((sum, suggestion) => sum + suggestion.count, 0);
   const selectableSuggestions = suggestions.filter((suggestion) => {
     const draft = drafts[suggestion.id];
     return Boolean(draft?.categoryId || draft?.taxEntityId);
@@ -431,6 +432,9 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
                 <div className="font-medium">Bulk accept reviewed suggestions</div>
                 <p className="text-sm text-muted-foreground">
                   Select suggestions after confirming their Category / Tax Entity. Cashpile applies each one and saves future rules.
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {suggestions.length} suggestion{suggestions.length === 1 ? "" : "s"} covering {totalSuggestedTransactions} transaction{totalSuggestedTransactions === 1 ? "" : "s"}; {selectableSuggestions.length} ready to accept.
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
