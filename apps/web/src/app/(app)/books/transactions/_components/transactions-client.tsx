@@ -569,18 +569,26 @@ export default function TransactionsClient({
     }
   }
 
-  // Helper to check if transaction was auto-assigned by rule
-  function getRuleAssignment(tx: Props["transactions"][0]) {
-    const taxViews = tx.books_tax_transaction_views ?? [];
-    const ruleAssigned = taxViews.find(v => v.tax_notes?.includes("Auto-assigned by rule"));
-    if (ruleAssigned) {
-      const entity = entities.find(e => e.id === ruleAssigned.tax_entity_id);
+  function getTaxAssignments(tx: Props["transactions"][0]) {
+    return (tx.books_tax_transaction_views ?? []).map((view) => {
+      const note = view.tax_notes ?? "Assigned to Tax Entity";
+      const entity = entities.find(e => e.id === view.tax_entity_id);
+      const source = note.includes("Auto-assigned by account")
+        ? "Account default"
+        : note.includes("Auto-assigned by rule")
+          ? "Tax rule"
+          : note.includes("AI-confirmed rule")
+            ? "AI review"
+            : note.includes("AI instruction")
+              ? "AI instruction"
+              : "Tax assignment";
       return {
         entityName: entity?.name ?? "Unknown",
-        percentage: ruleAssigned.business_percentage,
+        percentage: view.business_percentage,
+        source,
+        note,
       };
-    }
-    return null;
+    });
   }
 
   return (
@@ -941,21 +949,16 @@ export default function TransactionsClient({
                         </Badge>
                       );
                     })()}
-                    {(() => {
-                      const ruleAssignment = getRuleAssignment(tx);
-                      if (ruleAssignment) {
-                        return (
-                          <Badge 
-                            variant="secondary" 
-                            className="text-xs bg-blue-100 text-blue-700 hover:bg-blue-200 cursor-help"
-                            title={`Auto-assigned to ${ruleAssignment.entityName} @ ${ruleAssignment.percentage}%`}
-                          >
-                            {ruleAssignment.entityName} ({ruleAssignment.percentage}%)
-                          </Badge>
-                        );
-                      }
-                      return null;
-                    })()}
+                    {getTaxAssignments(tx).map((assignment, index) => (
+                      <Badge
+                        key={`${assignment.entityName}-${index}`}
+                        variant="secondary"
+                        className="text-xs bg-blue-100 text-blue-700 hover:bg-blue-200 cursor-help"
+                        title={`${assignment.source}: ${assignment.note} @ ${assignment.percentage}%`}
+                      >
+                        {assignment.entityName} ({assignment.percentage}%)
+                      </Badge>
+                    ))}
                   </td>
                 </tr>
               ))
