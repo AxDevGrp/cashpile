@@ -100,6 +100,17 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
     setPreviewSignature("");
   }
 
+  async function refreshSuggestions() {
+    const params = new URLSearchParams();
+    params.set("limit", String(initialData.limit));
+    if (initialData.activeAccount?.id) params.set("accountId", initialData.activeAccount.id);
+    const res = await fetch(`/api/books/ai-review?${params.toString()}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    setSuggestions(data.suggestions ?? []);
+    setSelectedSuggestionIds(new Set());
+  }
+
   function updateDraft(id: string, patch: Partial<{ categoryId: string; taxEntityId: string; applyAccountDefault: boolean }>) {
     setDrafts((current) => ({ ...current, [id]: { ...current[id], ...patch } }));
   }
@@ -251,6 +262,7 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
           return next;
         });
       }
+      await refreshSuggestions();
       setInstruction("");
       setInstructionPattern("");
       setInstructionPreview(null);

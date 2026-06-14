@@ -170,6 +170,42 @@ async function updateCategoryWithAudit(
   return updated;
 }
 
+async function markAiReviewProcessed(
+  supabase: any,
+  userId: string,
+  transactionIds: string[],
+  audit: Record<string, unknown>
+) {
+  const uniqueIds = [...new Set(transactionIds)].filter(Boolean);
+  if (uniqueIds.length === 0) return;
+
+  const { data: rows, error } = await supabase
+    .from("books_transactions")
+    .select("id, metadata")
+    .eq("user_id", userId)
+    .in("id", uniqueIds);
+  if (error) throw new Error(error.message);
+
+  const now = new Date().toISOString();
+  for (const row of rows ?? []) {
+    const { error: updateError } = await supabase
+      .from("books_transactions")
+      .update({
+        metadata: {
+          ...(row.metadata ?? {}),
+          ai_review_processed: {
+            ...audit,
+            processed_at: now,
+          },
+        },
+        updated_at: now,
+      })
+      .eq("user_id", userId)
+      .eq("id", row.id);
+    if (updateError) throw new Error(updateError.message);
+  }
+}
+
 export interface AiReviewSuggestion {
   id: string;
   pattern: string;
@@ -296,6 +332,7 @@ export async function listAiReviewSuggestions(limit = 40, accountId?: string | n
   const groups = new Map<string, any[]>();
 
   for (const tx of transactions ?? []) {
+    if (tx.metadata?.ai_review_processed?.processed_at) continue;
     if (tx.category_id && taxAssignedIds.has(String(tx.id))) continue;
     const pattern = derivePattern(tx.merchant, tx.description);
     if (!pattern || pattern.length < 3) continue;
@@ -690,6 +727,17 @@ export async function applyAiInstruction(input: {
       notes: `AI instruction: ${instruction.slice(0, 180)}`,
     });
     assignedTaxViews += result.assigned;
+  }
+
+  if (!input.dryRun && matchingTransactionIds.length > 0) {
+    await markAiReviewProcessed(supabase as any, user.id, matchingTransactionIds, {
+      method: "ai_instruction",
+      pattern: patterns.join(", ") || null,
+      category_id: category?.id ?? null,
+      tax_entity_id: taxEntity?.id ?? null,
+      rule_scope: ruleScope,
+      instruction: instruction.slice(0, 180),
+    });
   }
 
   if (!input.dryRun) {
