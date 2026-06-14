@@ -104,7 +104,7 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
     const params = new URLSearchParams();
     params.set("limit", String(initialData.limit));
     if (initialData.activeAccount?.id) params.set("accountId", initialData.activeAccount.id);
-    const res = await fetch(`/api/books/ai-review?${params.toString()}`);
+    const res = await fetch(`/api/books/ai-review?${params.toString()}`, { cache: "no-store" });
     if (!res.ok) return;
     const data = await res.json();
     setSuggestions(data.suggestions ?? []);

@@ -2,6 +2,8 @@ import { listAiReviewSuggestions } from "@/modules/books/actions/ai-review.actio
 import AiReviewClient from "./_components/ai-review-client";
 
 export const metadata = { title: "AI Review — Transactions | Cashpile" };
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export default async function AiReviewPage({ searchParams }: { searchParams?: { accountId?: string; limit?: string } }) {
   const requestedLimit = Number(searchParams?.limit ?? 100);
