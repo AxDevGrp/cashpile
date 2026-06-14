@@ -66,14 +66,38 @@ function findMentionedRow<T extends { id: string | number; name: string }>(
       .some((value) => text.includes(value)));
 }
 
-function extractInstructionPattern(instruction: string) {
+function splitInstructionPatterns(value: string) {
+  return value
+    .replace(/["“”']/g, " ")
+    .split(/,|\band\b/i)
+    .map((item) => normalizePattern(item))
+    .filter((item) => item.length >= 3);
+}
+
+function uniquePatterns(patterns: string[]) {
+  return [...new Set(patterns)].filter(Boolean);
+}
+
+function extractInstructionPatterns(instruction: string) {
+  const listBeforeAssignment = instruction.match(/^\s*["“]?(.+?)["”]?\s+(?:are|is|belong|belongs)\b/i)?.[1];
+  if (listBeforeAssignment) {
+    const patterns = uniquePatterns(splitInstructionPatterns(listBeforeAssignment));
+    if (patterns.length > 0) return patterns;
+  }
+
   const quoted = instruction.match(/["“](.+?)["”]/)?.[1] ?? instruction.match(/'(.+?)'/)?.[1];
-  if (quoted) return normalizePattern(quoted);
+  if (quoted) {
+    const patterns = uniquePatterns(splitInstructionPatterns(quoted));
+    if (patterns.length > 0) return patterns;
+  }
 
   const vendor = instruction.match(/\b(?:merchant|vendor|payee|from|at)\s+([A-Za-z0-9 .&'-]{3,50})/i)?.[1];
-  if (vendor) return normalizePattern(vendor);
+  if (vendor) {
+    const pattern = normalizePattern(vendor);
+    if (pattern) return [pattern];
+  }
 
-  return "";
+  return [];
 }
 
 function buildInstructionOptions(rows: any[], aliases: (row: any) => string[] = () => []) {
@@ -525,7 +549,8 @@ export async function applyAiInstruction(input: {
   let taxEntity = input.taxEntityId
     ? (taxEntities ?? []).find((row: any) => String(row.id) === String(input.taxEntityId))
     : findMentionedRow(instruction, taxEntities ?? []);
-  let pattern = normalizePattern(input.pattern) || extractInstructionPattern(instruction);
+  let patterns = uniquePatterns(normalizePattern(input.pattern) ? [normalizePattern(input.pattern)] : extractInstructionPatterns(instruction));
+  let pattern = patterns[0] ?? "";
   let interpretationSource: "explicit" | "deterministic" | "ai" =
     input.accountId || input.pattern || input.categoryId || input.taxEntityId ? "explicit" : "deterministic";
   let interpretationReason: string | null = null;
@@ -553,8 +578,9 @@ export async function applyAiInstruction(input: {
         if (!input.accountId && !account && parsed.accountId && accountById.has(String(parsed.accountId))) {
           account = accountById.get(String(parsed.accountId));
         }
-        if (!input.pattern && !pattern && parsed.pattern) {
-          pattern = normalizePattern(parsed.pattern);
+        if (!input.pattern && patterns.length === 0 && parsed.pattern) {
+          patterns = uniquePatterns([normalizePattern(parsed.pattern)]);
+          pattern = patterns[0] ?? "";
         }
         if (!input.categoryId && !category && parsed.categoryId != null && categoryById.has(String(parsed.categoryId))) {
           category = categoryById.get(String(parsed.categoryId));
@@ -607,11 +633,13 @@ export async function applyAiInstruction(input: {
 
     for (const tx of candidates ?? []) {
       let isMatch = false;
-      if (!pattern) {
+      if (patterns.length === 0) {
         isMatch = true;
       } else {
         const values = [normalizePattern(tx.merchant), normalizePattern(tx.description)].filter(Boolean);
-        isMatch = values.some((value) => value.includes(pattern) || pattern.split(" ").every((token) => value.split(" ").includes(token)));
+        isMatch = patterns.some((currentPattern) =>
+          values.some((value) => value.includes(currentPattern) || currentPattern.split(" ").every((token) => value.split(" ").includes(token)))
+        );
       }
 
       if (isMatch) {
@@ -621,12 +649,14 @@ export async function applyAiInstruction(input: {
     }
   }
 
-  const willCreateCategoryRule = Boolean(category && pattern);
-  const willCreateTaxRule = Boolean(taxEntity && pattern);
+  const willCreateCategoryRule = Boolean(category && patterns.length > 0);
+  const willCreateTaxRule = Boolean(taxEntity && patterns.length > 0);
 
   if (category) {
     if (!input.dryRun && willCreateCategoryRule) {
-      await createCategoryRule({ pattern, categoryId: category.id, source: "manual", priority: account ? 120 : 90, accountId: account?.id ?? null });
+      for (const currentPattern of patterns) {
+        await createCategoryRule({ pattern: currentPattern, categoryId: category.id, source: "manual", priority: account ? 120 : 90, accountId: account?.id ?? null });
+      }
       categoryRuleCreated = true;
     }
     if (!input.dryRun && input.applyToExisting !== false && uncategorizedMatchingTransactionIds.length > 0) {
@@ -635,7 +665,7 @@ export async function applyAiInstruction(input: {
         const ids = uncategorizedMatchingTransactionIds.slice(i, i + chunkSize);
         categorizedTransactions += await updateCategoryWithAudit(supabase as any, user.id, ids, category.id, {
           method: "ai_instruction",
-          pattern: pattern || null,
+          pattern: patterns.join(", ") || null,
           confidence: 1,
           rule_scope: ruleScope,
           instruction: instruction.slice(0, 180),
@@ -645,7 +675,9 @@ export async function applyAiInstruction(input: {
   }
 
   if (!input.dryRun && willCreateTaxRule) {
-    await createTaxAssignmentRule({ pattern, match_type: "contains", tax_entity_id: taxEntity.id, priority: account ? 120 : 90, financial_account_id: account?.id ?? null });
+    for (const currentPattern of patterns) {
+      await createTaxAssignmentRule({ pattern: currentPattern, match_type: "contains", tax_entity_id: taxEntity.id, priority: account ? 120 : 90, financial_account_id: account?.id ?? null });
+    }
     taxRuleCreated = true;
   }
   if (!input.dryRun && taxEntity && input.applyToExisting !== false && matchingTransactionIds.length > 0 && !accountDefaultApplied) {
@@ -670,7 +702,7 @@ export async function applyAiInstruction(input: {
   return {
     instruction,
     inferredAccountName: account?.name ?? null,
-    inferredPattern: pattern || null,
+    inferredPattern: patterns.join(", ") || null,
     inferredCategoryName: category?.name ?? null,
     inferredTaxEntityName: taxEntity?.name ?? null,
     matchedTransactions: matchingTransactionIds.length,
