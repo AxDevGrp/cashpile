@@ -31,6 +31,24 @@ function categoryTypeFromAmount(amount: number) {
   return amount > 0 ? "income" : "expense";
 }
 
+function matchesPatternRule(values: string[], pattern: string, matchType: "contains" | "equals") {
+  if (matchType === "equals") return values.some((value) => value === pattern);
+  const patternTokens = pattern.split(" ").filter(Boolean);
+  return values.some((value) => (
+    value.includes(pattern) ||
+    (patternTokens.length > 0 && patternTokens.every((token) => value.split(" ").includes(token)))
+  ));
+}
+
+function isMissingAccountScopeColumn(error: any) {
+  const message = String(error?.message ?? "").toLowerCase();
+  return message.includes("financial_account_id") && (
+    message.includes("does not exist") ||
+    message.includes("schema cache") ||
+    message.includes("column")
+  );
+}
+
 function defaultCategoryNameForPattern(pattern: string, amount: number) {
   const text = pattern.toUpperCase();
   if (/PAYROLL|SALARY|WAGES|DIRECT DEPOSIT|OASISBATCH/.test(text)) return "Income";
@@ -315,6 +333,34 @@ export async function listAiReviewSuggestions(limit = 40, accountId?: string | n
   if (entityError) throw new Error(entityError.message);
   if (accountError) throw new Error(accountError.message);
 
+  let categoryRulesRes = await (supabase as any)
+    .from("books_category_rules")
+    .select("pattern, match_type, category_id, financial_account_id")
+    .eq("user_id", user.id)
+    .eq("is_active", true);
+  if (categoryRulesRes.error && isMissingAccountScopeColumn(categoryRulesRes.error)) {
+    categoryRulesRes = await (supabase as any)
+      .from("books_category_rules")
+      .select("pattern, match_type, category_id")
+      .eq("user_id", user.id)
+      .eq("is_active", true);
+  }
+  if (categoryRulesRes.error && !String(categoryRulesRes.error.message ?? "").includes("books_category_rules")) throw new Error(categoryRulesRes.error.message);
+
+  let taxRulesRes = await (supabase as any)
+    .from("books_tax_assignment_rules")
+    .select("pattern, match_type, tax_entity_id, financial_account_id")
+    .eq("user_id", user.id)
+    .eq("is_active", true);
+  if (taxRulesRes.error && isMissingAccountScopeColumn(taxRulesRes.error)) {
+    taxRulesRes = await (supabase as any)
+      .from("books_tax_assignment_rules")
+      .select("pattern, match_type, tax_entity_id")
+      .eq("user_id", user.id)
+      .eq("is_active", true);
+  }
+  if (taxRulesRes.error && !String(taxRulesRes.error.message ?? "").includes("books_tax_assignment_rules")) throw new Error(taxRulesRes.error.message);
+
   const taxEntityById = new Map<string, any>((taxEntities ?? []).map((entity: any) => [String(entity.id), entity]));
   const categoryByName = new Map<string, any>((categories ?? []).map((category: any) => [String(category.name).toLowerCase(), category]));
   const categoryById = new Map<string, any>((categories ?? []).map((category: any) => [String(category.id), category]));
@@ -329,6 +375,14 @@ export async function listAiReviewSuggestions(limit = 40, accountId?: string | n
     : { data: [] };
 
   const taxAssignedIds = new Set((existingTaxViews.data ?? []).map((row: any) => String(row.transaction_id)));
+  const categoryRules = categoryRulesRes.data ?? [];
+  const taxRules = taxRulesRes.data ?? [];
+  const patternHasRule = (rules: any[], pattern: string, accountId: string | null) => rules.some((rule: any) => {
+    if (rule.financial_account_id && accountId && String(rule.financial_account_id) !== accountId) return false;
+    const rulePattern = normalizePattern(rule.pattern);
+    if (!rulePattern) return false;
+    return matchesPatternRule([pattern], rulePattern, rule.match_type ?? "contains") || matchesPatternRule([rulePattern], pattern, "contains");
+  });
   const groups = new Map<string, any[]>();
 
   for (const tx of transactions ?? []) {
@@ -338,6 +392,8 @@ export async function listAiReviewSuggestions(limit = 40, accountId?: string | n
     const pattern = derivePattern(tx.merchant, tx.description);
     if (!pattern || pattern.length < 3) continue;
     const accountId = tx.financial_account_id ?? "no-account";
+    const scopedAccountIdForRules = accountId === "no-account" ? null : String(accountId);
+    if (patternHasRule(categoryRules, pattern, scopedAccountIdForRules) || patternHasRule(taxRules, pattern, scopedAccountIdForRules)) continue;
     const key = `${accountId}|${pattern}`;
     const list = groups.get(key) ?? [];
     list.push(tx);
