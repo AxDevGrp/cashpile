@@ -104,7 +104,7 @@ export async function assignTransactions(params: {
 
   const { data: txns, error: txnError } = await (supabase as any)
     .from("books_transactions")
-    .select("id, amount, date, type")
+    .select("id, amount, date, transaction_type")
     .in("id", params.transactionIds);
   if (txnError) throw new Error(txnError.message);
 
