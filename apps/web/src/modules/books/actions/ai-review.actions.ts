@@ -332,7 +332,8 @@ export async function listAiReviewSuggestions(limit = 40, accountId?: string | n
   const groups = new Map<string, any[]>();
 
   for (const tx of transactions ?? []) {
-    if (tx.metadata?.ai_review_processed?.processed_at) continue;
+    const categoryAssignmentMethod = tx.metadata?.category_assignment?.method;
+    if (tx.metadata?.ai_review_processed?.processed_at || categoryAssignmentMethod === "ai_review" || categoryAssignmentMethod === "ai_instruction") continue;
     if (tx.category_id && taxAssignedIds.has(String(tx.id))) continue;
     const pattern = derivePattern(tx.merchant, tx.description);
     if (!pattern || pattern.length < 3) continue;
@@ -510,6 +511,14 @@ export async function acceptAiReviewSuggestion(input: {
     assignedTaxViews = Math.max(assignedTaxViews, result.assigned_transaction_count ?? 0);
     accountRuleUpdated = true;
   }
+
+  await markAiReviewProcessed(supabase as any, user.id, transactionIds, {
+    method: "ai_review",
+    pattern: input.pattern,
+    category_id: input.categoryId ?? null,
+    tax_entity_id: input.taxEntityId ?? null,
+    rule_scope: input.accountId ? "account" : "global",
+  });
 
   revalidatePath("/books/transactions");
   revalidatePath("/books/transactions/ai-review");
