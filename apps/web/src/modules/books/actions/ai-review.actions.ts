@@ -130,6 +130,25 @@ function isUuid(value: string | null | undefined) {
   return Boolean(value && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value));
 }
 
+async function getTaxAssignedTransactionIds(supabase: any, userId: string, transactionIds: string[]) {
+  const assignedIds = new Set<string>();
+  const uniqueIds = [...new Set(transactionIds)].filter(Boolean);
+  const chunkSize = 500;
+
+  for (let i = 0; i < uniqueIds.length; i += chunkSize) {
+    const ids = uniqueIds.slice(i, i + chunkSize);
+    const { data, error } = await supabase
+      .from("books_tax_transaction_views")
+      .select("transaction_id")
+      .eq("user_id", userId)
+      .in("transaction_id", ids);
+    if (error) throw new Error(error.message);
+    (data ?? []).forEach((row: any) => assignedIds.add(String(row.transaction_id)));
+  }
+
+  return assignedIds;
+}
+
 async function updateCategoryWithAudit(
   supabase: any,
   userId: string,
@@ -366,15 +385,7 @@ export async function listAiReviewSuggestions(limit = 40, accountId?: string | n
   const categoryById = new Map<string, any>((categories ?? []).map((category: any) => [String(category.id), category]));
 
   const transactionIds = (transactions ?? []).map((tx: any) => tx.id);
-  const existingTaxViews = transactionIds.length > 0
-    ? await (supabase as any)
-      .from("books_tax_transaction_views")
-      .select("transaction_id")
-      .eq("user_id", user.id)
-      .in("transaction_id", transactionIds)
-    : { data: [] };
-
-  const taxAssignedIds = new Set((existingTaxViews.data ?? []).map((row: any) => String(row.transaction_id)));
+  const taxAssignedIds = await getTaxAssignedTransactionIds(supabase as any, user.id, transactionIds);
   const categoryRules = categoryRulesRes.data ?? [];
   const taxRules = taxRulesRes.data ?? [];
   const patternHasRule = (rules: any[], pattern: string, accountId: string | null) => rules.some((rule: any) => {
