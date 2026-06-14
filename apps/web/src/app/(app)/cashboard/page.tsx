@@ -19,6 +19,7 @@ import { createServerSupabaseClient } from "@cashpile/db";
 import { formatCurrency } from "@cashpile/ui";
 import { generateCashboardBriefing, getCashflowSnapshot } from "@cashpile/ai";
 import { CashInputStrip } from "./_components/cash-input-strip";
+import { GremmyReminderModal, type GremmyReminder } from "./_components/gremmy-reminder-modal";
 import { AffordabilityForm } from "@/components/cashflow/affordability-form";
 
 // ─── Data helpers ────────────────────────────────────────────────────────────
@@ -68,6 +69,11 @@ type MoneyLeaks = {
   biggestSpikePct: number;
   duplicateCount: number;
   increasedSubscriptionCount: number;
+};
+
+type GremmyReminderInput = {
+  uncategorizedCount: number;
+  creditCardsNearPayoff: Array<{ name: string; balance: number }>;
 };
 
 type AiBudget = {
@@ -441,6 +447,35 @@ async function getSubscriptionSummary(userId: string, recurringItems: Array<any>
   };
 }
 
+async function getGremmyReminderInput(userId: string): Promise<GremmyReminderInput> {
+  const supabase = (await createServerSupabaseClient()) as any;
+  const [uncategorizedRes, cardsRes] = await Promise.all([
+    supabase
+      .from("books_transactions")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .eq("is_transfer", false)
+      .is("category_id", null),
+    supabase
+      .from("books_financial_accounts")
+      .select("name, current_balance")
+      .eq("user_id", userId)
+      .eq("is_active", true)
+      .eq("account_type", "credit_card"),
+  ]);
+
+  const creditCardsNearPayoff = ((cardsRes.data ?? []) as Array<{ name: string; current_balance: number | string | null }>)
+    .map((account) => ({ name: account.name, balance: Math.abs(Number(account.current_balance ?? 0)) }))
+    .filter((account) => account.balance > 0 && account.balance <= 500)
+    .sort((a, b) => a.balance - b.balance)
+    .slice(0, 3);
+
+  return {
+    uncategorizedCount: uncategorizedRes.count ?? 0,
+    creditCardsNearPayoff,
+  };
+}
+
 async function getRecentBooksData(userId: string) {
   const supabase = (await createServerSupabaseClient()) as any;
   const [transactionsRes, categoriesRes] = await Promise.all([
@@ -580,6 +615,96 @@ function buildAiBudget(transactions: TransactionRow[], categories: Map<number, C
   };
 }
 
+function buildGremmyReminders({
+  cashflow,
+  subscriptions,
+  moneyLeaks,
+  aiBudget,
+  reminderInput,
+}: {
+  cashflow: Awaited<ReturnType<typeof getCashflowSnapshot>> | null;
+  subscriptions: SubscriptionSummary;
+  moneyLeaks: MoneyLeaks;
+  aiBudget: AiBudget;
+  reminderInput: GremmyReminderInput;
+}): GremmyReminder[] {
+  const reminders: GremmyReminder[] = [];
+
+  if (reminderInput.uncategorizedCount > 0) {
+    reminders.push({
+      id: "categorize-transactions",
+      title: `Categorize ${reminderInput.uncategorizedCount.toLocaleString()} transaction${reminderInput.uncategorizedCount === 1 ? "" : "s"}`,
+      body: "Your books are cleaner, tax reports are sharper, and budget guesses get less sketchy once these are labeled.",
+      cta: "Clean up transactions",
+      href: "/books/transactions?filter=uncategorized",
+      priority: reminderInput.uncategorizedCount >= 25 ? "high" : "medium",
+    });
+  }
+
+  if (subscriptions.monthlyTotal >= 50 && subscriptions.items.length > 0) {
+    const biggest = subscriptions.items[0];
+    reminders.push({
+      id: "review-recurring",
+      title: `Review ${formatCurrency(subscriptions.monthlyTotal)}/mo in recurring charges`,
+      body: `${biggest.name} is the biggest likely subscription at about ${formatCurrency(biggest.monthlyCost)}/mo. Cut one stale charge and future-you gets paid every month.`,
+      cta: "Review recurring charges",
+      href: "/cashflow/recurring",
+      priority: subscriptions.monthlyTotal >= 150 ? "high" : "medium",
+    });
+  }
+
+  for (const card of reminderInput.creditCardsNearPayoff) {
+    reminders.push({
+      id: `credit-card-${card.name}`,
+      title: `${card.name} is close to paid off`,
+      body: `About ${formatCurrency(card.balance)} remains. If cash flow allows, knocking this out could remove a monthly drag and simplify your money map.`,
+      cta: "Check cash flow first",
+      href: "/cashflow",
+      priority: "medium",
+    });
+  }
+
+  if (cashflow && cashflow.safeToSpend <= 0) {
+    reminders.push({
+      id: "cashflow-tight",
+      title: "Cash looks tight before upcoming bills",
+      body: `Projected low balance is ${formatCurrency(cashflow.forecast.projectedLowBalance)}. Gremmy says pause extra spending until the next income clears.`,
+      cta: "Inspect cash flow",
+      href: "/cashflow",
+      priority: "high",
+    });
+  }
+
+  if (moneyLeaks.alertCount > 0) {
+    reminders.push({
+      id: "money-leaks",
+      title: `${moneyLeaks.alertCount} money leak signal${moneyLeaks.alertCount === 1 ? "" : "s"} to review`,
+      body: moneyLeaks.biggestSpikePct > 0
+        ? `${moneyLeaks.biggestSpikeLabel} is up ${moneyLeaks.biggestSpikePct}% versus the prior 30 days.`
+        : "Possible duplicate charges or increased subscription patterns showed up in recent transactions.",
+      cta: "Find the leak",
+      href: "/books/transactions",
+      priority: "medium",
+    });
+  }
+
+  if (aiBudget.needsLabels && !reminderInput.uncategorizedCount) {
+    reminders.push({
+      id: "budget-needs-labels",
+      title: "Budget confidence needs better labels",
+      body: "Gremmy can draft a better spending target after more transaction categories are cleaned up.",
+      cta: "Review transactions",
+      href: "/books/transactions",
+      priority: "low",
+    });
+  }
+
+  const priorityWeight = { high: 0, medium: 1, low: 2 };
+  return reminders
+    .sort((a, b) => priorityWeight[a.priority] - priorityWeight[b.priority])
+    .slice(0, 4);
+}
+
 function buildSpendingTrend(transactions: TransactionRow[]): SpendingTrendPoint[] {
   const points = Array.from({ length: 6 }, (_, index) => {
     const date = new Date();
@@ -621,21 +746,28 @@ function MoneyGremlin() {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default async function CashboardPage() {
+export default async function CashboardPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ gremmy?: string }>;
+}) {
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const [cashflow, briefing, booksData] = await Promise.all([
+  const [cashflow, briefing, booksData, reminderInput] = await Promise.all([
     getCashflowSnapshot(user.id, 14).catch(() => null),
     generateCashboardBriefing(user.id).catch(() => "Set up your Books data to get your personalized AI briefing."),
     getRecentBooksData(user.id).catch(() => ({ transactions: [], categories: new Map<number, CategoryRow>() })),
+    getGremmyReminderInput(user.id).catch(() => ({ uncategorizedCount: 0, creditCardsNearPayoff: [] })),
   ]);
 
   const subscriptionSummary = await getSubscriptionSummary(user.id, cashflow?.recurringItems ?? []);
   const incomeMix = buildIncomeMix(booksData.transactions, booksData.categories);
   const moneyLeaks = buildMoneyLeaks(booksData.transactions, booksData.categories, subscriptionSummary);
   const aiBudget = buildAiBudget(booksData.transactions, booksData.categories);
+  const gremmyReminders = buildGremmyReminders({ cashflow, subscriptions: subscriptionSummary, moneyLeaks, aiBudget, reminderInput });
+  const resolvedSearchParams = await searchParams;
 
   const affordabilityStatus = !cashflow
     ? "Needs data"
@@ -969,6 +1101,7 @@ export default async function CashboardPage() {
         </section>
       </div>
 
+      <GremmyReminderModal reminders={gremmyReminders} openOnLogin={resolvedSearchParams?.gremmy === "welcome"} />
       <CashInputStrip />
     </div>
   );

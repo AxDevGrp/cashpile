@@ -253,7 +253,7 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
   }
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="mx-auto w-full max-w-4xl space-y-6 p-4 sm:p-6">
       <div>
         <Link href="/books/transactions">
           <Button variant="outline" size="sm">← Back</Button>
