@@ -334,7 +334,7 @@ export async function listAiReviewSuggestions(limit = 40, accountId?: string | n
   for (const tx of transactions ?? []) {
     const categoryAssignmentMethod = tx.metadata?.category_assignment?.method;
     if (tx.metadata?.ai_review_processed?.processed_at || categoryAssignmentMethod === "ai_review" || categoryAssignmentMethod === "ai_instruction") continue;
-    if (tx.category_id && taxAssignedIds.has(String(tx.id))) continue;
+    if (tx.category_id || taxAssignedIds.has(String(tx.id))) continue;
     const pattern = derivePattern(tx.merchant, tx.description);
     if (!pattern || pattern.length < 3) continue;
     const accountId = tx.financial_account_id ?? "no-account";
