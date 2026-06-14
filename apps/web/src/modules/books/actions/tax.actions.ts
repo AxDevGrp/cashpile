@@ -396,7 +396,6 @@ export async function createTaxAssignmentRule(
   const { data: existing, error: existingError } = await existingQuery.maybeSingle();
   if (existingError) {
     if (isMissingAccountScopeColumn(existingError)) {
-      if (input.financial_account_id) throw accountScopeMigrationError();
       const legacyRow = { ...row } as any;
       delete legacyRow.financial_account_id;
       const { data, error } = await supabase
@@ -425,7 +424,17 @@ export async function createTaxAssignmentRule(
     .single();
 
   if (error) {
-    if (isMissingAccountScopeColumn(error)) throw accountScopeMigrationError();
+    if (isMissingAccountScopeColumn(error)) {
+      const legacyRow = { ...row } as any;
+      delete legacyRow.financial_account_id;
+      const retry = await supabase
+        .from("books_tax_assignment_rules")
+        .insert(legacyRow)
+        .select()
+        .single();
+      if (retry.error) throw new Error(retry.error.message);
+      return retry.data;
+    }
     throw new Error(error.message);
   }
   return data;

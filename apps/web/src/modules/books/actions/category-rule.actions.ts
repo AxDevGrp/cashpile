@@ -195,7 +195,6 @@ export async function createCategoryRule(input: {
   const { data: existing, error: existingError } = await existingQuery.maybeSingle();
   if (existingError) {
     if (isMissingAccountScopeColumn(existingError)) {
-      if (input.accountId) throw accountScopeMigrationError();
       const legacyRow = { ...row } as any;
       delete legacyRow.financial_account_id;
       const { data, error } = await (supabase as any)
@@ -226,7 +225,19 @@ export async function createCategoryRule(input: {
     .single();
 
   if (error) {
-    if (isMissingAccountScopeColumn(error)) throw accountScopeMigrationError();
+    if (isMissingAccountScopeColumn(error)) {
+      const legacyRow = { ...row } as any;
+      delete legacyRow.financial_account_id;
+      const retry = await (supabase as any)
+        .from("books_category_rules")
+        .upsert(legacyRow, { onConflict: "user_id,pattern" })
+        .select("*, books_categories(id, name)")
+        .single();
+      if (retry.error) throw new Error(retry.error.message);
+      revalidatePath("/books/category-rules");
+      revalidatePath("/books/transactions");
+      return retry.data as BooksCategoryRule;
+    }
     throw new Error(error.message);
   }
   revalidatePath("/books/category-rules");
