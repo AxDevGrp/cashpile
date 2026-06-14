@@ -5,13 +5,14 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { PageHeader, Button, Badge, Card, CardContent, formatCurrency, formatDate } from "@cashpile/ui";
+import { CategorySelectWithCreate } from "../../../_components/category-select-with-create";
 import type { AiReviewSuggestion } from "@/modules/books/actions/ai-review.actions";
 
 type Data = {
   suggestions: AiReviewSuggestion[];
   totalSuggestions: number;
   limit: number;
-  categories: Array<{ id: string | number; name: string; parent_category_id?: string | number | null }>;
+  categories: Array<{ id: string | number; name: string; category_type?: string | null; parent_category_id?: string | number | null }>;
   taxEntities: Array<{ id: string; name: string; entity_type?: string }>;
   accounts: Array<{ id: string; name: string; institution_name?: string | null; last_four_digits?: string | null }>;
   activeAccount: { id: string; name: string; institution_name?: string | null; last_four_digits?: string | null } | null;
@@ -33,13 +34,6 @@ type InstructionPreview = {
   interpretationReason: string | null;
 };
 
-function categoryLabel(category: Data["categories"][number], categories: Data["categories"]) {
-  const parent = category.parent_category_id
-    ? categories.find((item) => String(item.id) === String(category.parent_category_id))
-    : null;
-  return parent ? `${parent.name} / ${category.name}` : category.name;
-}
-
 function confidenceLabel(confidence: number) {
   if (confidence >= 0.9) return "High";
   if (confidence >= 0.75) return "Medium";
@@ -52,6 +46,7 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
     ? `${initialData.activeAccount.name}${initialData.activeAccount.last_four_digits ? ` - *${initialData.activeAccount.last_four_digits}` : ""}`
     : null;
   const [suggestions, setSuggestions] = useState(initialData.suggestions);
+  const [categoryOptions, setCategoryOptions] = useState(initialData.categories);
   const [instruction, setInstruction] = useState("");
   const [instructionAccountId, setInstructionAccountId] = useState(initialData.activeAccount?.id ?? "");
   const [instructionPattern, setInstructionPattern] = useState("");
@@ -108,6 +103,7 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
     if (!res.ok) return;
     const data = await res.json();
     setSuggestions(data.suggestions ?? []);
+    if (data.categories) setCategoryOptions(data.categories);
     setSelectedSuggestionIds(new Set());
   }
 
@@ -360,19 +356,17 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
 
             <label className="space-y-1 text-sm">
               <span className="font-medium">Category</span>
-              <select
-                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+              <CategorySelectWithCreate
                 value={instructionCategoryId}
-                onChange={(event) => {
-                  setInstructionCategoryId(event.target.value);
+                onChange={(value: string) => {
+                  setInstructionCategoryId(value);
                   clearInstructionPreview();
                 }}
-              >
-                <option value="">Infer / leave unchanged</option>
-                {initialData.categories.map((category) => (
-                  <option key={category.id} value={String(category.id)}>{categoryLabel(category, initialData.categories)}</option>
-                ))}
-              </select>
+                categories={categoryOptions}
+                onCategoriesChange={setCategoryOptions}
+                blankLabel="Infer / leave unchanged"
+                onBeforeCreate={clearInstructionPreview}
+              />
             </label>
 
             <label className="space-y-1 text-sm">
@@ -552,16 +546,13 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
                   <div className="grid gap-3 md:grid-cols-2">
                     <label className="space-y-1 text-sm">
                       <span className="font-medium">Category</span>
-                      <select
-                        className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                      <CategorySelectWithCreate
                         value={draft.categoryId}
-                        onChange={(event) => updateDraft(suggestion.id, { categoryId: event.target.value })}
-                      >
-                        <option value="">-- Leave category unchanged --</option>
-                        {initialData.categories.map((category) => (
-                          <option key={category.id} value={String(category.id)}>{categoryLabel(category, initialData.categories)}</option>
-                        ))}
-                      </select>
+                        onChange={(value: string) => updateDraft(suggestion.id, { categoryId: value })}
+                        categories={categoryOptions}
+                        onCategoriesChange={setCategoryOptions}
+                        blankLabel="-- Leave category unchanged --"
+                      />
                     </label>
 
                     <label className="space-y-1 text-sm">

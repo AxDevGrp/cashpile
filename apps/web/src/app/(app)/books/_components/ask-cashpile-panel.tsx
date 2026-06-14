@@ -5,8 +5,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Badge, Button, Card, CardContent } from "@cashpile/ui";
+import { CategorySelectWithCreate } from "./category-select-with-create";
 
-type Category = { id: string | number; name: string; parent_category_id?: string | number | null };
+type Category = { id: string | number; name: string; category_type?: string | null; parent_category_id?: string | number | null };
 type TaxEntity = { id: string; name: string; entity_type?: string | null };
 type Account = { id: string; name: string; institution_name?: string | null; last_four_digits?: string | null };
 
@@ -25,13 +26,6 @@ type InstructionPreview = {
   interpretationReason: string | null;
 };
 
-function categoryLabel(category: Category, categories: Category[]) {
-  const parent = category.parent_category_id
-    ? categories.find((item) => String(item.id) === String(category.parent_category_id))
-    : null;
-  return parent ? `${parent.name} / ${category.name}` : category.name;
-}
-
 export function AskCashpilePanel({
   categories,
   taxEntities,
@@ -48,6 +42,7 @@ export function AskCashpilePanel({
   description?: string;
 }) {
   const router = useRouter();
+  const [categoryOptions, setCategoryOptions] = useState(categories);
   const [instruction, setInstruction] = useState("");
   const [accountId, setAccountId] = useState(defaultAccountId);
   const [pattern, setPattern] = useState("");
@@ -191,19 +186,17 @@ export function AskCashpilePanel({
 
             <label className="space-y-1 text-sm">
               <span className="font-medium">Category</span>
-              <select
-                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+              <CategorySelectWithCreate
                 value={categoryId}
-                onChange={(event) => {
-                  setCategoryId(event.target.value);
+                onChange={(value: string) => {
+                  setCategoryId(value);
                   clearPreview();
                 }}
-              >
-                <option value="">Infer / leave unchanged</option>
-                {categories.map((category) => (
-                  <option key={category.id} value={String(category.id)}>{categoryLabel(category, categories)}</option>
-                ))}
-              </select>
+                categories={categoryOptions}
+                onCategoriesChange={setCategoryOptions}
+                blankLabel="Infer / leave unchanged"
+                onBeforeCreate={clearPreview}
+              />
             </label>
 
             <label className="space-y-1 text-sm">

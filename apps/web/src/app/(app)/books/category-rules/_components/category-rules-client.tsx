@@ -7,6 +7,7 @@ import { ArrowLeft, Trash2 } from "lucide-react";
 import { Button, Card, CardContent, Input, PageHeader, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@cashpile/ui";
 import type { BooksAccount, BooksCategory } from "@/modules/books/types";
 import type { BooksCategoryRule } from "@/modules/books/actions/category-rule.actions";
+import { CategorySelectWithCreate } from "../../_components/category-select-with-create";
 
 interface Props {
   initialRules: BooksCategoryRule[];
@@ -16,8 +17,9 @@ interface Props {
 
 export default function CategoryRulesClient({ initialRules, categories, accounts }: Props) {
   const [rules, setRules] = useState(initialRules);
+  const [categoryOptions, setCategoryOptions] = useState(categories);
   const [pattern, setPattern] = useState("");
-  const defaultCategory = categories.find((category) => category.name === "Software & Subscriptions") ?? categories[0];
+  const defaultCategory = categoryOptions.find((category) => category.name === "Software & Subscriptions") ?? categoryOptions[0];
   const [categoryId, setCategoryId] = useState(defaultCategory?.id ? String(defaultCategory.id) : "");
   const [accountId, setAccountId] = useState("global");
   const [saving, setSaving] = useState(false);
@@ -113,16 +115,13 @@ export default function CategoryRulesClient({ initialRules, categories, accounts
               onChange={(event) => setPattern(event.target.value)}
               placeholder="Merchant patterns, e.g. ANTHROPIC, OPENAI, OPENROUTER"
             />
-            <Select value={categoryId} onValueChange={setCategoryId}>
-              <SelectTrigger aria-label="Target category">
-                <SelectValue placeholder="Choose category" />
-              </SelectTrigger>
-              <SelectContent>
-                {categories.map((category) => (
-                  <SelectItem key={category.id} value={String(category.id)}>{category.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <CategorySelectWithCreate
+              value={categoryId}
+              onChange={setCategoryId}
+              categories={categoryOptions}
+              onCategoriesChange={setCategoryOptions}
+              blankLabel="Choose category"
+            />
             <Select value={accountId} onValueChange={setAccountId}>
               <SelectTrigger aria-label="Rule scope">
                 <SelectValue placeholder="Rule scope" />
