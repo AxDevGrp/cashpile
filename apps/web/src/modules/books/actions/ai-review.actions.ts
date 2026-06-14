@@ -496,6 +496,7 @@ export async function applyAiInstruction(input: {
   inferredCategoryName: string | null;
   inferredTaxEntityName: string | null;
   matchedTransactions: number;
+  matchedTransactionIds: string[];
   uncategorizedMatches: number;
   willSetAccountDefault: boolean;
   willCreateCategoryRule: boolean;
@@ -706,6 +707,7 @@ export async function applyAiInstruction(input: {
     inferredCategoryName: category?.name ?? null,
     inferredTaxEntityName: taxEntity?.name ?? null,
     matchedTransactions: matchingTransactionIds.length,
+    matchedTransactionIds: matchingTransactionIds,
     uncategorizedMatches: uncategorizedMatchingTransactionIds.length,
     willSetAccountDefault,
     willCreateCategoryRule,

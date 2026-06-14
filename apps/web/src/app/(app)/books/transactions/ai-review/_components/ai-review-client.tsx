@@ -23,6 +23,7 @@ type InstructionPreview = {
   inferredCategoryName: string | null;
   inferredTaxEntityName: string | null;
   matchedTransactions: number;
+  matchedTransactionIds?: string[];
   uncategorizedMatches: number;
   willSetAccountDefault: boolean;
   willCreateCategoryRule: boolean;
@@ -239,6 +240,17 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
       toast.success(
         `Instruction applied: ${data.categorizedTransactions ?? 0} categorized, ${data.assignedTaxViews ?? 0} assigned${data.accountDefaultApplied ? ", account default saved" : ""}`
       );
+      const matchedIds = new Set(Array.isArray(data.matchedTransactionIds) ? data.matchedTransactionIds : []);
+      if (matchedIds.size > 0) {
+        setSuggestions((current) => current.filter((suggestion) => !suggestion.transactionIds.some((id) => matchedIds.has(id))));
+        setSelectedSuggestionIds((current) => {
+          const next = new Set(current);
+          suggestions.forEach((suggestion) => {
+            if (suggestion.transactionIds.some((id) => matchedIds.has(id))) next.delete(suggestion.id);
+          });
+          return next;
+        });
+      }
       setInstruction("");
       setInstructionPattern("");
       setInstructionPreview(null);
