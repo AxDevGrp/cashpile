@@ -142,7 +142,10 @@ async function getTaxAssignedTransactionIds(supabase: any, userId: string, trans
       .select("transaction_id")
       .eq("user_id", userId)
       .in("transaction_id", ids);
-    if (error) throw new Error(error.message);
+    if (error) {
+      console.warn("[ai-review] Unable to load tax assignment index:", error.message);
+      return assignedIds;
+    }
     (data ?? []).forEach((row: any) => assignedIds.add(String(row.transaction_id)));
   }
 
@@ -364,7 +367,10 @@ export async function listAiReviewSuggestions(limit = 40, accountId?: string | n
       .eq("user_id", user.id)
       .eq("is_active", true);
   }
-  if (categoryRulesRes.error && !String(categoryRulesRes.error.message ?? "").includes("books_category_rules")) throw new Error(categoryRulesRes.error.message);
+  if (categoryRulesRes.error) {
+    console.warn("[ai-review] Unable to load category rules:", categoryRulesRes.error.message);
+    categoryRulesRes = { data: [] };
+  }
 
   let taxRulesRes = await (supabase as any)
     .from("books_tax_assignment_rules")
@@ -378,7 +384,10 @@ export async function listAiReviewSuggestions(limit = 40, accountId?: string | n
       .eq("user_id", user.id)
       .eq("is_active", true);
   }
-  if (taxRulesRes.error && !String(taxRulesRes.error.message ?? "").includes("books_tax_assignment_rules")) throw new Error(taxRulesRes.error.message);
+  if (taxRulesRes.error) {
+    console.warn("[ai-review] Unable to load tax assignment rules:", taxRulesRes.error.message);
+    taxRulesRes = { data: [] };
+  }
 
   const taxEntityById = new Map<string, any>((taxEntities ?? []).map((entity: any) => [String(entity.id), entity]));
   const categoryByName = new Map<string, any>((categories ?? []).map((category: any) => [String(category.name).toLowerCase(), category]));
