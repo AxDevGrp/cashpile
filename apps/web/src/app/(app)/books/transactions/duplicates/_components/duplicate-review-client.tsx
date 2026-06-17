@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, PageHeader, Progress, formatCurrency, formatDate } from "@cashpile/ui";
 import {
+  bulkMergeDuplicateGroups,
   bulkMarkDuplicateGroupsReviewed,
   deleteDuplicateTransactions,
   markDuplicateGroupReviewed,
@@ -16,6 +17,8 @@ import {
 type Props = {
   groups: DuplicateReviewGroup[];
 };
+
+const BULK_MERGE_GROUP_CHUNK_SIZE = 25;
 
 export default function DuplicateReviewClient({ groups }: Props) {
   const router = useRouter();
@@ -141,18 +144,25 @@ export default function DuplicateReviewClient({ groups }: Props) {
       let completedGroups = 0;
       let mergedTransactions = 0;
       try {
-        for (const item of payload) {
+        for (let index = 0; index < payload.length; index += BULK_MERGE_GROUP_CHUNK_SIZE) {
+          const chunk = payload.slice(index, index + BULK_MERGE_GROUP_CHUNK_SIZE);
+          const first = chunk[0];
           setBulkProgress({
             active: true,
             completedGroups,
             totalGroups: payload.length,
             mergedTransactions,
             totalTransactions: duplicateCount,
-            currentLabel: `${formatDate(item.group.transactions[0].date)} · ${formatCurrency(item.group.transactions[0].amount)}`,
+            currentLabel: first
+              ? `${formatDate(first.group.transactions[0].date)} · ${formatCurrency(first.group.transactions[0].amount)}`
+              : "Processing bulk merge…",
           });
 
-          const result = await mergeDuplicateTransactions(item.keeperId, item.duplicateIds);
-          completedGroups += 1;
+          const result = await bulkMergeDuplicateGroups(chunk.map((item) => ({
+            keeperId: item.keeperId,
+            duplicateIds: item.duplicateIds,
+          })));
+          completedGroups += chunk.length;
           mergedTransactions += result.merged;
 
           setBulkProgress({

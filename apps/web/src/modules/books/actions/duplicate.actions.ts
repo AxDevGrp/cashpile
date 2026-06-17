@@ -27,6 +27,8 @@ export type DuplicateReviewGroup = {
   transactions: DuplicateTransactionRow[];
 };
 
+type SupabaseClient = Awaited<ReturnType<typeof createServerSupabaseClient>>;
+
 function amountKey(amount: number) {
   return Number(amount).toFixed(2);
 }
@@ -202,10 +204,22 @@ export async function mergeDuplicateTransactions(keeperId: string, duplicateIds:
   if (ids.length === 0) return { merged: 0 };
 
   const { supabase, user } = await getCurrentUserSupabase();
+  const result = await mergeDuplicateTransactionsForUser(supabase, user.id, keeperId, ids);
+  revalidatePath("/books/transactions");
+  revalidatePath("/books/transactions/duplicates");
+  return result;
+}
+
+async function mergeDuplicateTransactionsForUser(
+  supabase: SupabaseClient,
+  userId: string,
+  keeperId: string,
+  ids: string[]
+) {
   const { data: rows, error: loadError } = await (supabase as any)
     .from("books_transactions")
     .select("id, merchant, category_id, financial_account_id, metadata")
-    .eq("user_id", user.id)
+    .eq("user_id", userId)
     .in("id", [keeperId, ...ids]);
   if (loadError) throw new Error(loadError.message);
 
@@ -232,19 +246,17 @@ export async function mergeDuplicateTransactions(keeperId: string, duplicateIds:
   const { error: updateError } = await (supabase as any)
     .from("books_transactions")
     .update(update)
-    .eq("user_id", user.id)
+    .eq("user_id", userId)
     .eq("id", keeperId);
   if (updateError) throw new Error(updateError.message);
 
   const { error: deleteError } = await (supabase as any)
     .from("books_transactions")
     .delete()
-    .eq("user_id", user.id)
+    .eq("user_id", userId)
     .in("id", ids);
   if (deleteError) throw new Error(deleteError.message);
 
-  revalidatePath("/books/transactions");
-  revalidatePath("/books/transactions/duplicates");
   return { merged: ids.length };
 }
 
@@ -276,13 +288,18 @@ export async function markDuplicateGroupReviewed(transactionIds: string[]) {
 
 export async function bulkMergeDuplicateGroups(groups: { keeperId: string; duplicateIds: string[] }[]) {
   let merged = 0;
+  const { supabase, user } = await getCurrentUserSupabase();
+
   for (const group of groups) {
     const ids = group.duplicateIds.filter((id) => id !== group.keeperId);
     if (group.keeperId && ids.length > 0) {
-      const result = await mergeDuplicateTransactions(group.keeperId, ids);
+      const result = await mergeDuplicateTransactionsForUser(supabase, user.id, group.keeperId, ids);
       merged += result.merged;
     }
   }
+
+  revalidatePath("/books/transactions");
+  revalidatePath("/books/transactions/duplicates");
   return { merged };
 }
 
