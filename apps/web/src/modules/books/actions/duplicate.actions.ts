@@ -32,7 +32,12 @@ function amountKey(amount: number) {
 }
 
 function exactGroupKey(tx: DuplicateTransactionRow) {
-  return [tx.date, amountKey(tx.amount), normalizeTransactionDescription(tx.description)].join("|");
+  return [
+    tx.financial_account_id ?? "unknown",
+    tx.date,
+    amountKey(tx.amount),
+    normalizeTransactionDescription(tx.description),
+  ].join("|");
 }
 
 function isReviewed(tx: DuplicateTransactionRow) {
@@ -52,6 +57,13 @@ function sortBestKeeperFirst(rows: DuplicateTransactionRow[]) {
   });
 }
 
+function possibleGroupConfidence(rows: DuplicateTransactionRow[]) {
+  const confidences = rows
+    .map((tx) => tx.metadata?.duplicate_confidence)
+    .filter((confidence): confidence is number => typeof confidence === "number");
+  return confidences.length > 0 ? Math.max(...confidences) : undefined;
+}
+
 async function getCurrentUserSupabase() {
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -62,16 +74,22 @@ async function getCurrentUserSupabase() {
 export async function listDuplicateReviewGroups(): Promise<DuplicateReviewGroup[]> {
   const { supabase, user } = await getCurrentUserSupabase();
 
-  const { data: rows, error } = await (supabase as any)
-    .from("books_transactions")
-    .select("id, date, description, merchant, amount, category_id, financial_account_id, import_source, plaid_transaction_id, metadata, created_at")
-    .eq("user_id", user.id)
-    .order("date", { ascending: false })
-    .limit(5000);
+  const rows: DuplicateTransactionRow[] = [];
+  const pageSize = 1000;
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await (supabase as any)
+      .from("books_transactions")
+      .select("id, date, description, merchant, amount, category_id, financial_account_id, import_source, plaid_transaction_id, metadata, created_at")
+      .eq("user_id", user.id)
+      .order("date", { ascending: false })
+      .range(from, from + pageSize - 1);
 
-  if (error) throw new Error(error.message);
+    if (error) throw new Error(error.message);
+    rows.push(...((data ?? []) as DuplicateTransactionRow[]));
+    if ((data?.length ?? 0) < pageSize) break;
+  }
 
-  const transactions = ((rows ?? []) as DuplicateTransactionRow[]).filter((tx) => !isReviewed(tx));
+  const transactions = rows.filter((tx) => !isReviewed(tx));
 
   const categoryIds = Array.from(new Set(transactions.map((tx) => tx.category_id).filter(Boolean)));
   const accountIds = Array.from(new Set(transactions.map((tx) => tx.financial_account_id).filter(Boolean)));
@@ -97,40 +115,71 @@ export async function listDuplicateReviewGroups(): Promise<DuplicateReviewGroup[
     books_financial_accounts: tx.financial_account_id ? accountsById.get(String(tx.financial_account_id)) ?? null : null,
   }));
 
-  const groups = new Map<string, DuplicateTransactionRow[]>();
+  const exactRowsByKey = new Map<string, DuplicateTransactionRow[]>();
   for (const tx of hydrated) {
     const key = exactGroupKey(tx);
-    groups.set(key, [...(groups.get(key) ?? []), tx]);
-  }
-
-  const exactGroups: DuplicateReviewGroup[] = [];
-  const groupedIds = new Set<string>();
-  for (const [key, groupRows] of groups) {
-    if (groupRows.length < 2) continue;
-    const sorted = sortBestKeeperFirst(groupRows);
-    sorted.forEach((tx) => groupedIds.add(tx.id));
-    exactGroups.push({ id: `exact:${key}`, reason: "exact", transactions: sorted });
+    exactRowsByKey.set(key, [...(exactRowsByKey.get(key) ?? []), tx]);
   }
 
   const byId = new Map(hydrated.map((tx) => [tx.id, tx]));
-  const possibleGroups: DuplicateReviewGroup[] = [];
-  for (const tx of hydrated) {
-    if (groupedIds.has(tx.id)) continue;
-    const candidateId = tx.metadata?.duplicate_candidate_id;
-    if (!candidateId || groupedIds.has(candidateId)) continue;
-    const candidate = byId.get(candidateId);
-    if (!candidate || isReviewed(candidate)) continue;
-    const sorted = sortBestKeeperFirst([candidate, tx]);
-    possibleGroups.push({
-      id: `possible:${tx.id}:${candidate.id}`,
-      reason: "possible",
-      confidence: typeof tx.metadata?.duplicate_confidence === "number" ? tx.metadata.duplicate_confidence : undefined,
-      transactions: sorted,
-    });
-    sorted.forEach((row) => groupedIds.add(row.id));
+  const links = new Map<string, Set<string>>();
+  const linkIds = new Set<string>();
+  const exactLinkIds = new Set<string>();
+  const addLink = (a: string, b: string, reason: "exact" | "possible") => {
+    links.set(a, (links.get(a) ?? new Set()).add(b));
+    links.set(b, (links.get(b) ?? new Set()).add(a));
+    linkIds.add(a);
+    linkIds.add(b);
+    if (reason === "exact") {
+      exactLinkIds.add(a);
+      exactLinkIds.add(b);
+    }
+  };
+
+  for (const groupRows of exactRowsByKey.values()) {
+    if (groupRows.length < 2) continue;
+    const [first, ...rest] = groupRows;
+    for (const tx of rest) addLink(first.id, tx.id, "exact");
   }
 
-  return [...exactGroups, ...possibleGroups].sort((a, b) => b.transactions[0].date.localeCompare(a.transactions[0].date));
+  for (const tx of hydrated) {
+    const candidateId = tx.metadata?.duplicate_candidate_id;
+    if (!candidateId) continue;
+    const candidate = byId.get(candidateId);
+    if (!candidate || isReviewed(candidate)) continue;
+    addLink(tx.id, candidateId, "possible");
+  }
+
+  const reviewGroups: DuplicateReviewGroup[] = [];
+  const visited = new Set<string>();
+  for (const id of linkIds) {
+    if (visited.has(id)) continue;
+    const componentIds: string[] = [];
+    const queue = [id];
+    visited.add(id);
+
+    for (let index = 0; index < queue.length; index++) {
+      const currentId = queue[index];
+      componentIds.push(currentId);
+      for (const linkedId of links.get(currentId) ?? []) {
+        if (visited.has(linkedId)) continue;
+        visited.add(linkedId);
+        queue.push(linkedId);
+      }
+    }
+
+    const sorted = sortBestKeeperFirst(componentIds.map((componentId) => byId.get(componentId)).filter(Boolean) as DuplicateTransactionRow[]);
+    if (sorted.length < 2) continue;
+    const reason = componentIds.some((componentId) => exactLinkIds.has(componentId)) ? "exact" : "possible";
+    reviewGroups.push({
+      id: `${reason}:${componentIds.sort().join(":")}`,
+      reason,
+      confidence: reason === "possible" ? possibleGroupConfidence(sorted) : undefined,
+      transactions: sorted,
+    });
+  }
+
+  return reviewGroups.sort((a, b) => b.transactions[0].date.localeCompare(a.transactions[0].date));
 }
 
 export async function deleteDuplicateTransactions(transactionIds: string[]) {
