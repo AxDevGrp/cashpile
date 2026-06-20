@@ -429,6 +429,171 @@ export interface Database {
         };
         Relationships: never[];
       };
+      tax_workbook_templates: {
+        Row: {
+          id: string;
+          user_id: string;
+          name: string;
+          tax_year: number | null;
+          preparer_name: string | null;
+          storage_path: string;
+          original_filename: string;
+          file_hash: string;
+          status: "uploaded" | "analyzed" | "mapped" | "archived" | "error";
+          error_message: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          name: string;
+          tax_year?: number | null;
+          preparer_name?: string | null;
+          storage_path: string;
+          original_filename: string;
+          file_hash: string;
+          status?: "uploaded" | "analyzed" | "mapped" | "archived" | "error";
+          error_message?: string | null;
+        };
+        Update: {
+          name?: string;
+          tax_year?: number | null;
+          preparer_name?: string | null;
+          storage_path?: string;
+          original_filename?: string;
+          file_hash?: string;
+          status?: "uploaded" | "analyzed" | "mapped" | "archived" | "error";
+          error_message?: string | null;
+          updated_at?: string;
+        };
+        Relationships: never[];
+      };
+      tax_workbook_targets: {
+        Row: {
+          id: string;
+          template_id: string;
+          sheet_name: string;
+          label: string;
+          target_cell: string;
+          target_range: string | null;
+          target_type: string;
+          detected_confidence: number;
+          is_formula_cell: boolean;
+          is_writable: boolean;
+          metadata: Json;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          template_id: string;
+          sheet_name: string;
+          label: string;
+          target_cell: string;
+          target_range?: string | null;
+          target_type?: string;
+          detected_confidence?: number;
+          is_formula_cell?: boolean;
+          is_writable?: boolean;
+          metadata?: Json;
+        };
+        Update: {
+          sheet_name?: string;
+          label?: string;
+          target_cell?: string;
+          target_range?: string | null;
+          target_type?: string;
+          detected_confidence?: number;
+          is_formula_cell?: boolean;
+          is_writable?: boolean;
+          metadata?: Json;
+          updated_at?: string;
+        };
+        Relationships: never[];
+      };
+      tax_category_mappings: {
+        Row: {
+          id: string;
+          user_id: string;
+          template_id: string;
+          tax_year: number | null;
+          tax_entity_id: string | null;
+          entity_type: string | null;
+          cashpile_category_id: number;
+          cashpile_category_name_snapshot: string;
+          target_id: string | null;
+          aggregation_rule: "sum_deductible_amount" | "sum_gross_amount";
+          deduction_percentage_override: number | null;
+          is_ignored: boolean;
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          template_id: string;
+          tax_year?: number | null;
+          tax_entity_id?: string | null;
+          entity_type?: string | null;
+          cashpile_category_id: number;
+          cashpile_category_name_snapshot: string;
+          target_id?: string | null;
+          aggregation_rule?: "sum_deductible_amount" | "sum_gross_amount";
+          deduction_percentage_override?: number | null;
+          is_ignored?: boolean;
+          is_active?: boolean;
+        };
+        Update: {
+          tax_year?: number | null;
+          tax_entity_id?: string | null;
+          entity_type?: string | null;
+          cashpile_category_name_snapshot?: string;
+          target_id?: string | null;
+          aggregation_rule?: "sum_deductible_amount" | "sum_gross_amount";
+          deduction_percentage_override?: number | null;
+          is_ignored?: boolean;
+          is_active?: boolean;
+          updated_at?: string;
+        };
+        Relationships: never[];
+      };
+      tax_workbook_exports: {
+        Row: {
+          id: string;
+          user_id: string;
+          template_id: string;
+          tax_year: number;
+          tax_entity_ids: string[];
+          status: "running" | "completed" | "error";
+          output_storage_path: string | null;
+          summary: Json;
+          error_message: string | null;
+          created_at: string;
+          completed_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          template_id: string;
+          tax_year: number;
+          tax_entity_ids?: string[];
+          status?: "running" | "completed" | "error";
+          output_storage_path?: string | null;
+          summary?: Json;
+          error_message?: string | null;
+          completed_at?: string | null;
+        };
+        Update: {
+          status?: "running" | "completed" | "error";
+          output_storage_path?: string | null;
+          summary?: Json;
+          error_message?: string | null;
+          completed_at?: string | null;
+        };
+        Relationships: never[];
+      };
       // ─── Trades tables ───────────────────────────────────────────────
       trades_prop_accounts: {
         Row: {

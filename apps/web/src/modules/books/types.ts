@@ -231,3 +231,54 @@ export interface ScheduleEReport {
   taxYear: number;
   properties: ScheduleEProperty[];
 }
+
+// ─── Tax workbook templates / mappings ─────────────────────────────────────
+
+export interface TaxWorkbookTemplate {
+  id: string;
+  user_id: string;
+  name: string;
+  tax_year?: number | null;
+  preparer_name?: string | null;
+  storage_path: string;
+  original_filename: string;
+  file_hash: string;
+  status: "uploaded" | "analyzed" | "mapped" | "archived" | "error";
+  error_message?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TaxWorkbookTarget {
+  id: string;
+  template_id: string;
+  sheet_name: string;
+  label: string;
+  target_cell: string;
+  target_range?: string | null;
+  target_type: string;
+  detected_confidence: number;
+  is_formula_cell: boolean;
+  is_writable: boolean;
+  metadata?: Record<string, unknown>;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface TaxCategoryMapping {
+  id: string;
+  user_id: string;
+  template_id: string;
+  tax_year?: number | null;
+  tax_entity_id?: string | null;
+  entity_type?: string | null;
+  cashpile_category_id: number;
+  cashpile_category_name_snapshot: string;
+  target_id?: string | null;
+  aggregation_rule: "sum_deductible_amount" | "sum_gross_amount";
+  deduction_percentage_override?: number | null;
+  is_ignored: boolean;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
