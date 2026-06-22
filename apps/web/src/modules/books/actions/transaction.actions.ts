@@ -241,6 +241,17 @@ export async function updateTransaction(id: string, input: Partial<BooksTransact
     update = { ...update, metadata: { ...(current?.metadata ?? {}), ...input.metadata } };
   }
 
+  if (hasOwn(update, "financial_account_id") && update.financial_account_id) {
+    const { data: account, error: accountError } = await (supabase as any)
+      .from("books_financial_accounts")
+      .select("id")
+      .eq("id", update.financial_account_id)
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (accountError) throw new Error(accountError.message);
+    if (!account) throw new Error("Account not found");
+  }
+
   const { data, error } = await supabase
     .from("books_transactions")
     .update(update)

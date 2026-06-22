@@ -102,20 +102,32 @@ export async function PATCH(req: NextRequest) {
     if (!body?.id) {
       return NextResponse.json({ error: "Transaction id is required" }, { status: 400 });
     }
-    const categoryAudit = body.categoryId
-      ? {
-        category_suggestion: null,
-        category_assignment: {
-          method: "manual",
-          confidence: 1,
-          assigned_at: new Date().toISOString(),
-        },
+
+    const update: Record<string, unknown> = {};
+    if (Object.prototype.hasOwnProperty.call(body, "categoryId")) {
+      update.category_id = body.categoryId ?? null;
+      if (body.categoryId) {
+        update.metadata = {
+          category_suggestion: null,
+          category_assignment: {
+            method: "manual",
+            confidence: 1,
+            assigned_at: new Date().toISOString(),
+          },
+        };
       }
-      : undefined;
-    const updated = await updateTransaction(body.id, {
-      category_id: body.categoryId ?? null,
-      metadata: categoryAudit,
-    } as any);
+    }
+    if (Object.prototype.hasOwnProperty.call(body, "accountId")) {
+      if (!body.accountId) {
+        return NextResponse.json({ error: "Account id is required" }, { status: 400 });
+      }
+      update.financial_account_id = body.accountId;
+    }
+    if (Object.keys(update).length === 0) {
+      return NextResponse.json({ error: "No transaction updates provided" }, { status: 400 });
+    }
+
+    const updated = await updateTransaction(body.id, update as any);
     let rule = null;
     let appliedMatches = 0;
     let taxAssigned = 0;

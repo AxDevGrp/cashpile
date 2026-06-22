@@ -36,7 +36,7 @@ interface Props {
   entities: TaxEntity[];
   categories: BooksCategory[];
   udas: (BooksUda & { books_financial_accounts?: { id: string; name: string }[] })[];
-  accounts?: { id: string; name: string; institution_name?: string | null; institution?: string | null; last_four_digits?: string | null }[];
+  accounts?: { id: string; name: string; tax_entity_id?: string | null; institution_name?: string | null; institution?: string | null; last_four_digits?: string | null }[];
   filters: { taxEntityId?: string; udaId?: string; accountId?: string; categoryId?: string; from?: string; to?: string; search?: string; filter?: "uncategorized" | "categorized" };
   loadError?: string;
   title?: string;
@@ -642,6 +642,98 @@ export default function TransactionsClient({
     }
   }
 
+  async function assignAccount(transactionId: string, accountId: string) {
+    const previousRows = rows;
+    const nextAccount = accounts.find((account) => account.id === accountId);
+    if (!nextAccount) {
+      toast.error("Choose an account");
+      return;
+    }
+
+    setRows((current) => current.map((tx) => tx.id === transactionId
+      ? {
+        ...tx,
+        account_id: accountId,
+        financial_account_id: accountId,
+        books_financial_accounts: { name: nextAccount.name },
+      } as typeof tx
+      : tx
+    ));
+
+    try {
+      const res = await fetch("/api/books/transactions", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: transactionId, accountId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Unable to update account");
+      toast.success(`Moved to ${nextAccount.name}`);
+    } catch (error) {
+      setRows(previousRows);
+      toast.error(error instanceof Error ? error.message : "Unable to update account");
+    }
+  }
+
+  async function assignTaxEntity(transactionId: string, taxEntityId: string) {
+    const previousRows = rows;
+    const tx = rows.find((row) => row.id === transactionId);
+    if (!tx) return;
+
+    const existingViews = tx.books_tax_transaction_views ?? [];
+    const nextViews = taxEntityId === "unassigned"
+      ? []
+      : [{ tax_entity_id: taxEntityId, tax_notes: "Manually assigned in Transactions", business_percentage: 100 }];
+    const nextEntity = entities.find((entity) => entity.id === taxEntityId);
+
+    setRows((current) => current.map((row) => row.id === transactionId
+      ? { ...row, books_tax_transaction_views: nextViews }
+      : row
+    ));
+
+    try {
+      for (const view of existingViews) {
+        const res = await fetch("/api/tax/assignment", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ transactionIds: [transactionId], taxEntityId: view.tax_entity_id }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "Unable to update Tax Entity");
+      }
+
+      if (taxEntityId !== "unassigned") {
+        const res = await fetch("/api/tax/assignment", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            transactionIds: [transactionId],
+            taxEntityId,
+            businessPct: 100,
+            deductionPct: 100,
+            isDeductible: true,
+            notes: "Manually assigned in Transactions",
+            categoryId: tx.category_id ? Number(tx.category_id) : undefined,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "Unable to update Tax Entity");
+      }
+
+      toast.success(nextEntity ? `Assigned to ${nextEntity.name}` : "Removed Tax Entity assignment");
+    } catch (error) {
+      setRows(previousRows);
+      toast.error(error instanceof Error ? error.message : "Unable to update Tax Entity");
+    }
+  }
+
+  function taxEntitySelectValue(tx: Props["transactions"][0]) {
+    const ids = Array.from(new Set((tx.books_tax_transaction_views ?? []).map((view) => view.tax_entity_id)));
+    if (ids.length === 0) return "unassigned";
+    if (ids.length === 1) return ids[0];
+    return "multiple";
+  }
+
   function getTaxAssignments(tx: Props["transactions"][0]) {
     return (tx.books_tax_transaction_views ?? []).map((view) => {
       const note = view.tax_notes ?? "Assigned to Tax Entity";
@@ -976,6 +1068,7 @@ export default function TransactionsClient({
               <th className="p-3 text-left font-medium">Description</th>
               <th className="p-3 text-left font-medium">Account</th>
               <th className="p-3 text-left font-medium">Category</th>
+              <th className="p-3 text-left font-medium">Tax Entity</th>
               <th className="p-3 text-right font-medium">Amount</th>
               <th className="p-3 text-left font-medium">Flags</th>
             </tr>
@@ -983,13 +1076,13 @@ export default function TransactionsClient({
           <tbody>
             {isLoading ? (
               <tr>
-                <td colSpan={7} className="p-8 text-center text-muted-foreground">
+                <td colSpan={8} className="p-8 text-center text-muted-foreground">
                   Loading transactions…
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={7} className="p-8 text-center text-muted-foreground">
+                <td colSpan={8} className="p-8 text-center text-muted-foreground">
                   No transactions yet.{" "}
                   <Link href="/books/transactions/import" className="underline">
                     Import your first CSV
@@ -1009,7 +1102,21 @@ export default function TransactionsClient({
                   </td>
                   <td className="p-3 tabular-nums text-muted-foreground">{formatDate(tx.date)}</td>
                   <td className="p-3 max-w-xs truncate">{tx.description}</td>
-                  <td className="p-3 text-muted-foreground">{tx.books_financial_accounts?.name ?? "—"}</td>
+                  <td className="p-3">
+                    <Select
+                      value={tx.account_id ?? (tx as any).financial_account_id ?? ""}
+                      onValueChange={(value) => assignAccount(tx.id, value)}
+                    >
+                      <SelectTrigger className="h-8 w-56 rounded-full bg-white text-xs">
+                        <SelectValue placeholder="Choose account" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {accounts.map((account) => (
+                          <SelectItem key={account.id} value={account.id}>{accountOptionLabel(account)}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </td>
                   <td className="p-3">
                     <Select
                       value={tx.category_id ? String(tx.category_id) : "uncategorized"}
@@ -1033,6 +1140,27 @@ export default function TransactionsClient({
                         ))}
                         <SelectSeparator />
                         <SelectItem value="__add_category__">+ Add category…</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </td>
+                  <td className="p-3">
+                    <Select
+                      value={taxEntitySelectValue(tx)}
+                      onValueChange={(value) => {
+                        if (value !== "multiple") assignTaxEntity(tx.id, value);
+                      }}
+                    >
+                      <SelectTrigger className="h-8 w-52 rounded-full bg-white text-xs">
+                        <SelectValue placeholder="No Tax Entity" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="unassigned">No Tax Entity</SelectItem>
+                        {taxEntitySelectValue(tx) === "multiple" && (
+                          <SelectItem value="multiple">Multiple Tax Entities</SelectItem>
+                        )}
+                        {entities.map((entity) => (
+                          <SelectItem key={entity.id} value={entity.id}>{entity.name}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </td>
