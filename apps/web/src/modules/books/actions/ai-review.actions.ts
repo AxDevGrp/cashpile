@@ -246,6 +246,35 @@ async function markAiReviewProcessed(
   }
 }
 
+async function updateTransactionAccounts(
+  supabase: any,
+  userId: string,
+  transactionIds: string[],
+  accountId: string | null | undefined
+) {
+  const uniqueIds = [...new Set(transactionIds)].filter(Boolean);
+  if (uniqueIds.length === 0 || !accountId) return 0;
+
+  const { data: account, error: accountError } = await supabase
+    .from("books_financial_accounts")
+    .select("id")
+    .eq("id", accountId)
+    .eq("user_id", userId)
+    .eq("is_active", true)
+    .maybeSingle();
+  if (accountError) throw new Error(accountError.message);
+  if (!account) throw new Error("Account not found");
+
+  const { data, error } = await supabase
+    .from("books_transactions")
+    .update({ financial_account_id: accountId, updated_at: new Date().toISOString() })
+    .eq("user_id", userId)
+    .in("id", uniqueIds)
+    .select("id");
+  if (error) throw new Error(error.message);
+  return (data ?? []).length;
+}
+
 export interface AiReviewSuggestion {
   id: string;
   pattern: string;
@@ -535,16 +564,20 @@ export async function acceptAiReviewSuggestion(input: {
   accountId?: string | null;
   categoryId?: string | number | null;
   taxEntityId?: string | null;
+  targetAccountId?: string | null;
   applyAccountDefault?: boolean;
   createRule?: boolean;
-}): Promise<{ updatedTransactions: number; assignedTaxViews: number; categoryRuleCreated: boolean; taxRuleCreated: boolean; accountRuleUpdated: boolean }> {
+}): Promise<{ updatedTransactions: number; assignedTaxViews: number; assignedAccounts: number; categoryRuleCreated: boolean; taxRuleCreated: boolean; accountRuleUpdated: boolean }> {
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthenticated");
 
   const transactionIds = [...new Set(input.transactionIds)].filter(Boolean);
   if (transactionIds.length === 0) throw new Error("No transactions selected");
-  if (!input.categoryId && !input.taxEntityId) throw new Error("Choose a category, Tax Entity, or both");
+  if (!input.categoryId && !input.taxEntityId && !input.targetAccountId) throw new Error("Choose an Account, Category, Tax Entity, or some combination.");
+
+  const effectiveAccountId = input.targetAccountId ?? input.accountId ?? null;
+  const assignedAccounts = await updateTransactionAccounts(supabase as any, user.id, transactionIds, input.targetAccountId);
 
   let updatedTransactions = 0;
   if (input.categoryId) {
@@ -552,7 +585,7 @@ export async function acceptAiReviewSuggestion(input: {
       method: "ai_review",
       pattern: input.pattern,
       confidence: 1,
-      rule_scope: input.accountId ? "account" : "global",
+      rule_scope: effectiveAccountId ? "account" : "global",
     });
   }
 
@@ -573,17 +606,17 @@ export async function acceptAiReviewSuggestion(input: {
   let accountRuleUpdated = false;
   if (input.createRule !== false) {
     if (input.categoryId) {
-      await createCategoryRule({ pattern: input.pattern, categoryId: input.categoryId, source: "manual", priority: input.accountId ? 100 : 80, accountId: input.accountId ?? null });
+      await createCategoryRule({ pattern: input.pattern, categoryId: input.categoryId, source: "manual", priority: effectiveAccountId ? 100 : 80, accountId: effectiveAccountId });
       categoryRuleCreated = true;
     }
     if (input.taxEntityId) {
-      await createTaxAssignmentRule({ pattern: input.pattern, match_type: "contains", tax_entity_id: input.taxEntityId, priority: input.accountId ? 100 : 80, financial_account_id: input.accountId ?? null });
+      await createTaxAssignmentRule({ pattern: input.pattern, match_type: "contains", tax_entity_id: input.taxEntityId, priority: effectiveAccountId ? 100 : 80, financial_account_id: effectiveAccountId });
       taxRuleCreated = true;
     }
   }
 
-  if (input.applyAccountDefault && input.accountId && input.taxEntityId) {
-    const result = await assignAccountToTaxEntity(input.accountId, input.taxEntityId);
+  if (input.applyAccountDefault && effectiveAccountId && input.taxEntityId) {
+    const result = await assignAccountToTaxEntity(effectiveAccountId, input.taxEntityId);
     assignedTaxViews = Math.max(assignedTaxViews, result.assigned_transaction_count ?? 0);
     accountRuleUpdated = true;
   }
@@ -593,13 +626,13 @@ export async function acceptAiReviewSuggestion(input: {
     pattern: input.pattern,
     category_id: input.categoryId ?? null,
     tax_entity_id: input.taxEntityId ?? null,
-    rule_scope: input.accountId ? "account" : "global",
+    rule_scope: effectiveAccountId ? "account" : "global",
   });
 
   revalidatePath("/books/transactions");
   revalidatePath("/books/transactions/ai-review");
   revalidatePath("/books/tax");
-  return { updatedTransactions, assignedTaxViews, categoryRuleCreated, taxRuleCreated, accountRuleUpdated };
+  return { updatedTransactions, assignedTaxViews, assignedAccounts, categoryRuleCreated, taxRuleCreated, accountRuleUpdated };
 }
 
 export async function applyAiInstruction(input: {

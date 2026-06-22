@@ -14,7 +14,7 @@ type Data = {
   limit: number;
   categories: Array<{ id: string | number; name: string; category_type?: string | null; parent_category_id?: string | number | null }>;
   taxEntities: Array<{ id: string; name: string; entity_type?: string }>;
-  accounts: Array<{ id: string; name: string; institution_name?: string | null; last_four_digits?: string | null }>;
+  accounts: Array<{ id: string; name: string; institution_name?: string | null; last_four_digits?: string | null; tax_entity_id?: string | null }>;
   activeAccount: { id: string; name: string; institution_name?: string | null; last_four_digits?: string | null } | null;
 };
 
@@ -59,10 +59,11 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
   const [previewSignature, setPreviewSignature] = useState("");
   const [selectedSuggestionIds, setSelectedSuggestionIds] = useState<Set<string>>(new Set());
   const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
-  const [drafts, setDrafts] = useState<Record<string, { categoryId: string; taxEntityId: string; applyAccountDefault: boolean }>>(() =>
+  const [drafts, setDrafts] = useState<Record<string, { accountId: string; categoryId: string; taxEntityId: string; applyAccountDefault: boolean }>>(() =>
     Object.fromEntries(initialData.suggestions.map((suggestion) => [
       suggestion.id,
       {
+        accountId: suggestion.accountId ?? "",
         categoryId: suggestion.suggestedCategoryId ? String(suggestion.suggestedCategoryId) : "",
         taxEntityId: suggestion.suggestedTaxEntityId ?? "",
         applyAccountDefault: Boolean(suggestion.suggestedTaxEntityId && suggestion.accountId),
@@ -77,7 +78,7 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
   const showMoreHref = `${initialData.activeAccount ? `/books/transactions/ai-review?accountId=${encodeURIComponent(initialData.activeAccount.id)}&` : "/books/transactions/ai-review?"}limit=${Math.min(initialData.limit + 100, 500)}`;
   const selectableSuggestions = suggestions.filter((suggestion) => {
     const draft = drafts[suggestion.id];
-    return Boolean(draft?.categoryId || draft?.taxEntityId);
+    return Boolean(draft?.categoryId || draft?.taxEntityId || (draft?.accountId && draft.accountId !== (suggestion.accountId ?? "")));
   });
   const highConfidenceSuggestions = selectableSuggestions.filter((suggestion) => suggestion.confidence >= 0.9);
   const currentInstructionSignature = JSON.stringify({
@@ -107,7 +108,7 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
     setSelectedSuggestionIds(new Set());
   }
 
-  function updateDraft(id: string, patch: Partial<{ categoryId: string; taxEntityId: string; applyAccountDefault: boolean }>) {
+  function updateDraft(id: string, patch: Partial<{ accountId: string; categoryId: string; taxEntityId: string; applyAccountDefault: boolean }>) {
     setDrafts((current) => ({ ...current, [id]: { ...current[id], ...patch } }));
   }
 
@@ -121,8 +122,9 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
 
   async function postSuggestion(suggestion: AiReviewSuggestion) {
     const draft = drafts[suggestion.id];
-    if (!draft?.categoryId && !draft?.taxEntityId) {
-      throw new Error(`Choose a category or Tax Entity for ${suggestion.pattern}`);
+    const accountChanged = Boolean(draft?.accountId && draft.accountId !== (suggestion.accountId ?? ""));
+    if (!draft?.categoryId && !draft?.taxEntityId && !accountChanged) {
+      throw new Error(`Choose an Account, Category, or Tax Entity for ${suggestion.pattern}`);
     }
 
     const res = await fetch("/api/books/ai-review", {
@@ -132,6 +134,7 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
         transactionIds: suggestion.transactionIds,
         pattern: suggestion.pattern,
         accountId: suggestion.accountId,
+        targetAccountId: accountChanged ? draft.accountId : null,
         categoryId: draft.categoryId || null,
         taxEntityId: draft.taxEntityId || null,
         applyAccountDefault: draft.applyAccountDefault,
@@ -145,8 +148,9 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
 
   async function acceptSuggestion(suggestion: AiReviewSuggestion) {
     const draft = drafts[suggestion.id];
-    if (!draft?.categoryId && !draft?.taxEntityId) {
-      toast.error("Choose a category, Tax Entity, or both");
+    const accountChanged = Boolean(draft?.accountId && draft.accountId !== (suggestion.accountId ?? ""));
+    if (!draft?.categoryId && !draft?.taxEntityId && !accountChanged) {
+      toast.error("Choose an Account, Category, Tax Entity, or some combination");
       return;
     }
 
@@ -160,7 +164,7 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
         next.delete(suggestion.id);
         return next;
       });
-      toast.success(`Applied to ${Math.max(data.updatedTransactions ?? 0, data.assignedTaxViews ?? 0, suggestion.count)} transaction${suggestion.count === 1 ? "" : "s"} and saved future rule${data.accountRuleUpdated ? " + account default" : ""}`);
+      toast.success(`Applied to ${Math.max(data.updatedTransactions ?? 0, data.assignedTaxViews ?? 0, data.assignedAccounts ?? 0, suggestion.count)} transaction${suggestion.count === 1 ? "" : "s"} and saved future rule${data.accountRuleUpdated ? " + account default" : ""}`);
       router.refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Unable to accept suggestion");
@@ -177,10 +181,10 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
 
     const missing = selectedSuggestions.filter((suggestion) => {
       const draft = drafts[suggestion.id];
-      return !draft?.categoryId && !draft?.taxEntityId;
+      return !draft?.categoryId && !draft?.taxEntityId && !(draft?.accountId && draft.accountId !== (suggestion.accountId ?? ""));
     });
     if (missing.length > 0) {
-      toast.error(`Choose category or Tax Entity for ${missing[0].pattern} before bulk accepting`);
+      toast.error(`Choose Account, Category, or Tax Entity for ${missing[0].pattern} before bulk accepting`);
       return;
     }
 
@@ -506,7 +510,7 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
           </div>
 
           {suggestions.map((suggestion) => {
-            const draft = drafts[suggestion.id] ?? { categoryId: "", taxEntityId: "", applyAccountDefault: Boolean(suggestion.suggestedTaxEntityId && suggestion.accountId) };
+            const draft = drafts[suggestion.id] ?? { accountId: suggestion.accountId ?? "", categoryId: "", taxEntityId: "", applyAccountDefault: Boolean(suggestion.suggestedTaxEntityId && suggestion.accountId) };
             return (
               <Card key={suggestion.id}>
                 <CardContent className="space-y-4 pt-5">
@@ -543,7 +547,28 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
                     </div>
                   </div>
 
-                  <div className="grid gap-3 md:grid-cols-2">
+                  <div className="grid gap-3 md:grid-cols-3">
+                    <label className="space-y-1 text-sm">
+                      <span className="font-medium">Account</span>
+                      <select
+                        className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                        value={draft.accountId}
+                        onChange={(event) => {
+                          const account = initialData.accounts.find((item) => item.id === event.target.value);
+                          updateDraft(suggestion.id, {
+                            accountId: event.target.value,
+                            taxEntityId: draft.taxEntityId || account?.tax_entity_id || "",
+                            applyAccountDefault: Boolean((draft.taxEntityId || account?.tax_entity_id) && event.target.value),
+                          });
+                        }}
+                      >
+                        <option value="">-- No account / leave unchanged --</option>
+                        {initialData.accounts.map((account) => (
+                          <option key={account.id} value={account.id}>{account.name}{account.last_four_digits ? ` - *${account.last_four_digits}` : ""}</option>
+                        ))}
+                      </select>
+                    </label>
+
                     <label className="space-y-1 text-sm">
                       <span className="font-medium">Category</span>
                       <CategorySelectWithCreate
@@ -570,14 +595,14 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
                     </label>
                   </div>
 
-                  {suggestion.accountId && draft.taxEntityId && (
+                  {draft.accountId && draft.taxEntityId && (
                     <label className={`flex items-center gap-2 rounded-md border px-3 py-2 text-sm ${draft.applyAccountDefault ? "border-blue-200 bg-blue-50 text-blue-900" : "text-muted-foreground"}`}>
                       <input
                         type="checkbox"
                         checked={draft.applyAccountDefault}
                         onChange={(event) => updateDraft(suggestion.id, { applyAccountDefault: event.target.checked })}
                       />
-                      <span>Also assign all current and future transactions from {suggestion.accountName} to this Tax Entity{draft.applyAccountDefault ? " (account default will be saved)" : ""}.</span>
+                      <span>Also assign all current and future transactions from {initialData.accounts.find((account) => account.id === draft.accountId)?.name ?? suggestion.accountName} to this Tax Entity{draft.applyAccountDefault ? " (account default will be saved)" : ""}.</span>
                     </label>
                   )}
 

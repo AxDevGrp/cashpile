@@ -37,6 +37,7 @@ export async function POST(req: NextRequest) {
       transactionIds: Array.isArray(body.transactionIds) ? body.transactionIds : [],
       pattern: String(body.pattern ?? ""),
       accountId: body.accountId ?? null,
+      targetAccountId: body.targetAccountId ?? null,
       categoryId: body.categoryId ?? null,
       taxEntityId: body.taxEntityId ?? null,
       applyAccountDefault: Boolean(body.applyAccountDefault),
