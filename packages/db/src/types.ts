@@ -209,12 +209,17 @@ export interface Database {
           id: string;
           uda_id: string | null; // DEPRECATED: use tax_entity_id
           tax_entity_id: string | null; // NEW: links to books_business_entities
+          user_id: string | null;
           name: string;
           account_type: "checking" | "savings" | "credit_card" | "loan" | "investment" | "other";
           institution_name: string | null;
           last_four_digits: string | null;
           account_identifier: string | null;
           current_balance: number;
+          available_balance: number | null;
+          cashflow_role: "spending_source" | "reserve" | "credit_liability" | "investment" | "loan" | "ignore" | null;
+          cashflow_include: boolean | null;
+          is_emergency: boolean | null;
           is_active: boolean;
           created_at: string;
           updated_at: string;
@@ -223,25 +228,190 @@ export interface Database {
           id?: string;
           uda_id?: string | null;
           tax_entity_id?: string | null;
+          user_id?: string | null;
           name: string;
           account_type: "checking" | "savings" | "credit_card" | "loan" | "investment" | "other";
           institution_name?: string | null;
           last_four_digits?: string | null;
           account_identifier?: string | null;
           current_balance?: number;
+          available_balance?: number | null;
+          cashflow_role?: "spending_source" | "reserve" | "credit_liability" | "investment" | "loan" | "ignore" | null;
+          cashflow_include?: boolean | null;
+          is_emergency?: boolean | null;
           is_active?: boolean;
         };
         Update: {
           uda_id?: string | null;
           tax_entity_id?: string | null;
+          user_id?: string | null;
           name?: string;
           account_type?: "checking" | "savings" | "credit_card" | "loan" | "investment" | "other";
           institution_name?: string | null;
           last_four_digits?: string | null;
           account_identifier?: string | null;
           current_balance?: number;
+          available_balance?: number | null;
+          cashflow_role?: "spending_source" | "reserve" | "credit_liability" | "investment" | "loan" | "ignore" | null;
+          cashflow_include?: boolean | null;
+          is_emergency?: boolean | null;
           is_active?: boolean;
           updated_at?: string;
+        };
+        Relationships: never[];
+      };
+      user_settings: {
+        Row: {
+          id: string;
+          user_id: string;
+          default_currency: string;
+          timezone: string;
+          date_format: string;
+          ai_categorization_enabled: boolean;
+          email_notifications: boolean;
+          preferences: Record<string, unknown> | null;
+          minimum_cash_buffer: number | null;
+          essential_weekly_allowance: number | null;
+          emergency_target_months: number | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          default_currency?: string;
+          timezone?: string;
+          date_format?: string;
+          ai_categorization_enabled?: boolean;
+          email_notifications?: boolean;
+          preferences?: Record<string, unknown> | null;
+          minimum_cash_buffer?: number | null;
+          essential_weekly_allowance?: number | null;
+          emergency_target_months?: number | null;
+        };
+        Update: {
+          default_currency?: string;
+          timezone?: string;
+          date_format?: string;
+          ai_categorization_enabled?: boolean;
+          email_notifications?: boolean;
+          preferences?: Record<string, unknown> | null;
+          minimum_cash_buffer?: number | null;
+          essential_weekly_allowance?: number | null;
+          emergency_target_months?: number | null;
+        };
+        Relationships: never[];
+      };
+      cashflow_recurring_items: {
+        Row: {
+          id: string;
+          user_id: string;
+          stable_key: string;
+          direction: "income" | "expense";
+          merchant: string;
+          description_pattern: string;
+          amount_bucket: number;
+          cadence: "weekly" | "biweekly" | "twice_monthly" | "monthly" | "quarterly" | "annual" | "irregular";
+          amount: number;
+          next_date: string | null;
+          anchor_days_of_month: number[] | null;
+          account_ids: string[] | null;
+          included: boolean;
+          confirmed_at: string | null;
+          flow_kind: "standard" | "internal_transfer" | "card_payment" | null;
+          counterparty_account_ids: string[] | null;
+          is_subscription: boolean;
+          review_status: "keep" | "review" | "cancel_help" | null;
+          last_seen_date: string | null;
+          source: "detected" | "manual";
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          stable_key: string;
+          direction: "income" | "expense";
+          merchant?: string;
+          description_pattern?: string;
+          amount_bucket?: number;
+          cadence: "weekly" | "biweekly" | "twice_monthly" | "monthly" | "quarterly" | "annual" | "irregular";
+          amount?: number;
+          next_date?: string | null;
+          anchor_days_of_month?: number[] | null;
+          account_ids?: string[] | null;
+          included?: boolean;
+          confirmed_at?: string | null;
+          flow_kind?: "standard" | "internal_transfer" | "card_payment" | null;
+          counterparty_account_ids?: string[] | null;
+          is_subscription?: boolean;
+          review_status?: "keep" | "review" | "cancel_help" | null;
+          last_seen_date?: string | null;
+          source?: "detected" | "manual";
+        };
+        Update: {
+          stable_key?: string;
+          direction?: "income" | "expense";
+          merchant?: string;
+          description_pattern?: string;
+          amount_bucket?: number;
+          cadence?: "weekly" | "biweekly" | "twice_monthly" | "monthly" | "quarterly" | "annual" | "irregular";
+          amount?: number;
+          next_date?: string | null;
+          anchor_days_of_month?: number[] | null;
+          account_ids?: string[] | null;
+          included?: boolean;
+          confirmed_at?: string | null;
+          flow_kind?: "standard" | "internal_transfer" | "card_payment" | null;
+          counterparty_account_ids?: string[] | null;
+          is_subscription?: boolean;
+          review_status?: "keep" | "review" | "cancel_help" | null;
+          last_seen_date?: string | null;
+          source?: "detected" | "manual";
+        };
+        Relationships: never[];
+      };
+      cashflow_action_state: {
+        Row: {
+          id: string;
+          user_id: string;
+          action_key: string;
+          pinned: boolean;
+          dismissed_at: string | null;
+          completed_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          action_key: string;
+          pinned?: boolean;
+          dismissed_at?: string | null;
+          completed_at?: string | null;
+        };
+        Update: {
+          pinned?: boolean;
+          dismissed_at?: string | null;
+          completed_at?: string | null;
+        };
+        Relationships: never[];
+      };
+      app_feature_flags: {
+        Row: {
+          key: string;
+          enabled: boolean;
+          cohorts: string[];
+          updated_at: string;
+        };
+        Insert: {
+          key: string;
+          enabled?: boolean;
+          cohorts?: string[];
+        };
+        Update: {
+          enabled?: boolean;
+          cohorts?: string[];
         };
         Relationships: never[];
       };

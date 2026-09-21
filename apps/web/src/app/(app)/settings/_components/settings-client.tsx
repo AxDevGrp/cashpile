@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { CheckCircle2, XCircle, ExternalLink } from "lucide-react";
-import { updateProfile } from "../actions";
+import { saveCashflowPreferences, updateProfile } from "../actions";
 
 interface Props {
   profile: {
@@ -15,15 +15,55 @@ interface Props {
     mirofish: boolean;
     deepseek: boolean;
   };
+  cashflow: {
+    minimumCashBuffer: number | null;
+    timezone: string;
+    essentialWeeklyAllowance: number | null;
+    emergencyTargetMonths: number | null;
+  };
 }
 
 const CURRENCIES = ["USD", "EUR", "GBP", "CAD", "AUD", "JPY", "CHF", "SGD", "MXN", "BRL"];
+const TIMEZONES = [
+  "UTC",
+  "America/New_York",
+  "America/Chicago",
+  "America/Denver",
+  "America/Los_Angeles",
+  "America/Anchorage",
+  "Pacific/Honolulu",
+  "Europe/London",
+  "Europe/Berlin",
+  "Asia/Singapore",
+  "Australia/Sydney",
+];
 
-export default function SettingsClient({ profile, integrations }: Props) {
+function optionalNumber(value: string): number | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const n = Number(trimmed);
+  return Number.isFinite(n) ? n : NaN;
+}
+
+export default function SettingsClient({ profile, integrations, cashflow }: Props) {
   const [displayName, setDisplayName] = useState(profile.display_name);
   const [currency, setCurrency] = useState(profile.preferred_currency);
   const [, startTransition] = useTransition();
   const [saving, setSaving] = useState(false);
+
+  const [buffer, setBuffer] = useState(cashflow.minimumCashBuffer == null ? "" : String(cashflow.minimumCashBuffer));
+  const [allowance, setAllowance] = useState(cashflow.essentialWeeklyAllowance == null ? "" : String(cashflow.essentialWeeklyAllowance));
+  const [targetMonths, setTargetMonths] = useState(cashflow.emergencyTargetMonths == null ? "" : String(cashflow.emergencyTargetMonths));
+  const [timezone, setTimezone] = useState(cashflow.timezone);
+  const [cashflowDirty, setCashflowDirty] = useState(false);
+  const [cashflowSaving, setCashflowSaving] = useState(false);
+
+  function touchCashflow(setter: (v: string) => void) {
+    return (value: string) => {
+      setter(value);
+      setCashflowDirty(true);
+    };
+  }
 
   function handleSave() {
     setSaving(true);
@@ -36,6 +76,33 @@ export default function SettingsClient({ profile, integrations }: Props) {
         console.error(err);
       } finally {
         setSaving(false);
+      }
+    });
+  }
+
+  function handleSaveCashflow() {
+    const parsedBuffer = optionalNumber(buffer);
+    const parsedAllowance = optionalNumber(allowance);
+    const parsedTarget = optionalNumber(targetMonths);
+    if ([parsedBuffer, parsedAllowance, parsedTarget].some((v) => v !== null && Number.isNaN(v))) {
+      toast.error("Cashflow values must be numbers, or empty to use defaults");
+      return;
+    }
+    setCashflowSaving(true);
+    startTransition(async () => {
+      try {
+        await saveCashflowPreferences({
+          minimumCashBuffer: parsedBuffer,
+          timezone,
+          essentialWeeklyAllowance: parsedAllowance,
+          emergencyTargetMonths: parsedTarget,
+        });
+        setCashflowDirty(false);
+        toast.success("Cashflow preferences saved");
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Failed to save cashflow preferences");
+      } finally {
+        setCashflowSaving(false);
       }
     });
   }
@@ -94,6 +161,86 @@ export default function SettingsClient({ profile, integrations }: Props) {
             <p className="text-xs text-muted-foreground">Used across Books and Trades displays</p>
           </div>
         </div>
+      </section>
+
+      {/* Cashflow preferences */}
+      <section className="rounded-xl border bg-card p-6 space-y-5">
+        <h2 className="font-semibold text-base">Cashflow preferences</h2>
+        <p className="text-xs text-muted-foreground">
+          Leave a field empty to use the default. Entering 0 is a real choice: a $0 buffer means every projected dip
+          below zero is a risk, and it is kept distinct from an unset buffer.
+        </p>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium" htmlFor="buffer">Minimum cash buffer ($)</label>
+            <input
+              id="buffer"
+              type="number"
+              min="0"
+              step="0.01"
+              value={buffer}
+              onChange={(e) => touchCashflow(setBuffer)(e.target.value)}
+              placeholder="auto (10% of recurring bills)"
+              className="w-full h-9 rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+            <p className="text-xs text-muted-foreground">Cash you keep below your forecasts as a safety line</p>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium" htmlFor="allowance">Everyday spending allowance ($/week)</label>
+            <input
+              id="allowance"
+              type="number"
+              min="0"
+              step="0.01"
+              value={allowance}
+              onChange={(e) => touchCashflow(setAllowance)(e.target.value)}
+              placeholder="unset (forecasts exclude everyday spending)"
+              className="w-full h-9 rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+            <p className="text-xs text-muted-foreground">Groceries, gas, and similar essentials not in your recurring bills</p>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium" htmlFor="targetMonths">Emergency cushion target (months)</label>
+            <input
+              id="targetMonths"
+              type="number"
+              min="0"
+              step="0.5"
+              value={targetMonths}
+              onChange={(e) => touchCashflow(setTargetMonths)(e.target.value)}
+              placeholder="unset"
+              className="w-full h-9 rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+            <p className="text-xs text-muted-foreground">Your goal for months of essentials covered by your emergency reserve</p>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium" htmlFor="timezone">Forecast timezone</label>
+            <select
+              id="timezone"
+              value={timezone}
+              onChange={(e) => { setTimezone(e.target.value); setCashflowDirty(true); }}
+              className="w-full h-9 rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              {TIMEZONES.map((tz) => (
+                <option key={tz} value={tz}>{tz}</option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground">Used for forecasting preferences</p>
+          </div>
+        </div>
+
+        {cashflowDirty && (
+          <div className="flex justify-end">
+            <button
+              onClick={handleSaveCashflow}
+              disabled={cashflowSaving}
+              className="bg-primary text-primary-foreground px-6 py-2 rounded-md text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
+            >
+              {cashflowSaving ? "Saving…" : "Save Cashflow Preferences"}
+            </button>
+          </div>
+        )}
       </section>
 
       {/* Integrations */}

@@ -165,7 +165,7 @@ export async function syncPlaidItem(itemId: string, serviceClient?: any) {
     if (accountId) {
       await client
         .from("books_financial_accounts")
-        .update({ current_balance: acct.balances.current ?? 0, updated_at: new Date().toISOString() })
+        .update({ current_balance: acct.balances.current ?? 0, available_balance: acct.balances.available ?? null, updated_at: new Date().toISOString() })
         .eq("id", accountId);
     }
   }

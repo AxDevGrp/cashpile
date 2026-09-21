@@ -2,14 +2,24 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { plaidClient } from "@/lib/plaid";
 import { syncPlaidItem } from "@/lib/plaid-sync";
+import { verifyPlaidWebhook } from "@/lib/plaid-webhook-verification";
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    const { webhook_type, webhook_code, item_id } = body;
+    const rawBody = await req.text();
 
-    // Verify webhook came from Plaid using the Plaid-Verification header
-    // (Full JWT verification requires plaid-node >= 14 — skipped in sandbox)
+    if (process.env.PLAID_SKIP_WEBHOOK_VERIFICATION !== "true") {
+      const verification = await verifyPlaidWebhook({
+        verificationHeader: req.headers.get("plaid-verification"),
+        rawBody,
+      });
+      if (!verification.valid) {
+        return NextResponse.json({ error: verification.reason ?? "invalid webhook" }, { status: 401 });
+      }
+    }
+
+    const body = JSON.parse(rawBody);
+    const { webhook_type, webhook_code, item_id } = body;
 
     const serviceClient = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
