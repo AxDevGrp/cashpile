@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { useTaxAccess } from "@/components/tax-access-provider";
 import { useRouter } from "next/navigation";
 import { randomUUID } from "crypto";
 import { Button, Progress, Badge, Dialog, DialogContent, DialogHeader, DialogTitle } from "@cashpile/ui";
@@ -18,6 +19,7 @@ interface Props {
 
 export default function ImportWizard({ entities, initialUdas }: Props) {
   const router = useRouter();
+  const taxEnabled = useTaxAccess();
   const [step, setStep] = useState<Step>(1);
   const [csvContent, setCsvContent] = useState("");
   const [entityId, setEntityId] = useState(entities[0]?.id ?? "");
@@ -64,7 +66,7 @@ export default function ImportWizard({ entities, initialUdas }: Props) {
     setLoading(true);
     setError("");
     try {
-      const res = await executeImport(csvContent, accountId, entityId, overrideDuplicates);
+      const res = await executeImport(csvContent, accountId, taxEnabled ? entityId : "", overrideDuplicates);
       setResult({ imported: res.imported, skipped: res.skipped, duplicatesSkipped: res.duplicatesSkipped });
       setStep(3);
     } catch (err) {
@@ -102,7 +104,7 @@ export default function ImportWizard({ entities, initialUdas }: Props) {
       {/* Step 1 — Upload */}
       {step === 1 && (
         <div className="space-y-4">
-          <div className="space-y-2">
+{taxEnabled &&           <div className="space-y-2">
             <label className="text-sm font-medium">Entity</label>
             <Select value={entityId} onValueChange={setEntityId}>
               <SelectTrigger><SelectValue placeholder="Select entity" /></SelectTrigger>
@@ -111,7 +113,7 @@ export default function ImportWizard({ entities, initialUdas }: Props) {
               </SelectContent>
             </Select>
           </div>
-
+}
           <div className="space-y-2">
             <label className="text-sm font-medium">Account</label>
             <Select value={accountId} onValueChange={setAccountId}>

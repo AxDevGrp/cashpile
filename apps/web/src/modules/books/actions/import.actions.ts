@@ -1,5 +1,6 @@
 "use server";
 
+import { assertTaxTestingAccess } from "@/lib/tax-access";
 import { createServerSupabaseClient } from "@cashpile/db";
 import { randomUUID } from "crypto";
 import { CSVParser } from "../services/csv-parser";
@@ -31,6 +32,7 @@ export async function executeImport(
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthenticated");
+  if (entityId) assertTaxTestingAccess(user);
 
   const preview = await previewImport(csvContent, user.id, accountId);
   const batchId = randomUUID();

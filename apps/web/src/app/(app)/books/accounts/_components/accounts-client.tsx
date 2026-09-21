@@ -5,6 +5,7 @@ import Link from "next/link";
 import { PageHeader, Button, Badge, Card, CardHeader, CardTitle, CardContent } from "@cashpile/ui";
 import PlaidLinkButton from "@/components/plaid-link-button";
 import type { TaxEntity, BooksAccount } from "@/modules/books/types";
+import { useTaxAccess } from "@/components/tax-access-provider";
 import { assignAccountToTaxEntity, createAccount, mergeFinancialAccounts, updateAccount } from "@/modules/books/actions/account.actions";
 
 interface PlaidItem {
@@ -85,6 +86,7 @@ function AccountCard({
   onMerge: (account: BooksAccount) => void;
   onRename: (accountId: string, name: string) => Promise<void>;
 }) {
+  const taxEnabled = useTaxAccess();
   const [syncing, setSyncing] = useState(false);
   const [isAssigning, setIsAssigning] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
@@ -244,10 +246,9 @@ function AccountCard({
           )}
         </div>
 
-        {/* Tax Entity Assignment */}
         <div className="pt-2 border-t border-border">
           <div className="flex items-center justify-between">
-            <div className="text-sm">
+            {taxEnabled && <div className="text-sm">
               {assignedEntity ? (
                 <div className="flex items-center gap-2">
                   <span className="text-muted-foreground">Tax Entity:</span>
@@ -256,21 +257,14 @@ function AccountCard({
               ) : (
                 <span className="text-muted-foreground">Not assigned to a Tax Entity</span>
               )}
-            </div>
+            </div>}
             <div className="flex gap-1">
               <Link href={`/books/accounts/${account.id}/transactions`}>
                 <Button size="sm" variant="outline" className="h-6 px-2 text-xs">
                   Transactions
                 </Button>
               </Link>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-6 px-2 text-xs"
-                onClick={() => setIsAssigning(!isAssigning)}
-              >
-                {isAssigning ? "Cancel" : assignedEntity ? "Change" : "Assign"}
-              </Button>
+              {taxEnabled && <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => setIsAssigning(!isAssigning)}>{isAssigning ? "Cancel" : assignedEntity ? "Change" : "Assign"}</Button>}
               <Button
                 size="sm"
                 variant="ghost"
@@ -305,7 +299,7 @@ function AccountCard({
                 </select>
                 {canReconnectPlaidItem ? (
                   <PlaidLinkButton
-                    taxEntityId={account.tax_entity_id ?? undefined}
+                    taxEntityId={taxEnabled ? account.tax_entity_id ?? undefined : undefined}
                     updatePlaidItemId={plaidItem!.id}
                     updateItemId={plaidItem!.item_id}
                     backfillAccountId={account.id}
@@ -313,7 +307,7 @@ function AccountCard({
                   />
                 ) : (
                   <PlaidLinkButton
-                    taxEntityId={account.tax_entity_id ?? undefined}
+                    taxEntityId={taxEnabled ? account.tax_entity_id ?? undefined : undefined}
                     replaceAccountId={account.id}
                     label="Connect bank again"
                   />
@@ -325,7 +319,7 @@ function AccountCard({
             </div>
           )}
           
-          {isAssigning && (
+          {taxEnabled && isAssigning && (
             <div className="mt-2 space-y-2">
               <select
                 className="w-full bg-background border border-border rounded-md px-3 py-1.5 text-sm"
@@ -439,7 +433,7 @@ function MergeAccountModal({
           )}
 
           <div className="text-xs text-muted-foreground">
-            This moves transactions from the duplicate account into the kept account, preserves tax assignments through those transactions, and deletes the duplicate account.
+            This moves transactions from the duplicate account into the kept account and deletes the duplicate account.
           </div>
 
           {result && (
@@ -467,6 +461,7 @@ function AddManualAccountModal({
   onClose: () => void;
   onCreated: (account: BooksAccount) => void;
 }) {
+  const taxEnabled = useTaxAccess();
   const [name, setName] = useState("");
   const [institutionName, setInstitutionName] = useState("");
   const [lastFourDigits, setLastFourDigits] = useState("");
@@ -495,7 +490,7 @@ function AddManualAccountModal({
         institution_name: institutionName.trim() || null,
         last_four_digits: lastFourDigits.trim() || null,
         account_type: accountType,
-        tax_entity_id: taxEntityId || null,
+        tax_entity_id: taxEnabled ? taxEntityId || null : null,
         current_balance: balance,
       } as any);
       onCreated(account);
@@ -579,7 +574,7 @@ function AddManualAccountModal({
             </label>
           </div>
 
-          <label className="block text-sm space-y-1">
+          {taxEnabled && <label className="block text-sm space-y-1">
             <span className="text-muted-foreground">Tax Entity</span>
             <select
               className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm"
@@ -593,7 +588,7 @@ function AddManualAccountModal({
                 </option>
               ))}
             </select>
-          </label>
+          </label>}
         </div>
 
         <div className="p-4 border-t border-border flex justify-end gap-2">
@@ -668,6 +663,7 @@ function PlaidAccountActions({ onAddManual }: { onAddManual: () => void }) {
 }
 
 export default function AccountsClient({ taxEntities, accounts, plaidItems }: Props) {
+  const taxEnabled = useTaxAccess();
   const [localAccounts, setLocalAccounts] = useState(accounts);
   const [mergeTarget, setMergeTarget] = useState<BooksAccount | null>(null);
   const [addManualOpen, setAddManualOpen] = useState(false);
@@ -708,7 +704,7 @@ export default function AccountsClient({ taxEntities, accounts, plaidItems }: Pr
   taxEntities.forEach(e => accountsByEntity.set(e.id, []));
   
   localAccounts.forEach(account => {
-    const entityId = account.tax_entity_id ?? null;
+    const entityId = taxEnabled ? account.tax_entity_id ?? null : null;
     const list = accountsByEntity.get(entityId) ?? [];
     list.push(account);
     accountsByEntity.set(entityId, list);
@@ -814,8 +810,8 @@ export default function AccountsClient({ taxEntities, accounts, plaidItems }: Pr
         {unassignedAccounts.length > 0 && (
           <div className="space-y-3">
             <div className="flex items-center gap-2">
-              <h2 className="text-lg font-semibold text-muted-foreground">Unassigned Accounts</h2>
-              <Badge variant="outline">Personal</Badge>
+              <h2 className="text-lg font-semibold text-muted-foreground">{taxEnabled ? "Unassigned Accounts" : "Accounts"}</h2>
+              {taxEnabled && <Badge variant="outline">Personal</Badge>}
             </div>
             <div className="space-y-4">
               {unassignedAccounts.filter(isInstitutionalAccount).length > 0 && (

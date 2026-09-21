@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { PageHeader, Button, Badge, Card, CardContent, formatCurrency, formatDate } from "@cashpile/ui";
 import { CategorySelectWithCreate } from "../../../_components/category-select-with-create";
+import { useTaxAccess } from "@/components/tax-access-provider";
 import type { AiReviewSuggestion } from "@/modules/books/actions/ai-review.actions";
 
 type Data = {
@@ -42,6 +43,7 @@ function confidenceLabel(confidence: number) {
 
 export default function AiReviewClient({ initialData }: { initialData: Data }) {
   const router = useRouter();
+  const taxEnabled = useTaxAccess();
   const activeAccountLabel = initialData.activeAccount
     ? `${initialData.activeAccount.name}${initialData.activeAccount.last_four_digits ? ` - *${initialData.activeAccount.last_four_digits}` : ""}`
     : null;
@@ -65,8 +67,8 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
       {
         accountId: suggestion.accountId ?? "",
         categoryId: suggestion.suggestedCategoryId ? String(suggestion.suggestedCategoryId) : "",
-        taxEntityId: suggestion.suggestedTaxEntityId ?? "",
-        applyAccountDefault: Boolean(suggestion.suggestedTaxEntityId && suggestion.accountId),
+        taxEntityId: taxEnabled ? suggestion.suggestedTaxEntityId ?? "" : "",
+        applyAccountDefault: taxEnabled && Boolean(suggestion.suggestedTaxEntityId && suggestion.accountId),
       },
     ]))
   );
@@ -78,7 +80,7 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
   const showMoreHref = `${initialData.activeAccount ? `/books/transactions/ai-review?accountId=${encodeURIComponent(initialData.activeAccount.id)}&` : "/books/transactions/ai-review?"}limit=${Math.min(initialData.limit + 100, 500)}`;
   const selectableSuggestions = suggestions.filter((suggestion) => {
     const draft = drafts[suggestion.id];
-    return Boolean(draft?.categoryId || draft?.taxEntityId || (draft?.accountId && draft.accountId !== (suggestion.accountId ?? "")));
+    return Boolean(draft?.categoryId || (taxEnabled && draft?.taxEntityId) || (draft?.accountId && draft.accountId !== (suggestion.accountId ?? "")));
   });
   const highConfidenceSuggestions = selectableSuggestions.filter((suggestion) => suggestion.confidence >= 0.9);
   const currentInstructionSignature = JSON.stringify({
@@ -86,8 +88,8 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
     accountId: instructionAccountId,
     pattern: instructionPattern.trim(),
     categoryId: instructionCategoryId,
-    taxEntityId: instructionTaxEntityId,
-    setAccountDefault,
+    taxEntityId: taxEnabled ? instructionTaxEntityId : "",
+    setAccountDefault: taxEnabled && setAccountDefault,
   });
   const hasFreshInstructionPreview = Boolean(instructionPreview && previewSignature === currentInstructionSignature);
 
@@ -123,8 +125,8 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
   async function postSuggestion(suggestion: AiReviewSuggestion) {
     const draft = drafts[suggestion.id];
     const accountChanged = Boolean(draft?.accountId && draft.accountId !== (suggestion.accountId ?? ""));
-    if (!draft?.categoryId && !draft?.taxEntityId && !accountChanged) {
-      throw new Error(`Choose an Account, Category, or Tax Entity for ${suggestion.pattern}`);
+    if (!draft?.categoryId && !(taxEnabled && draft?.taxEntityId) && !accountChanged) {
+      throw new Error(`Choose an Account or Category for ${suggestion.pattern}`);
     }
 
     const res = await fetch("/api/books/ai-review", {
@@ -136,8 +138,8 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
         accountId: suggestion.accountId,
         targetAccountId: accountChanged ? draft.accountId : null,
         categoryId: draft.categoryId || null,
-        taxEntityId: draft.taxEntityId || null,
-        applyAccountDefault: draft.applyAccountDefault,
+        taxEntityId: taxEnabled ? draft.taxEntityId || null : null,
+        applyAccountDefault: taxEnabled && draft.applyAccountDefault,
         createRule: true,
       }),
     });
@@ -149,8 +151,8 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
   async function acceptSuggestion(suggestion: AiReviewSuggestion) {
     const draft = drafts[suggestion.id];
     const accountChanged = Boolean(draft?.accountId && draft.accountId !== (suggestion.accountId ?? ""));
-    if (!draft?.categoryId && !draft?.taxEntityId && !accountChanged) {
-      toast.error("Choose an Account, Category, Tax Entity, or some combination");
+    if (!draft?.categoryId && !(taxEnabled && draft?.taxEntityId) && !accountChanged) {
+      toast.error("Choose an Account, Category, or some combination");
       return;
     }
 
@@ -184,7 +186,7 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
       return !draft?.categoryId && !draft?.taxEntityId && !(draft?.accountId && draft.accountId !== (suggestion.accountId ?? ""));
     });
     if (missing.length > 0) {
-      toast.error(`Choose Account, Category, or Tax Entity for ${missing[0].pattern} before bulk accepting`);
+      toast.error(`Choose Account or Category for ${missing[0].pattern} before bulk accepting`);
       return;
     }
 
@@ -233,9 +235,9 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
           accountId: instructionAccountId || null,
           pattern: instructionPattern || null,
           categoryId: instructionCategoryId || null,
-          taxEntityId: instructionTaxEntityId || null,
+          taxEntityId: taxEnabled ? instructionTaxEntityId || null : null,
           applyToExisting: true,
-          setAccountDefault,
+          setAccountDefault: taxEnabled && setAccountDefault,
         }),
       });
       const data = await res.json();
@@ -249,7 +251,7 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
       }
 
       toast.success(
-        `Instruction applied: ${data.categorizedTransactions ?? 0} categorized, ${data.assignedTaxViews ?? 0} assigned${data.accountDefaultApplied ? ", account default saved" : ""}`
+        `Instruction applied: ${data.categorizedTransactions ?? 0} categorized${taxEnabled ? `, ${data.assignedTaxViews ?? 0} assigned${data.accountDefaultApplied ? ", account default saved" : ""}` : ""}`
       );
       const matchedIds = new Set(Array.isArray(data.matchedTransactionIds) ? data.matchedTransactionIds : []);
       if (matchedIds.size > 0) {
@@ -321,7 +323,7 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
                 setInstruction(event.target.value);
                 clearInstructionPreview();
               }}
-              placeholder={'Example: Charges from "ANTHROPIC" on Amex Blue Plus AxDevGrp belong to Axial Development Group and Software & Subscriptions.'}
+              placeholder={'Example: Categorize "ANTHROPIC" charges as Software & Subscriptions.'}
             />
           </label>
 
@@ -373,7 +375,7 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
               />
             </label>
 
-            <label className="space-y-1 text-sm">
+            {taxEnabled && <label className="space-y-1 text-sm">
               <span className="font-medium">Tax Entity</span>
               <select
                 className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
@@ -388,10 +390,10 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
                   <option key={entity.id} value={entity.id}>{entity.name}</option>
                 ))}
               </select>
-            </label>
+            </label>}
           </div>
 
-          {instructionAccountId && instructionTaxEntityId && (
+          {taxEnabled && instructionAccountId && instructionTaxEntityId && (
             <label className="flex items-center gap-2 text-sm text-muted-foreground">
               <input
                 type="checkbox"
@@ -412,7 +414,7 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
                 <div>Account: {instructionPreview.inferredAccountName ?? "All / not specified"}</div>
                 <div>Pattern: {instructionPreview.inferredPattern ?? "Account-wide"}</div>
                 <div>Category: {instructionPreview.inferredCategoryName ?? "No category change"}</div>
-                <div>Tax Entity: {instructionPreview.inferredTaxEntityName ?? "No Tax Entity change"}</div>
+                {taxEnabled && <div>Tax Entity: {instructionPreview.inferredTaxEntityName ?? "No Tax Entity change"}</div>}
                 <div>Matches: {instructionPreview.matchedTransactions} transaction{instructionPreview.matchedTransactions === 1 ? "" : "s"}</div>
                 <div>Uncategorized to update: {instructionPreview.uncategorizedMatches}</div>
                 <div>Rule scope: {instructionPreview.ruleScope === "account" ? "This account only" : "All accounts"}</div>
@@ -424,8 +426,8 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
               <div className="mt-2 text-xs">
                 Will save: {[
                   instructionPreview.willCreateCategoryRule ? "category rule" : null,
-                  instructionPreview.willCreateTaxRule ? "Tax Entity rule" : null,
-                  instructionPreview.willSetAccountDefault ? "account default" : null,
+                  taxEnabled && instructionPreview.willCreateTaxRule ? "Tax Entity rule" : null,
+                  taxEnabled && instructionPreview.willSetAccountDefault ? "account default" : null,
                 ].filter(Boolean).join(", ") || "current transaction updates only"}
               </div>
             </div>
@@ -459,7 +461,7 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
               <div>
                 <div className="font-medium">Bulk accept reviewed suggestions</div>
                 <p className="text-sm text-muted-foreground">
-                  Select suggestions after confirming their Category / Tax Entity. Cashpile applies each one and saves future rules.
+                  Select suggestions after confirming their category. Cashpile applies each one and saves future rules.
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground">
                   Showing {suggestions.length} of {initialData.totalSuggestions} suggestion{initialData.totalSuggestions === 1 ? "" : "s"}, covering {totalSuggestedTransactions} displayed transaction{totalSuggestedTransactions === 1 ? "" : "s"}; {selectableSuggestions.length} ready to accept.
@@ -510,7 +512,7 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
           </div>
 
           {suggestions.map((suggestion) => {
-            const draft = drafts[suggestion.id] ?? { accountId: suggestion.accountId ?? "", categoryId: "", taxEntityId: "", applyAccountDefault: Boolean(suggestion.suggestedTaxEntityId && suggestion.accountId) };
+            const draft = drafts[suggestion.id] ?? { accountId: suggestion.accountId ?? "", categoryId: "", taxEntityId: "", applyAccountDefault: false };
             return (
               <Card key={suggestion.id}>
                 <CardContent className="space-y-4 pt-5">
@@ -524,7 +526,7 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
                         {suggestion.suggestedCategoryName && (
                           <Badge variant="outline">Suggested category: {suggestion.suggestedCategoryName}</Badge>
                         )}
-                        {suggestion.suggestedTaxEntityName && (
+                        {taxEnabled && suggestion.suggestedTaxEntityName && (
                           <Badge variant="outline">Suggested entity: {suggestion.suggestedTaxEntityName}</Badge>
                         )}
                       </div>
@@ -542,7 +544,7 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
                         Select
                       </label>
                       <Button onClick={() => acceptSuggestion(suggestion)} disabled={savingId === suggestion.id || bulkProgress !== null}>
-                        {savingId === suggestion.id ? "Applying…" : draft.applyAccountDefault ? `Accept, Save Rule & Account Default (${suggestion.count})` : `Accept & Save Rule (${suggestion.count})`}
+                        {savingId === suggestion.id ? "Applying…" : taxEnabled && draft.applyAccountDefault ? `Accept, Save Rule & Account Default (${suggestion.count})` : `Accept & Save Rule (${suggestion.count})`}
                       </Button>
                     </div>
                   </div>
@@ -557,8 +559,8 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
                           const account = initialData.accounts.find((item) => item.id === event.target.value);
                           updateDraft(suggestion.id, {
                             accountId: event.target.value,
-                            taxEntityId: draft.taxEntityId || account?.tax_entity_id || "",
-                            applyAccountDefault: Boolean((draft.taxEntityId || account?.tax_entity_id) && event.target.value),
+                            taxEntityId: taxEnabled ? draft.taxEntityId || account?.tax_entity_id || "" : "",
+                            applyAccountDefault: taxEnabled && Boolean((draft.taxEntityId || account?.tax_entity_id) && event.target.value),
                           });
                         }}
                       >
@@ -580,7 +582,7 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
                       />
                     </label>
 
-                    <label className="space-y-1 text-sm">
+                    {taxEnabled && <label className="space-y-1 text-sm">
                       <span className="font-medium">Tax Entity</span>
                       <select
                         className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
@@ -592,10 +594,10 @@ export default function AiReviewClient({ initialData }: { initialData: Data }) {
                           <option key={entity.id} value={entity.id}>{entity.name}</option>
                         ))}
                       </select>
-                    </label>
+                    </label>}
                   </div>
 
-                  {draft.accountId && draft.taxEntityId && (
+                  {taxEnabled && draft.accountId && draft.taxEntityId && (
                     <label className={`flex items-center gap-2 rounded-md border px-3 py-2 text-sm ${draft.applyAccountDefault ? "border-blue-200 bg-blue-50 text-blue-900" : "text-muted-foreground"}`}>
                       <input
                         type="checkbox"

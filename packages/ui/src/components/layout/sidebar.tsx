@@ -7,6 +7,8 @@ import {
   LayoutDashboard,
   BookOpen,
   Receipt,
+  Sparkles,
+  Landmark,
   Settings,
   ChevronLeft,
   X,
@@ -23,8 +25,9 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { href: "/cashboard", label: "Cashboard", icon: LayoutDashboard },
-  { href: "/books", label: "Books", icon: BookOpen, moduleColor: "text-emerald-500" },
-  { href: "/books/tax", label: "Taxes", icon: Receipt, moduleColor: "text-amber-500" },
+  { href: "/books/transactions", label: "Transactions", icon: BookOpen, moduleColor: "text-emerald-500" },
+  { href: "/books/transactions/ai-review", label: "AI cleanup", icon: Sparkles, moduleColor: "text-emerald-500" },
+  { href: "/books/accounts", label: "Accounts", icon: Landmark, moduleColor: "text-emerald-500" },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
@@ -35,11 +38,12 @@ interface SidebarProps {
   /** Mobile: drawer is open */
   mobileOpen?: boolean;
   onMobileClose?: () => void;
+  taxEnabled?: boolean;
 }
 
 function isNavItemActive(pathname: string, href: string) {
-  if (href === "/books") {
-    return pathname === "/books" || (pathname.startsWith("/books/") && !pathname.startsWith("/books/tax"));
+  if (href === "/books/transactions") {
+    return pathname === href || (pathname.startsWith(href + "/") && !pathname.startsWith("/books/transactions/ai-review"));
   }
   return pathname === href || pathname.startsWith(href + "/");
 }
@@ -107,11 +111,13 @@ function NavContent({
   onPin,
   onMobileClose,
   forMobile = false,
+  taxEnabled = false,
 }: {
   pinned: boolean;
   onPin?: () => void;
   onMobileClose?: () => void;
   forMobile?: boolean;
+  taxEnabled?: boolean;
 }) {
   const pathname = usePathname();
 
@@ -149,7 +155,7 @@ function NavContent({
 
       {/* Nav items */}
       <nav className="flex-1 py-5 px-3 space-y-2 overflow-y-auto">
-        {NAV_ITEMS.map((item) => (
+        {[...NAV_ITEMS, ...(taxEnabled ? [{ href: "/books/tax", label: "Taxes (testing)", icon: Receipt, moduleColor: "text-amber-500" }] : [])].map((item) => (
           <NavLink
             key={item.href}
             item={item}
@@ -186,6 +192,7 @@ export function Sidebar({
   onPin,
   mobileOpen = false,
   onMobileClose,
+  taxEnabled = false,
 }: SidebarProps) {
   return (
     <>
@@ -198,7 +205,7 @@ export function Sidebar({
           pinned ? "w-64" : "w-16"
         )}
       >
-        <NavContent pinned={pinned} onPin={onPin} />
+        <NavContent pinned={pinned} onPin={onPin} taxEnabled={taxEnabled} />
       </aside>
 
       {/* Mobile backdrop */}
@@ -217,7 +224,7 @@ export function Sidebar({
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
-        <NavContent pinned={true} forMobile={true} onMobileClose={onMobileClose} />
+        <NavContent pinned={true} forMobile={true} onMobileClose={onMobileClose} taxEnabled={taxEnabled} />
       </aside>
     </>
   );

@@ -1,3 +1,4 @@
+import { hasTaxTestingAccess } from "@/lib/tax-access";
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient, createServiceRoleClient } from "@cashpile/db";
 import { assertPlaidConfigured, plaidClient } from "@/lib/plaid";
@@ -100,6 +101,9 @@ export async function POST(req: NextRequest) {
     const { public_token, tax_entity_id, uda_id, import_options, replace_account_id } = await req.json();
     if (!public_token) return NextResponse.json({ error: "Missing public_token" }, { status: 400 });
     const taxEntityId = tax_entity_id ?? uda_id ?? null;
+    if (taxEntityId && !hasTaxTestingAccess(user)) {
+      return NextResponse.json({ error: "This feature is not available." }, { status: 403 });
+    }
     const serviceClient = createServiceRoleClient() as any;
 
     // Exchange public token for access token

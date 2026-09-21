@@ -58,7 +58,7 @@ export const AGENT_CAPABILITIES: AgentCapability[] = [
   {
     name: "cashpile.briefing.generate",
     title: "Generate Cashpile briefing",
-    description: "Generate a concise personal-finance briefing using Books, cash-flow, and tax data.",
+    description: "Generate a concise personal-finance briefing with practical next steps using transactions and cash-flow data.",
     module: "cashpile",
     kind: "read",
     requiredScopes: ["books:read"],
@@ -155,4 +155,13 @@ export const AGENT_CAPABILITIES: AgentCapability[] = [
 
 export function getAgentCapability(name: string) {
   return AGENT_CAPABILITIES.find((capability) => capability.name === name) ?? null;
+}
+
+// Public discovery describes only the initial release, not testing-only features.
+export function getPublicAgentCapabilities(): AgentCapability[] {
+  return AGENT_CAPABILITIES.filter((capability) => capability.module !== "tax").map((capability) =>
+    capability.name === "books.accounts.list"
+      ? { ...capability, inputSchema: { type: "object", properties: {}, additionalProperties: false } }
+      : capability
+  );
 }

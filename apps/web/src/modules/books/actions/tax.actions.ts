@@ -1,5 +1,6 @@
 "use server";
 
+import { requireTaxTestingAccess, hasTaxTestingAccess } from "@/lib/tax-access";
 import { createServerSupabaseClient } from "@cashpile/db";
 
 function isMissingAccountScopeColumn(error: any) {
@@ -68,6 +69,7 @@ export type TaxReport = {
 // ─── Tax View CRUD ─────────────────────────────────────────────────────────
 
 export async function listTaxViews(taxEntityId: string, year?: number): Promise<TaxView[]> {
+  await requireTaxTestingAccess();
   const supabase = await createServerSupabaseClient();
 
   let q = (supabase as any)
@@ -98,6 +100,7 @@ export async function assignTransactions(params: {
   notes?: string;
   categoryId?: number;
 }): Promise<{ assigned: number; skipped: number }> {
+  await requireTaxTestingAccess();
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthorized");
@@ -148,6 +151,7 @@ export async function unassignTransactions(params: {
   transactionIds: string[];
   taxEntityId: string;
 }): Promise<void> {
+  await requireTaxTestingAccess();
   const supabase = await createServerSupabaseClient();
   const { error } = await (supabase as any)
     .from("books_tax_transaction_views")
@@ -230,6 +234,7 @@ export async function getTaxSummaryForEntities(
 ): Promise<Record<string, { totalIncome: number; totalExpenses: number; transactionCount: number }>> {
   if (!taxEntityIds.length) return {};
 
+  await requireTaxTestingAccess();
   const supabase = await createServerSupabaseClient();
   const { data, error } = await (supabase as any)
     .from("books_tax_transaction_views")
@@ -262,6 +267,7 @@ export async function listTaxAssignmentIndex(year: number): Promise<Record<strin
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthenticated");
+  if (!hasTaxTestingAccess(user)) return {};
 
   const { data, error } = await (supabase as any)
     .from("books_tax_transaction_views")
@@ -347,6 +353,7 @@ export type UpdateRuleInput = Partial<CreateRuleInput> & {
  * Fetch all rules for the current user
  */
 export async function getTaxAssignmentRules(): Promise<TaxAssignmentRule[]> {
+  await requireTaxTestingAccess();
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthenticated");
@@ -367,6 +374,7 @@ export async function getTaxAssignmentRules(): Promise<TaxAssignmentRule[]> {
 export async function createTaxAssignmentRule(
   input: CreateRuleInput
 ): Promise<TaxAssignmentRule> {
+  await requireTaxTestingAccess();
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthenticated");
@@ -447,6 +455,7 @@ export async function updateTaxAssignmentRule(
   ruleId: string,
   input: UpdateRuleInput
 ): Promise<TaxAssignmentRule> {
+  await requireTaxTestingAccess();
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthenticated");
@@ -488,6 +497,7 @@ export async function updateTaxAssignmentRule(
  * Delete a rule
  */
 export async function deleteTaxAssignmentRule(ruleId: string): Promise<void> {
+  await requireTaxTestingAccess();
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthenticated");
@@ -511,6 +521,7 @@ export async function testRulePattern(
   limit: number = 10,
   accountId?: string | null
 ): Promise<Array<{ id: string; description: string; merchant: string | null; amount: number; date: string }>> {
+  await requireTaxTestingAccess();
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthenticated");
@@ -535,6 +546,7 @@ export async function testRulePattern(
  * Useful when creating new rules for historical data
  */
 export async function applyRulesToExistingTransactions(): Promise<{ assigned: number }> {
+  await requireTaxTestingAccess();
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthenticated");

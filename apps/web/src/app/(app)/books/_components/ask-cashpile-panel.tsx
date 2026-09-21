@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Badge, Button, Card, CardContent } from "@cashpile/ui";
 import { CategorySelectWithCreate } from "./category-select-with-create";
+import { useTaxAccess } from "@/components/tax-access-provider";
 
 type Category = { id: string | number; name: string; category_type?: string | null; parent_category_id?: string | number | null };
 type TaxEntity = { id: string; name: string; entity_type?: string | null };
@@ -42,6 +43,7 @@ export function AskCashpilePanel({
   description?: string;
 }) {
   const router = useRouter();
+  const taxEnabled = useTaxAccess();
   const [categoryOptions, setCategoryOptions] = useState(categories);
   const [instruction, setInstruction] = useState("");
   const [accountId, setAccountId] = useState(defaultAccountId);
@@ -59,8 +61,8 @@ export function AskCashpilePanel({
     accountId,
     pattern: pattern.trim(),
     categoryId,
-    taxEntityId,
-    setAccountDefault,
+    taxEntityId: taxEnabled ? taxEntityId : "",
+    setAccountDefault: taxEnabled && setAccountDefault,
   });
   const hasFreshPreview = Boolean(preview && previewSignature === currentSignature);
 
@@ -89,9 +91,9 @@ export function AskCashpilePanel({
           accountId: accountId || null,
           pattern: pattern || null,
           categoryId: categoryId || null,
-          taxEntityId: taxEntityId || null,
+          taxEntityId: taxEnabled ? taxEntityId || null : null,
           applyToExisting: true,
-          setAccountDefault,
+          setAccountDefault: taxEnabled && setAccountDefault,
         }),
       });
       const data = await res.json();
@@ -104,9 +106,7 @@ export function AskCashpilePanel({
         return;
       }
 
-      toast.success(
-        `Cashpile applied it: ${data.categorizedTransactions ?? 0} categorized, ${data.assignedTaxViews ?? 0} assigned${data.accountDefaultApplied ? ", account default saved" : ""}`
-      );
+      toast.success(`Cashpile applied it: ${data.categorizedTransactions ?? 0} categorized${taxEnabled ? `, ${data.assignedTaxViews ?? 0} assigned${data.accountDefaultApplied ? ", account default saved" : ""}` : ""}`);
       setInstruction("");
       setPattern("");
       setPreview(null);
@@ -145,12 +145,12 @@ export function AskCashpilePanel({
               setInstruction(event.target.value);
               clearPreview();
             }}
-            placeholder={'Example: Charges from "ANTHROPIC" on Amex Blue Plus AxDevGrp belong to Axial Development Group and Software & Subscriptions.'}
+            placeholder={'Example: Charges from "ANTHROPIC" on Amex Blue Plus AxDevGrp belong to Software & Subscriptions.'}
           />
         </label>
 
         <details className="rounded-lg border bg-background/70 p-3">
-          <summary className="cursor-pointer text-sm font-medium">Optional: confirm exact account, merchant, category, or Tax Entity</summary>
+          <summary className="cursor-pointer text-sm font-medium">Optional: confirm exact account, merchant, or category</summary>
           <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             <label className="space-y-1 text-sm">
               <span className="font-medium">Account</span>
@@ -199,7 +199,7 @@ export function AskCashpilePanel({
               />
             </label>
 
-            <label className="space-y-1 text-sm">
+            {taxEnabled && <label className="space-y-1 text-sm">
               <span className="font-medium">Tax Entity</span>
               <select
                 className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
@@ -214,11 +214,11 @@ export function AskCashpilePanel({
                   <option key={entity.id} value={entity.id}>{entity.name}</option>
                 ))}
               </select>
-            </label>
+            </label>}
           </div>
         </details>
 
-        {accountId && taxEntityId && (
+        {taxEnabled && accountId && taxEntityId && (
           <label className="flex items-center gap-2 text-sm text-muted-foreground">
             <input
               type="checkbox"
@@ -239,7 +239,7 @@ export function AskCashpilePanel({
               <div>Account: {preview.inferredAccountName ?? "All / not specified"}</div>
               <div>Pattern: {preview.inferredPattern ?? "Account-wide"}</div>
               <div>Category: {preview.inferredCategoryName ?? "No category change"}</div>
-              <div>Tax Entity: {preview.inferredTaxEntityName ?? "No Tax Entity change"}</div>
+              {taxEnabled && <div>Tax Entity: {preview.inferredTaxEntityName ?? "No Tax Entity change"}</div>}
               <div>Matches: {preview.matchedTransactions} transaction{preview.matchedTransactions === 1 ? "" : "s"}</div>
               <div>Uncategorized to update: {preview.uncategorizedMatches}</div>
               <div>Scope: {preview.ruleScope === "account" ? "This account only" : "All accounts"}</div>
@@ -249,8 +249,8 @@ export function AskCashpilePanel({
             <div className="mt-2 text-xs">
               Will save: {[
                 preview.willCreateCategoryRule ? "category rule" : null,
-                preview.willCreateTaxRule ? "Tax Entity rule" : null,
-                preview.willSetAccountDefault ? "account default" : null,
+                taxEnabled && preview.willCreateTaxRule ? "Tax Entity rule" : null,
+                taxEnabled && preview.willSetAccountDefault ? "account default" : null,
               ].filter(Boolean).join(", ") || "current transaction updates only"}
             </div>
           </div>

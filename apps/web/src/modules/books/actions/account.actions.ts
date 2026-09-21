@@ -1,5 +1,6 @@
 "use server";
 
+import { assertTaxTestingAccess } from "@/lib/tax-access";
 import { createServerSupabaseClient } from "@cashpile/db";
 import { revalidatePath } from "next/cache";
 import type { BooksUda, BooksAccount, TaxEntity } from "../types";
@@ -11,6 +12,7 @@ export async function getAccountsByTaxEntity(taxEntityId: string): Promise<Books
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthenticated");
+  assertTaxTestingAccess(user);
 
   const { data, error } = await (supabase as any)
     .from("books_financial_accounts")
@@ -29,6 +31,7 @@ export async function assignAccountToTaxEntity(
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthenticated");
+  assertTaxTestingAccess(user);
 
   const { data, error } = await (supabase as any)
     .from("books_financial_accounts")
@@ -120,6 +123,7 @@ export async function listAccounts(taxEntityId?: string): Promise<BooksAccount[]
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthenticated");
+  if (taxEntityId) assertTaxTestingAccess(user);
 
   let q = (supabase as any)
     .from("books_financial_accounts")
@@ -142,6 +146,7 @@ export async function createAccount(
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthenticated");
+  if (input.tax_entity_id) assertTaxTestingAccess(user);
 
   let udaId = input.uda_id ?? null;
   if (!udaId) {
@@ -199,6 +204,7 @@ export async function updateAccount(id: string, input: Partial<BooksAccount>) {
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthenticated");
+  if (Object.prototype.hasOwnProperty.call(input, "tax_entity_id")) assertTaxTestingAccess(user);
 
   const { data, error } = await (supabase as any)
     .from("books_financial_accounts")
@@ -252,6 +258,7 @@ export async function createUda(input: { entityId: string; name: string; descrip
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthenticated");
+  if (input.entityId) assertTaxTestingAccess(user);
 
   const { data, error } = await supabase
     .from("books_udas")
@@ -278,6 +285,7 @@ export async function backfillAssignedAccountTaxViews(): Promise<{ accounts: num
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthenticated");
+  assertTaxTestingAccess(user);
 
   const { data: accounts, error: accountError } = await (supabase as any)
     .from("books_financial_accounts")

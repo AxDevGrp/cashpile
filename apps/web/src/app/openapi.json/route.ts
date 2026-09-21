@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { AGENT_CAPABILITIES } from "@/modules/agent/capabilities";
+import { getPublicAgentCapabilities } from "@/modules/agent/capabilities";
 
 export const runtime = "nodejs";
 
@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
           type: "object",
           required: ["name"],
           properties: {
-            name: { type: "string", enum: AGENT_CAPABILITIES.map((capability) => capability.name) },
+            name: { type: "string", enum: getPublicAgentCapabilities().map((capability) => capability.name) },
             input: { type: "object", additionalProperties: true },
             confirmationToken: { type: "string" },
           },

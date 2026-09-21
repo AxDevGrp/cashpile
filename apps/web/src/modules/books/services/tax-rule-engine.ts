@@ -5,6 +5,7 @@
  * Rules are matched by pattern (contains/equals) on transaction description/merchant.
  */
 
+import { getTaxTestingAccessForUser } from "@/lib/tax-access";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@cashpile/db";
 import { transactionMatchesTaxRule } from "./rule-matching";
@@ -233,6 +234,7 @@ export async function autoAssignTaxEntities(
   userId: string,
   transactions: TransactionForRuleMatching[]
 ): Promise<number> {
+  if (!await getTaxTestingAccessForUser(userId)) return 0;
   const rules = await fetchActiveRules(supabase, userId);
   const accountDefaults = await fetchAccountTaxDefaults(supabase, userId, transactions);
 

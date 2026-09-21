@@ -1,5 +1,7 @@
 "use server";
 
+import { assertTaxTestingAccess, hasTaxTestingAccess } from "@/lib/tax-access";
+
 import { createServerSupabaseClient } from "@cashpile/db";
 import { revalidatePath } from "next/cache";
 import { categorizeTransactions as aiCategorizeTransactions, parseBooksInstruction } from "@cashpile/ai";
@@ -303,6 +305,7 @@ export async function listAiInstructionOptions(): Promise<{
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthenticated");
+  const taxEnabled = hasTaxTestingAccess(user);
 
   const [{ data: categories, error: categoryError }, { data: taxEntities, error: entityError }, { data: accounts, error: accountError }] = await Promise.all([
     (supabase as any)
@@ -310,12 +313,12 @@ export async function listAiInstructionOptions(): Promise<{
       .select("id, name, category_type, parent_category_id")
       .eq("user_id", user.id)
       .order("name"),
-    (supabase as any)
+    taxEnabled ? (supabase as any)
       .from("books_business_entities")
       .select("id, name, entity_type")
       .eq("user_id", user.id)
       .eq("is_active", true)
-      .order("name"),
+      .order("name") : Promise.resolve({ data: [], error: null }),
     (supabase as any)
       .from("books_financial_accounts")
       .select("id, name, institution_name, last_four_digits, tax_entity_id")
@@ -347,6 +350,7 @@ export async function listAiReviewSuggestions(limit = 40, accountId?: string | n
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthenticated");
+  const taxEnabled = hasTaxTestingAccess(user);
   const scopedAccountId = isUuid(accountId) ? accountId : null;
 
   let transactionQuery = (supabase as any)
@@ -365,12 +369,12 @@ export async function listAiReviewSuggestions(limit = 40, accountId?: string | n
       .select("id, name, category_type, parent_category_id")
       .eq("user_id", user.id)
       .order("name"),
-    (supabase as any)
+    taxEnabled ? (supabase as any)
       .from("books_business_entities")
       .select("id, name, entity_type")
       .eq("user_id", user.id)
       .eq("is_active", true)
-      .order("name"),
+      .order("name") : Promise.resolve({ data: [], error: null }),
     (supabase as any)
       .from("books_financial_accounts")
       .select("id, name, institution_name, last_four_digits, tax_entity_id")
@@ -401,11 +405,11 @@ export async function listAiReviewSuggestions(limit = 40, accountId?: string | n
     categoryRulesRes = { data: [] };
   }
 
-  let taxRulesRes = await (supabase as any)
+  let taxRulesRes = taxEnabled ? await (supabase as any)
     .from("books_tax_assignment_rules")
     .select("pattern, match_type, tax_entity_id, financial_account_id")
     .eq("user_id", user.id)
-    .eq("is_active", true);
+    .eq("is_active", true) : { data: [], error: null };
   if (taxRulesRes.error && isMissingAccountScopeColumn(taxRulesRes.error)) {
     taxRulesRes = await (supabase as any)
       .from("books_tax_assignment_rules")
@@ -423,7 +427,7 @@ export async function listAiReviewSuggestions(limit = 40, accountId?: string | n
   const categoryById = new Map<string, any>((categories ?? []).map((category: any) => [String(category.id), category]));
 
   const transactionIds = (transactions ?? []).map((tx: any) => tx.id);
-  const taxAssignedIds = await getTaxAssignedTransactionIds(supabase as any, user.id, transactionIds);
+  const taxAssignedIds = taxEnabled ? await getTaxAssignedTransactionIds(supabase as any, user.id, transactionIds) : new Set<string>();
   const categoryRules = categoryRulesRes.data ?? [];
   const taxRules = taxRulesRes.data ?? [];
   const patternHasRule = (rules: any[], pattern: string, accountId: string | null) => rules.some((rule: any) => {
@@ -453,7 +457,8 @@ export async function listAiReviewSuggestions(limit = 40, accountId?: string | n
   for (const [key, rows] of groups) {
     const [accountId, pattern] = key.split("|");
     const rawAccount = rows[0].books_financial_accounts;
-    const account = (Array.isArray(rawAccount) ? rawAccount[0] : rawAccount) as any;
+    const originalAccount = (Array.isArray(rawAccount) ? rawAccount[0] : rawAccount) as any;
+    const account = taxEnabled ? originalAccount : { ...originalAccount, tax_entity_id: null };
     const totalAmount = rows.reduce((sum: number, tx: any) => sum + Number(tx.amount ?? 0), 0);
     const isRepeatedPattern = rows.length >= 2;
     const isHighImpactSingle = rows.length === 1 && Math.abs(totalAmount) >= 250;
@@ -485,6 +490,9 @@ export async function listAiReviewSuggestions(limit = 40, accountId?: string | n
         : (account?.tax_entity_id
           ? `High-impact transaction needs Category confirmation. Account is assigned to ${taxEntityById.get(String(account.tax_entity_id))?.name ?? "a Tax Entity"}.`
           : "High-impact transaction needs Category or Tax Entity confirmation.");
+    if (!taxEnabled) reason = isRepeatedPattern
+      ? "Grouped by repeated merchant/description pattern. Confirm the category before applying."
+      : "Transaction needs category confirmation.";
     if (storedCategory && typeof storedSuggestion?.confidence === "number") {
       category = storedCategory;
       confidence = Math.min(confidence, storedSuggestion.confidence);
@@ -571,10 +579,12 @@ export async function acceptAiReviewSuggestion(input: {
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthenticated");
+  const taxEnabled = hasTaxTestingAccess(user);
+  if (input.taxEntityId || input.applyAccountDefault) assertTaxTestingAccess(user);
 
   const transactionIds = [...new Set(input.transactionIds)].filter(Boolean);
   if (transactionIds.length === 0) throw new Error("No transactions selected");
-  if (!input.categoryId && !input.taxEntityId && !input.targetAccountId) throw new Error("Choose an Account, Category, Tax Entity, or some combination.");
+  if (!input.categoryId && !input.taxEntityId && !input.targetAccountId) throw new Error(taxEnabled ? "Choose an Account, Category, Tax Entity, or some combination." : "Choose an account or category.");
 
   const effectiveAccountId = input.targetAccountId ?? input.accountId ?? null;
   const assignedAccounts = await updateTransactionAccounts(supabase as any, user.id, transactionIds, input.targetAccountId);
@@ -668,6 +678,8 @@ export async function applyAiInstruction(input: {
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthenticated");
+  const taxEnabled = hasTaxTestingAccess(user);
+  if (input.taxEntityId || input.setAccountDefault) assertTaxTestingAccess(user);
 
   const instruction = input.instruction.trim();
   if (instruction.length < 8) throw new Error("Tell Cashpile what should go where.");
@@ -682,11 +694,11 @@ export async function applyAiInstruction(input: {
       .from("books_categories")
       .select("id, name, category_type, parent_category_id")
       .eq("user_id", user.id),
-    (supabase as any)
+    taxEnabled ? (supabase as any)
       .from("books_business_entities")
       .select("id, name, entity_type")
       .eq("user_id", user.id)
-      .eq("is_active", true),
+      .eq("is_active", true) : Promise.resolve({ data: [], error: null }),
   ]);
   if (accountError) throw new Error(accountError.message);
   if (categoryError) throw new Error(categoryError.message);
@@ -711,7 +723,7 @@ export async function applyAiInstruction(input: {
     input.accountId || input.pattern || input.categoryId || input.taxEntityId ? "explicit" : "deterministic";
   let interpretationReason: string | null = null;
 
-  if (!account || !pattern || !category || !taxEntity) {
+  if (!account || !pattern || !category || (taxEnabled && !taxEntity)) {
     try {
       const categoryById = new Map((categories ?? []).map((row: any) => [String(row.id), row]));
       const taxEntityById = new Map((taxEntities ?? []).map((row: any) => [String(row.id), row]));
@@ -756,7 +768,7 @@ export async function applyAiInstruction(input: {
     throw new Error("Choose an account or include a quoted merchant/pattern, e.g. \"ANTHROPIC\".");
   }
   if (!category && !taxEntity) {
-    throw new Error("Choose or mention a Category or Tax Entity.");
+    throw new Error(taxEnabled ? "Choose or mention a Category or Tax Entity." : "Choose or mention a category.");
   }
 
   let accountDefaultApplied = false;

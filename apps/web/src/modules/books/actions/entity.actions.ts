@@ -1,5 +1,6 @@
 "use server";
 
+import { assertTaxTestingAccess, hasTaxTestingAccess } from "@/lib/tax-access";
 import { createServerSupabaseClient } from "@cashpile/db";
 import { revalidatePath } from "next/cache";
 import type { TaxEntity } from "../types";
@@ -12,6 +13,7 @@ export async function listTaxEntities(): Promise<TaxEntity[]> {
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthenticated");
+  if (!hasTaxTestingAccess(user)) return [];
 
   const { data, error } = await (supabase as any)
     .from("books_business_entities")
@@ -27,6 +29,7 @@ export async function getTaxEntity(id: string): Promise<TaxEntity | null> {
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthenticated");
+  assertTaxTestingAccess(user);
 
   const { data, error } = await (supabase as any)
     .from("books_business_entities")
@@ -45,6 +48,7 @@ export async function createTaxEntity(
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthenticated");
+  assertTaxTestingAccess(user);
 
   const { data, error } = await (supabase as any)
     .from("books_business_entities")
@@ -65,6 +69,7 @@ export async function updateTaxEntity(
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthenticated");
+  assertTaxTestingAccess(user);
 
   const { data, error } = await (supabase as any)
     .from("books_business_entities")
@@ -84,6 +89,7 @@ export async function deleteTaxEntity(id: string): Promise<void> {
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthenticated");
+  assertTaxTestingAccess(user);
 
   const { error } = await (supabase as any)
     .from("books_business_entities")

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { AGENT_CAPABILITIES } from "@/modules/agent/capabilities";
+import { getPublicAgentCapabilities } from "@/modules/agent/capabilities";
 
 export const runtime = "nodejs";
 
@@ -7,12 +7,12 @@ export async function GET(req: NextRequest) {
   const origin = new URL(req.url).origin;
   return NextResponse.json({
     name: "Cashpile.ai",
-    description: "Agent-ready financial platform for Books, Trades, Pulse, tax workflows, and AI briefings.",
+    description: "Import finances, clean up transactions with AI, and find practical next steps on your Cashboard.",
     version: "0.1.0",
     agent_api_version: "2026-05-02",
     auth: {
       supported: ["Supabase user JWT bearer", "Cashpile agent token bearer", "web session cookie"],
-      scopes: Array.from(new Set(AGENT_CAPABILITIES.flatMap((capability) => capability.requiredScopes))).sort(),
+      scopes: Array.from(new Set(getPublicAgentCapabilities().flatMap((capability) => capability.requiredScopes))).sort(),
     },
     endpoints: {
       capabilities: `${origin}/api/agent/capabilities`,

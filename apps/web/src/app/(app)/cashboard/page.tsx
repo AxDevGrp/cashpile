@@ -1,17 +1,11 @@
 import {
   ArrowUpRight,
-  BadgeCheck,
   CalendarCheck,
-  CheckCircle2,
-  Coins,
   CreditCard,
-  Gauge,
   Landmark,
-  PiggyBank,
   Search,
   ShieldAlert,
   Sparkles,
-  Umbrella,
   WalletCards,
 } from "lucide-react";
 import Link from "next/link";
@@ -55,14 +49,6 @@ type SubscriptionSummary = {
   ytdTotal: number;
 };
 
-type IncomeMix = {
-  wageIncome: number;
-  ownerIncome: number;
-  unknownIncome: number;
-  ownerPct: number;
-  label: string;
-};
-
 type MoneyLeaks = {
   alertCount: number;
   biggestSpikeLabel: string;
@@ -74,14 +60,6 @@ type MoneyLeaks = {
 type GremmyReminderInput = {
   uncategorizedCount: number;
   creditCardsNearPayoff: Array<{ name: string; balance: number }>;
-};
-
-type AiBudget = {
-  monthlyAverage: number;
-  suggestedTarget: number;
-  topCategoryLabel: string;
-  confidence: "High" | "Medium" | "Low";
-  needsLabels: boolean;
 };
 
 type SpendingTrendPoint = {
@@ -139,21 +117,6 @@ const cashpileDashboardStyles = `
     color: #475569;
     font-size: 0.95rem;
     line-height: 1.55;
-  }
-  .cp-nav-chips {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-    font-size: 0.75rem;
-    font-weight: 800;
-    color: #475569;
-  }
-  .cp-nav-chip {
-    border: 1px solid #e2e8f0;
-    background: rgba(255, 255, 255, 0.82);
-    border-radius: 999px;
-    padding: 0.45rem 0.8rem;
-    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
   }
   .cp-panel {
     overflow: hidden;
@@ -255,9 +218,7 @@ const cashpileDashboardStyles = `
   .cp-inner-card { padding: 1rem; }
   .cp-card { padding: 1.25rem; }
   .cp-metric-grid,
-  .cp-content-grid,
-  .cp-lower-grid,
-  .cp-question-grid {
+  .cp-content-grid {
     display: grid;
     gap: 1rem;
   }
@@ -284,14 +245,6 @@ const cashpileDashboardStyles = `
     line-height: 1.05;
     font-weight: 950;
     font-variant-numeric: tabular-nums;
-  }
-  .cp-pill {
-    border-radius: 999px;
-    background: #f1f5f9;
-    color: #64748b;
-    padding: 0.25rem 0.65rem;
-    font-size: 0.68rem;
-    font-weight: 900;
   }
   .cp-chart {
     display: flex;
@@ -329,33 +282,10 @@ const cashpileDashboardStyles = `
     background: #f8fafc;
     color: #0f172a;
   }
-  .cp-progress-track {
-    height: 0.75rem;
-    overflow: hidden;
-    border-radius: 999px;
-    background: #f1f5f9;
-  }
-  .cp-progress-fill {
-    height: 100%;
-    border-radius: 999px;
-    background: linear-gradient(to right, #18c99a, #2563eb);
-  }
-  .cp-question-card {
-    display: flex;
-    min-height: 235px;
-    flex-direction: column;
-    border: 1px solid #fff;
-    background: #fff;
-    border-radius: 1.5rem;
-    padding: 1.25rem;
-    text-decoration: none;
-    box-shadow: 0 16px 40px rgba(15, 23, 42, 0.07);
-  }
   @media (min-width: 640px) {
     .cp-dashboard-shell { padding-left: 1.5rem; padding-right: 1.5rem; }
     .cp-hero-content { flex-direction: row; align-items: center; }
     .cp-metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .cp-question-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
   @media (min-width: 1024px) {
     .cp-dashboard-shell { padding-left: 2rem; padding-right: 2rem; }
@@ -364,10 +294,8 @@ const cashpileDashboardStyles = `
     .cp-side-panel { border-left: 1px solid #f1f5f9; border-top: 0; }
   }
   @media (min-width: 1280px) {
-    .cp-metric-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .cp-metric-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     .cp-content-grid { grid-template-columns: 1.4fr 0.9fr; }
-    .cp-lower-grid { grid-template-columns: 0.95fr 1.05fr; }
-    .cp-question-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   }
 `;
 
@@ -505,40 +433,6 @@ function getCategoryName(row: TransactionRow, categories: Map<number, CategoryRo
   return row.category_id ? categories.get(row.category_id)?.name ?? "Uncategorized" : "Uncategorized";
 }
 
-function classifyIncome(row: TransactionRow, categories: Map<number, CategoryRow>) {
-  const text = `${row.description ?? ""} ${row.merchant ?? ""} ${getCategoryName(row, categories)}`.toLowerCase();
-  if (/payroll|salary|wage|direct dep|direct deposit|paycheck|employer|adp|gusto|workday|paychex/.test(text)) return "wage";
-  if (/rental|rent income|dividend|interest|royalty|business|consulting|contract|stripe|square|shopify|airbnb|vrbo|distribution|k-1|1099/.test(text)) return "owner";
-  return "unknown";
-}
-
-function buildIncomeMix(transactions: TransactionRow[], categories: Map<number, CategoryRow>): IncomeMix {
-  const incomeRows = transactions.filter((row) => row.transaction_type === "credit");
-  let wageIncome = 0;
-  let ownerIncome = 0;
-  let unknownIncome = 0;
-
-  incomeRows.forEach((row) => {
-    const amount = Math.abs(Number(row.amount ?? 0));
-    const type = classifyIncome(row, categories);
-    if (type === "wage") wageIncome += amount;
-    else if (type === "owner") ownerIncome += amount;
-    else unknownIncome += amount;
-  });
-
-  const total = wageIncome + ownerIncome + unknownIncome;
-  const ownerPct = total > 0 ? Math.round((ownerIncome / total) * 100) : 0;
-  const label = total === 0
-    ? "Needs income data"
-    : ownerPct >= 35
-      ? "Owner-style"
-      : ownerPct >= 10
-        ? "Mixed income"
-        : "Worker-heavy";
-
-  return { wageIncome, ownerIncome, unknownIncome, ownerPct, label };
-}
-
 function buildMoneyLeaks(transactions: TransactionRow[], categories: Map<number, CategoryRow>, subscriptions: SubscriptionSummary): MoneyLeaks {
   const debitRows = transactions.filter((row) => row.transaction_type === "debit");
   const last30Start = new Date(daysAgo(30));
@@ -592,40 +486,15 @@ function buildMoneyLeaks(transactions: TransactionRow[], categories: Map<number,
   };
 }
 
-function buildAiBudget(transactions: TransactionRow[], categories: Map<number, CategoryRow>): AiBudget {
-  const debitRows = transactions.filter((row) => row.transaction_type === "debit" && new Date(row.date) >= new Date(daysAgo(90)));
-  const total = debitRows.reduce((sum, row) => sum + Math.abs(Number(row.amount ?? 0)), 0);
-  const monthlyAverage = total / 3;
-  const categoryTotals = new Map<string, number>();
-  debitRows.forEach((row) => {
-    const category = getCategoryName(row, categories);
-    categoryTotals.set(category, (categoryTotals.get(category) ?? 0) + Math.abs(Number(row.amount ?? 0)));
-  });
-  const top = [...categoryTotals.entries()].sort((a, b) => b[1] - a[1])[0];
-  const uncategorized = categoryTotals.get("Uncategorized") ?? 0;
-  const needsLabels = total > 0 && uncategorized / total > 0.4;
-  const confidence = needsLabels ? "Low" : debitRows.length >= 150 ? "High" : debitRows.length >= 45 ? "Medium" : "Low";
-
-  return {
-    monthlyAverage: +monthlyAverage.toFixed(2),
-    suggestedTarget: +Math.max(0, monthlyAverage * 0.92).toFixed(2),
-    topCategoryLabel: top?.[0] ?? "Not enough spending history",
-    confidence,
-    needsLabels,
-  };
-}
-
 function buildGremmyReminders({
   cashflow,
   subscriptions,
   moneyLeaks,
-  aiBudget,
   reminderInput,
 }: {
   cashflow: Awaited<ReturnType<typeof getCashflowSnapshot>> | null;
   subscriptions: SubscriptionSummary;
   moneyLeaks: MoneyLeaks;
-  aiBudget: AiBudget;
   reminderInput: GremmyReminderInput;
 }): GremmyReminder[] {
   const reminders: GremmyReminder[] = [];
@@ -634,7 +503,7 @@ function buildGremmyReminders({
     reminders.push({
       id: "categorize-transactions",
       title: `Categorize ${reminderInput.uncategorizedCount.toLocaleString()} transaction${reminderInput.uncategorizedCount === 1 ? "" : "s"}`,
-      body: "Your books are cleaner, tax reports are sharper, and budget guesses get less sketchy once these are labeled.",
+      body: "Your cash picture and AI suggestions improve once these transactions are labeled.",
       cta: "Clean up transactions",
       href: "/books/transactions?filter=uncategorized",
       priority: reminderInput.uncategorizedCount >= 25 ? "high" : "medium",
@@ -668,7 +537,7 @@ function buildGremmyReminders({
     reminders.push({
       id: "cashflow-tight",
       title: "Cash looks tight before upcoming bills",
-      body: `Projected low balance is ${formatCurrency(cashflow.forecast.projectedLowBalance)}. Gremmy says pause extra spending until the next income clears.`,
+      body: `Projected low balance is ${formatCurrency(cashflow!.forecast.projectedLowBalance)}. Gremmy says pause extra spending until the next income clears.`,
       cta: "Inspect cash flow",
       href: "/cashflow",
       priority: "high",
@@ -685,17 +554,6 @@ function buildGremmyReminders({
       cta: "Find the leak",
       href: "/books/transactions",
       priority: "medium",
-    });
-  }
-
-  if (aiBudget.needsLabels && !reminderInput.uncategorizedCount) {
-    reminders.push({
-      id: "budget-needs-labels",
-      title: "Budget confidence needs better labels",
-      body: "Gremmy can draft a better spending target after more transaction categories are cleaned up.",
-      cta: "Review transactions",
-      href: "/books/transactions",
-      priority: "low",
     });
   }
 
@@ -725,11 +583,11 @@ function buildSpendingTrend(transactions: TransactionRow[]): SpendingTrendPoint[
       if (point) point.amount += Math.abs(Number(row.amount ?? 0));
     });
 
-  const maxAmount = Math.max(...points.map((point) => point.amount), 1);
+  const maxAmount = Math.max(...points.map((point) => point.amount));
   return points.map((point) => ({
     label: point.label,
     amount: +point.amount.toFixed(2),
-    height: Math.max(12, Math.round((point.amount / maxAmount) * 100)),
+    height: maxAmount > 0 ? Math.round((point.amount / maxAmount) * 100) : 0,
   }));
 }
 
@@ -752,119 +610,122 @@ export default async function CashboardPage({
   searchParams?: Promise<{ gremmy?: string }>;
 }) {
   const supabase = await createServerSupabaseClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   if (!user) return null;
 
   const [cashflow, briefing, booksData, reminderInput] = await Promise.all([
     getCashflowSnapshot(user.id, 14).catch(() => null),
-    generateCashboardBriefing(user.id).catch(() => "Set up your Books data to get your personalized AI briefing."),
-    getRecentBooksData(user.id).catch(() => ({ transactions: [], categories: new Map<number, CategoryRow>() })),
-    getGremmyReminderInput(user.id).catch(() => ({ uncategorizedCount: 0, creditCardsNearPayoff: [] })),
+    generateCashboardBriefing(user.id).catch(
+      () => "Set up your Books data to get your personalized AI briefing.",
+    ),
+    getRecentBooksData(user.id).catch(() => ({
+      transactions: [],
+      categories: new Map<number, CategoryRow>(),
+    })),
+    getGremmyReminderInput(user.id).catch(() => ({
+      uncategorizedCount: 0,
+      creditCardsNearPayoff: [],
+    })),
   ]);
 
-  const subscriptionSummary = await getSubscriptionSummary(user.id, cashflow?.recurringItems ?? []);
-  const incomeMix = buildIncomeMix(booksData.transactions, booksData.categories);
-  const moneyLeaks = buildMoneyLeaks(booksData.transactions, booksData.categories, subscriptionSummary);
-  const aiBudget = buildAiBudget(booksData.transactions, booksData.categories);
-  const gremmyReminders = buildGremmyReminders({ cashflow, subscriptions: subscriptionSummary, moneyLeaks, aiBudget, reminderInput });
+  const subscriptionSummary = await getSubscriptionSummary(
+    user.id,
+    cashflow?.recurringItems ?? [],
+  );
+  const moneyLeaks = buildMoneyLeaks(
+    booksData.transactions,
+    booksData.categories,
+    subscriptionSummary,
+  );
   const resolvedSearchParams = await searchParams;
-
-  const affordabilityStatus = !cashflow
-    ? "Needs data"
-    : cashflow.safeToSpend > 500
-      ? "Green light"
-      : cashflow.safeToSpend > 0
-        ? "Caution"
-        : "Pause";
-
-  const insightCards = [
-    {
-      title: "Can I afford it?",
-      question: "Can I safely spend money on the thing I want?",
-      metricLabel: "Safe to spend",
-      metricValue: cashflow ? formatCurrency(cashflow.safeToSpend) : "—",
-      insight: cashflow
-        ? `Projected low balance is ${formatCurrency(cashflow.forecast.projectedLowBalance)} after upcoming bills and income.`
-        : "Connect accounts to let Cashpile answer purchase decisions.",
-      status: affordabilityStatus,
-      href: "/cashflow",
-      Icon: WalletCards,
-      accent: "from-emerald-500/15 to-blue-500/10 border-emerald-500/20",
-    },
-    {
-      title: "What am I still paying for?",
-      question: "Which subscriptions are quietly draining cash?",
-      metricLabel: "Subscriptions",
-      metricValue: `${formatCurrency(subscriptionSummary.monthlyTotal)}/mo`,
-      insight: subscriptionSummary.items.length
-        ? `${subscriptionSummary.items.length} likely subscriptions · ${formatCurrency(subscriptionSummary.ytdTotal)} spent this year.`
-        : "No recurring subscriptions detected yet. More history improves detection.",
-      status: `${subscriptionSummary.items.length} found`,
-      href: "/cashflow/recurring",
-      Icon: CreditCard,
-      accent: "from-yellow-500/15 to-orange-500/10 border-yellow-500/20",
-    },
-    {
-      title: "Worker vs Owner income",
-      question: "Am I earning like a worker or an owner?",
-      metricLabel: "Owner-style income",
-      metricValue: `${incomeMix.ownerPct}%`,
-      insight: incomeMix.ownerIncome + incomeMix.wageIncome + incomeMix.unknownIncome > 0
-        ? `${incomeMix.label}: ${formatCurrency(incomeMix.ownerIncome)} owner/passive income detected in recent history.`
-        : "Import income transactions to classify wage, business, rental, and passive income.",
-      status: incomeMix.label,
-      href: "/books/transactions",
-      Icon: PiggyBank,
-      accent: "from-violet-500/15 to-blue-500/10 border-violet-500/20",
-    },
-    {
-      title: "Where is my money leaking?",
-      question: "What looks wasteful, unusual, or worth reviewing?",
-      metricLabel: "Items to review",
-      metricValue: moneyLeaks.alertCount.toLocaleString(),
-      insight: moneyLeaks.biggestSpikePct > 0
-        ? `${moneyLeaks.biggestSpikeLabel} is up ${moneyLeaks.biggestSpikePct}% versus the prior 30 days.`
-        : moneyLeaks.duplicateCount > 0
-          ? `${moneyLeaks.duplicateCount} possible duplicate charge patterns found.`
-          : "No major money leaks detected from simple checks yet.",
-      status: moneyLeaks.alertCount > 0 ? "Review" : "Looks calm",
-      href: "/books/transactions",
-      Icon: ShieldAlert,
-      accent: "from-red-500/15 to-orange-500/10 border-red-500/20",
-    },
-    {
-      title: "What should my budget be?",
-      question: "If AI built my budget from real spending, what would it suggest?",
-      metricLabel: "Suggested target",
-      metricValue: aiBudget.needsLabels ? "Needs labels" : aiBudget.monthlyAverage > 0 ? `${formatCurrency(aiBudget.suggestedTarget)}/mo` : "—",
-      insight: aiBudget.needsLabels
-        ? "Cashpile can draft a better budget after uncategorized spending is labeled."
-        : aiBudget.monthlyAverage > 0
-          ? `Based on actual spending, start near ${formatCurrency(aiBudget.suggestedTarget)}. Biggest area: ${aiBudget.topCategoryLabel}.`
-          : "Cashpile needs recent spending history to draft your first AI budget.",
-      status: aiBudget.needsLabels ? "Needs labels" : `${aiBudget.confidence} confidence`,
-      href: "/cashflow",
-      Icon: CalendarCheck,
-      accent: "from-cyan-500/15 to-emerald-500/10 border-cyan-500/20",
-    },
-  ];
-
   const spendingTrend = buildSpendingTrend(booksData.transactions);
   const recentTransactions = booksData.transactions
     .filter((row) => row.transaction_type === "debit")
     .slice(0, 5);
-  const savingsProgress = cashflow
-    ? Math.min(100, Math.max(12, Math.round((Math.max(cashflow.safeToSpend, 0) / Math.max(cashflow.forecast.projectedLowBalance + Math.max(cashflow.safeToSpend, 0), 1)) * 100)))
-    : 0;
-  const gremlinLine = cashflow && cashflow.safeToSpend > 0
-    ? `You’re ${formatCurrency(cashflow.safeToSpend)} ahead.`
-    : "I’ll help find leaks, protect cash, and make the next money move obvious.";
-  const nextStashAmount = cashflow && cashflow.safeToSpend > 25 ? 25 : Math.max(0, Math.round((cashflow?.safeToSpend ?? 0) * 0.1));
-  const moneyMoves = [
-    { label: "Find leaks", detail: moneyLeaks.alertCount > 0 ? `${moneyLeaks.alertCount} items worth reviewing` : "No major leaks detected yet", href: "/books/transactions", Icon: Search },
-    { label: "Protect rent money", detail: cashflow ? `Projected low: ${formatCurrency(cashflow.forecast.projectedLowBalance)}` : "Connect accounts for protection signals", href: "/cashflow", Icon: ShieldAlert },
-    { label: "Boost savings", detail: aiBudget.needsLabels ? "Label spending to improve AI targets" : `Suggested target: ${formatCurrency(aiBudget.suggestedTarget)}/mo`, href: "/cashflow", Icon: Coins },
-  ];
+  const hasTransactionData = booksData.transactions.length > 0;
+  const hasSpendingData = spendingTrend.some((point) => point.amount > 0);
+  const hasCashflowData = Boolean(
+    cashflow &&
+      cashflow.accounts.length > 0 &&
+      (booksData.transactions.length > 0 || cashflow.recurringItems.length > 0),
+  );
+
+  const gremmyReminders = buildGremmyReminders({
+    cashflow: hasCashflowData ? cashflow : null,
+    subscriptions: subscriptionSummary,
+    moneyLeaks,
+    reminderInput,
+  });
+
+  const nextActions = [
+    hasCashflowData &&
+      cashflow!.forecast.projectedLowBalance < cashflow!.minimumBuffer && {
+        label: "Inspect your cash outlook",
+        detail: `Estimated low balance: ${formatCurrency(cashflow!.forecast.projectedLowBalance)}. Your buffer is ${formatCurrency(cashflow!.minimumBuffer)}.`,
+        href: "/cashflow",
+        Icon: ShieldAlert,
+      },
+    !hasTransactionData && {
+      label: "Import your finances",
+      detail: "Connect an account or upload a CSV to get started.",
+      href: "/books/accounts",
+      Icon: CalendarCheck,
+    },
+    reminderInput.uncategorizedCount > 0 && {
+      label: `Review ${reminderInput.uncategorizedCount.toLocaleString()} uncategorized transaction${reminderInput.uncategorizedCount === 1 ? "" : "s"}`,
+      detail:
+        "Use AI suggestions, then approve the categories that look right.",
+      href: "/books/transactions/ai-review",
+      Icon: Sparkles,
+    },
+    moneyLeaks.alertCount > 0 && {
+      label: `Review ${moneyLeaks.alertCount} possible issue${moneyLeaks.alertCount === 1 ? "" : "s"}`,
+      detail:
+        moneyLeaks.biggestSpikePct > 0
+          ? `${moneyLeaks.biggestSpikeLabel} is up ${moneyLeaks.biggestSpikePct}% compared with the prior 30 days.`
+          : "Possible duplicate charges or changed recurring patterns need a look.",
+      href: "/books/transactions",
+      Icon: Search,
+    },
+    subscriptionSummary.items.length > 0 && {
+      label: "Review recurring charges",
+      detail: `${subscriptionSummary.items.length} likely recurring charge${subscriptionSummary.items.length === 1 ? "" : "s"} total about ${formatCurrency(subscriptionSummary.monthlyTotal)}/mo.`,
+      href: "/cashflow/recurring",
+      Icon: CreditCard,
+    },
+    hasCashflowData
+      ? cashflow!.forecast.projectedLowBalance >= cashflow!.minimumBuffer && {
+          label: "Inspect your cash outlook",
+          detail: `Estimated low balance: ${formatCurrency(cashflow!.forecast.projectedLowBalance)}.`,
+          href: "/cashflow",
+          Icon: ShieldAlert,
+        }
+      : {
+          label: "Set up your cash outlook",
+          detail:
+            "Connect accounts and review recurring items to estimate upcoming cash flow.",
+          href: "/cashflow",
+          Icon: WalletCards,
+        },
+  ]
+    .filter(Boolean)
+    .slice(0, 3) as Array<{
+    label: string;
+    detail: string;
+    href: string;
+    Icon: typeof CalendarCheck;
+  }>;
+
+  const cashOutlookStatus = !hasCashflowData
+    ? "Needs data"
+    : cashflow!.forecast.projectedLowBalance >= 0
+      ? "Above zero"
+      : "Below zero";
+  const gremlinLine = hasCashflowData
+    ? `Your estimated low balance is ${formatCurrency(cashflow!.forecast.projectedLowBalance)}.`
+    : "Import transactions or connect an account to build your cash outlook.";
 
   return (
     <div className="cp-dashboard flex min-h-full flex-col bg-[#f7f5ef] text-[#101828]">
@@ -875,19 +736,15 @@ export default async function CashboardPage({
           <div>
             <div className="cp-eyebrow inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white/80 px-3 py-1 text-xs font-semibold text-emerald-700 shadow-sm">
               <Sparkles className="h-3.5 w-3.5" />
-              AI finance dashboard
+              Your Cashboard
             </div>
-            <h1 className="cp-title mt-3 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">Cashpile Dashboard</h1>
+            <h1 className="cp-title mt-3 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">
+              Know what to review next.
+            </h1>
             <p className="cp-subtitle mt-2 max-w-2xl text-sm leading-relaxed text-slate-600">
-              A street-smart little money creature that finds leaks, protects your cash, and helps you win.
+              See your recent spending, recurring charges, and estimated cash
+              outlook in one place.
             </p>
-          </div>
-          <div className="cp-nav-chips flex flex-wrap gap-2 text-xs font-semibold text-slate-600">
-            {["Dashboard", "Accounts", "Goals", "Insights", "Transactions", "Ask AI"].map((item) => (
-              <span key={item} className="cp-nav-chip rounded-full border border-slate-200 bg-white/80 px-3 py-1.5 shadow-sm">
-                {item}
-              </span>
-            ))}
           </div>
         </div>
 
@@ -898,27 +755,25 @@ export default async function CashboardPage({
               <div className="cp-hero-content relative flex flex-col gap-6 sm:flex-row sm:items-center">
                 <MoneyGremlin />
                 <div className="min-w-0 flex-1">
-                  <p className="max-w-md text-base leading-relaxed text-slate-600">
-                    A street-smart little money creature that finds leaks, protects your cash, and helps you win
-                  </p>
+                  <div className="cp-briefing-kicker">
+                    Today&apos;s briefing
+                  </div>
                   <h2 className="cp-hero-title text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">
                     {gremlinLine}
                   </h2>
-                  <p className="mt-3 text-2xl tracking-tight text-slate-950">
-                    {nextStashAmount > 0 ? `Want me to stash ${formatCurrency(nextStashAmount)}?` : "Want me to find your next smart move?"}
-                  </p>
+                  <p className="cp-copy mt-3 max-w-xl">{briefing}</p>
                   <div className="cp-actions mt-5 flex flex-wrap gap-3">
                     <Link
-                      href="/cashflow"
+                      href="/books/transactions"
                       className="cp-button-primary inline-flex items-center gap-2 rounded-full bg-[#18c99a] px-4 py-2 text-sm font-bold text-slate-950 shadow-sm transition hover:bg-[#12b589]"
                     >
-                      {nextStashAmount > 0 ? `Stash ${formatCurrency(nextStashAmount)}` : "Protect cash"} <ArrowUpRight className="h-4 w-4" />
+                      Review transactions <ArrowUpRight className="h-4 w-4" />
                     </Link>
                     <Link
-                      href="/books/transactions"
+                      href="/cashflow"
                       className="cp-button-secondary inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 shadow-sm transition hover:border-slate-300"
                     >
-                      Show me why
+                      View cash outlook
                     </Link>
                   </div>
                 </div>
@@ -930,19 +785,31 @@ export default async function CashboardPage({
                   <Sparkles className="h-5 w-5" />
                 </div>
                 <div>
-                  <h2 className="cp-card-title text-lg font-black tracking-tight text-slate-950">AI Money Moves</h2>
-                  <p className="cp-card-muted text-sm text-slate-500">Smart actions to help you win</p>
+                  <h2 className="cp-card-title text-lg font-black tracking-tight text-slate-950">
+                    Next actions
+                  </h2>
+                  <p className="cp-card-muted text-sm text-slate-500">
+                    Based on the data currently available.
+                  </p>
                 </div>
               </div>
               <div className="space-y-3">
-                {moneyMoves.map(({ label, detail, href, Icon }) => (
-                  <Link key={label} href={href} className="cp-move flex items-center gap-3 rounded-2xl border border-slate-100 bg-slate-50/70 p-3 transition hover:border-emerald-200 hover:bg-emerald-50/60">
+                {nextActions.map(({ label, detail, href, Icon }) => (
+                  <Link
+                    key={label}
+                    href={href}
+                    className="cp-move flex items-center gap-3 rounded-2xl border border-slate-100 bg-slate-50/70 p-3 transition hover:border-emerald-200 hover:bg-emerald-50/60"
+                  >
                     <div className="cp-move-icon">
                       <Icon className="h-5 w-5" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="text-sm font-bold text-slate-950">{label}</div>
-                      <div className="text-xs leading-snug text-slate-500">{detail}</div>
+                      <div className="text-sm font-bold text-slate-950">
+                        {label}
+                      </div>
+                      <div className="text-xs leading-snug text-slate-500">
+                        {detail}
+                      </div>
                     </div>
                     <ArrowUpRight className="h-4 w-4 text-slate-400" />
                   </Link>
@@ -952,22 +819,58 @@ export default async function CashboardPage({
           </div>
         </section>
 
-        <section className="cp-metric-grid grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <section className="cp-metric-grid grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {[
-            { label: "Safe to spend", value: cashflow ? formatCurrency(cashflow.safeToSpend) : "—", detail: affordabilityStatus, Icon: WalletCards, color: "text-emerald-700 bg-emerald-50 border-emerald-100" },
-            { label: "Upcoming bills", value: cashflow ? "Covered" : "Needs data", detail: cashflow ? `Low balance ${formatCurrency(cashflow.forecast.projectedLowBalance)}` : "Connect accounts", Icon: CheckCircle2, color: "text-blue-700 bg-blue-50 border-blue-100" },
-            { label: "Savings signal", value: `${savingsProgress}%`, detail: "Cashpile Progress", Icon: Umbrella, color: "text-amber-700 bg-amber-50 border-amber-100" },
-            { label: "Subscriptions flagged", value: formatCurrency(subscriptionSummary.monthlyTotal), detail: `${subscriptionSummary.items.length} recurring items`, Icon: CreditCard, color: "text-red-700 bg-red-50 border-red-100" },
+            {
+              label: "Estimated cash available",
+              value: hasCashflowData
+                ? formatCurrency(cashflow!.safeToSpend)
+                : "—",
+              detail: hasCashflowData ? "Forecast-based" : "Connect accounts",
+              Icon: WalletCards,
+              color: "text-emerald-700 bg-emerald-50 border-emerald-100",
+            },
+            {
+              label: "Projected low balance",
+              value: hasCashflowData
+                ? formatCurrency(cashflow!.forecast.projectedLowBalance)
+                : "—",
+              detail: cashOutlookStatus,
+              Icon: ShieldAlert,
+              color: "text-blue-700 bg-blue-50 border-blue-100",
+            },
+            {
+              label: "Likely recurring charges",
+              value: subscriptionSummary.items.length
+                ? `${formatCurrency(subscriptionSummary.monthlyTotal)}/mo`
+                : "—",
+              detail: subscriptionSummary.items.length
+                ? `${subscriptionSummary.items.length} detected`
+                : "No matches yet",
+              Icon: CreditCard,
+              color: "text-red-700 bg-red-50 border-red-100",
+            },
           ].map(({ label, value, detail, Icon, color }) => (
-            <div key={label} className="cp-card rounded-3xl border border-white bg-white p-5 shadow-[0_16px_40px_rgba(15,23,42,0.07)]">
+            <div
+              key={label}
+              className="cp-card rounded-3xl border border-white bg-white p-5 shadow-[0_16px_40px_rgba(15,23,42,0.07)]"
+            >
               <div className="flex items-start justify-between gap-3">
-                <div className={`flex h-11 w-11 items-center justify-center rounded-2xl border ${color}`}>
+                <div
+                  className={`flex h-11 w-11 items-center justify-center rounded-2xl border ${color}`}
+                >
                   <Icon className="h-5 w-5" />
                 </div>
-                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-500">{detail}</span>
+                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-500">
+                  {detail}
+                </span>
               </div>
-              <div className="cp-metric-label mt-5 text-xs font-bold uppercase tracking-wide text-slate-500">{label}</div>
-              <div className="cp-metric-value mt-1 font-mono text-3xl font-black tabular-nums text-slate-950">{value}</div>
+              <div className="cp-metric-label mt-5 text-xs font-bold uppercase tracking-wide text-slate-500">
+                {label}
+              </div>
+              <div className="cp-metric-value mt-1 font-mono text-3xl font-black tabular-nums text-slate-950">
+                {value}
+              </div>
             </div>
           ))}
         </section>
@@ -976,49 +879,83 @@ export default async function CashboardPage({
           <div className="cp-card rounded-[2rem] border border-white bg-white p-6 shadow-[0_16px_40px_rgba(15,23,42,0.07)]">
             <div className="mb-6 flex items-center justify-between gap-4">
               <div>
-                <h2 className="cp-card-title text-lg font-black tracking-tight text-slate-950">Spending trend</h2>
-                <p className="cp-card-muted text-sm text-slate-500">A clean read on recent cash outflow.</p>
+                <h2 className="cp-card-title text-lg font-black tracking-tight text-slate-950">
+                  Spending trend
+                </h2>
+                <p className="cp-card-muted text-sm text-slate-500">
+                  Recent outgoing transactions.
+                </p>
               </div>
-              <div className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-bold text-slate-600">Last 6 months</div>
+              <div className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-bold text-slate-600">
+                Last 6 months
+              </div>
             </div>
-            <div className="cp-chart flex h-56 items-end gap-3 rounded-3xl border border-slate-100 bg-[#fbfaf7] p-4">
-              {spendingTrend.map((point) => (
-                <div key={point.label} className="flex h-full flex-1 flex-col justify-end gap-2">
+            {hasSpendingData ? (
+              <div className="cp-chart flex h-56 items-end gap-3 rounded-3xl border border-slate-100 bg-[#fbfaf7] p-4">
+                {spendingTrend.map((point) => (
                   <div
-                    className="cp-bar rounded-t-2xl bg-gradient-to-t from-[#2563eb] to-[#18c99a] shadow-sm"
-                    style={{ height: `${point.height}%` }}
-                    title={formatCurrency(point.amount)}
-                  />
-                  <div className="text-center text-xs font-bold text-slate-500">{point.label}</div>
-                </div>
-              ))}
-            </div>
+                    key={point.label}
+                    className="flex h-full flex-1 flex-col justify-end gap-2"
+                  >
+                    <div
+                      className="cp-bar rounded-t-2xl bg-gradient-to-t from-[#2563eb] to-[#18c99a] shadow-sm"
+                      style={{ height: `${point.height}%` }}
+                      title={formatCurrency(point.amount)}
+                    />
+                    <div className="text-center text-xs font-bold text-slate-500">
+                      {point.label}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">
+                Import outgoing transactions to see a spending trend.
+              </div>
+            )}
           </div>
 
           <div className="cp-card rounded-[2rem] border border-white bg-white p-6 shadow-[0_16px_40px_rgba(15,23,42,0.07)]">
             <div className="mb-5 flex items-center justify-between gap-4">
               <div>
-                <h2 className="cp-card-title text-lg font-black tracking-tight text-slate-950">Recent transactions</h2>
-                <p className="cp-card-muted text-sm text-slate-500">Still a financial app first.</p>
+                <h2 className="cp-card-title text-lg font-black tracking-tight text-slate-950">
+                  Recent transactions
+                </h2>
+                <p className="cp-card-muted text-sm text-slate-500">
+                  Your latest outgoing activity.
+                </p>
               </div>
-              <Link href="/books/transactions" className="text-sm font-bold text-blue-600 no-underline">View all</Link>
+              <Link
+                href="/books/transactions"
+                className="text-sm font-bold text-blue-600 no-underline"
+              >
+                View all
+              </Link>
             </div>
             <div className="divide-y divide-slate-100">
-              {recentTransactions.length ? recentTransactions.map((row) => (
-                <div key={row.id} className="flex items-center gap-3 py-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-950 text-sm font-black text-white">
-                    {(row.merchant || row.description || "?").slice(0, 1)}
+              {recentTransactions.length ? (
+                recentTransactions.map((row) => (
+                  <div key={row.id} className="flex items-center gap-3 py-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-950 text-sm font-black text-white">
+                      {(row.merchant || row.description || "?").slice(0, 1)}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-bold text-slate-800">
+                        {row.merchant || row.description}
+                      </div>
+                      <div className="text-xs text-slate-500">{row.date}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-mono text-sm font-bold text-slate-950">
+                        -{formatCurrency(Math.abs(Number(row.amount ?? 0)))}
+                      </div>
+                      <div className="text-xs text-slate-500">
+                        {getCategoryName(row, booksData.categories)}
+                      </div>
+                    </div>
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-bold text-slate-800">{row.merchant || row.description}</div>
-                    <div className="text-xs text-slate-500">{row.date}</div>
-                  </div>
-                  <div className="text-right">
-                    <div className="font-mono text-sm font-bold text-slate-950">-{formatCurrency(Math.abs(Number(row.amount ?? 0)))}</div>
-                    <div className="text-xs text-slate-500">{getCategoryName(row, booksData.categories)}</div>
-                  </div>
-                </div>
-              )) : (
+                ))
+              ) : (
                 <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-5 text-sm text-slate-500">
                   Import transactions to see recent activity here.
                 </div>
@@ -1027,81 +964,27 @@ export default async function CashboardPage({
           </div>
         </section>
 
-        <section className="cp-lower-grid grid gap-5 xl:grid-cols-[0.95fr_1.05fr]">
-          <div className="cp-card rounded-[2rem] border border-white bg-white p-6 shadow-[0_16px_40px_rgba(15,23,42,0.07)]">
-            <div className="mb-5 flex items-center justify-between gap-4">
-              <div>
-                <h2 className="cp-card-title text-lg font-black tracking-tight text-slate-950">Cashpile Progress</h2>
-                <p className="cp-card-muted text-sm text-slate-500">Subtle progress cues from existing money signals.</p>
-              </div>
-              <BadgeCheck className="h-5 w-5 text-emerald-600" />
+        <section className="cp-card rounded-[2rem] border border-white bg-white p-6 shadow-[0_16px_40px_rgba(15,23,42,0.07)]">
+          <div className="mb-5 flex items-center justify-between gap-4">
+            <div>
+              <h2 className="cp-card-title text-lg font-black tracking-tight text-slate-950">
+                Can I afford it?
+              </h2>
+              <p className="cp-card-muted text-sm text-slate-500">
+                Check a purchase against your current cash-flow estimate.
+              </p>
             </div>
-            <div className="space-y-4">
-              {[
-                { label: "Emergency shield", value: savingsProgress, Icon: Umbrella },
-                { label: "Subscription leaks", value: subscriptionSummary.items.length ? Math.max(8, 100 - subscriptionSummary.items.length * 12) : 100, Icon: ShieldAlert },
-                { label: "Budget confidence", value: aiBudget.confidence === "High" ? 86 : aiBudget.confidence === "Medium" ? 58 : 28, Icon: Gauge },
-              ].map(({ label, value, Icon }) => (
-                <div key={label}>
-                  <div className="mb-2 flex items-center justify-between text-sm">
-                    <div className="flex items-center gap-2 font-bold text-slate-700">
-                      <Icon className="h-4 w-4 text-emerald-600" />
-                      {label}
-                    </div>
-                    <span className="font-mono font-bold text-slate-500">{value}%</span>
-                  </div>
-                  <div className="cp-progress-track h-3 overflow-hidden rounded-full bg-slate-100">
-                    <div className="cp-progress-fill h-full rounded-full bg-gradient-to-r from-[#18c99a] to-[#2563eb]" style={{ width: `${value}%` }} />
-                  </div>
-                </div>
-              ))}
-            </div>
+            <Landmark className="h-5 w-5 text-emerald-600" />
           </div>
-
-          <div className="cp-card rounded-[2rem] border border-white bg-white p-6 shadow-[0_16px_40px_rgba(15,23,42,0.07)]">
-            <div className="mb-5 flex items-center justify-between gap-4">
-              <div>
-                <h2 className="cp-card-title text-lg font-black tracking-tight text-slate-950">Ask Cashpile</h2>
-                <p className="cp-card-muted text-sm text-slate-500">Quick affordability check from existing cashflow data.</p>
-              </div>
-              <Landmark className="h-5 w-5 text-emerald-600" />
-            </div>
-            <div className="rounded-3xl border border-slate-200 bg-slate-50/70 p-4">
-              <AffordabilityForm variant="compact" />
-            </div>
-          </div>
-        </section>
-
-        <section className="space-y-3">
-          <div>
-            <h2 className="text-sm font-black uppercase tracking-wide text-slate-500">Your top money questions</h2>
-            <p className="mt-1 text-xs text-slate-500">Existing answers, restyled with the new Cashpile visual system.</p>
-          </div>
-          <div className="cp-question-grid grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {insightCards.map(({ title, question, metricLabel, metricValue, insight, status, href, Icon }) => (
-              <Link key={title} href={href} className="cp-question-card group flex min-h-[235px] flex-col rounded-3xl border border-white bg-white p-5 shadow-[0_16px_40px_rgba(15,23,42,0.07)] transition hover:-translate-y-0.5 hover:shadow-[0_20px_50px_rgba(15,23,42,0.10)]">
-                <div className="mb-5 flex items-start justify-between gap-4">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-100 bg-[#fbfaf7] text-slate-700">
-                    <Icon className="h-5 w-5" />
-                  </div>
-                  <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-bold text-slate-500">{status}</span>
-                </div>
-                <div className="flex-1 space-y-2">
-                  <h3 className="text-lg font-black leading-tight text-slate-950">{title}</h3>
-                  <p className="text-xs leading-relaxed text-slate-500">{question}</p>
-                </div>
-                <div className="mt-5 border-t border-slate-100 pt-5">
-                  <div className="text-[11px] uppercase tracking-wide text-slate-500">{metricLabel}</div>
-                  <div className="cp-metric-value mt-1 font-mono text-2xl font-black tabular-nums text-slate-950">{metricValue}</div>
-                  <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-slate-500">{insight}</p>
-                </div>
-              </Link>
-            ))}
+          <div className="rounded-3xl border border-slate-200 bg-slate-50/70 p-4">
+            <AffordabilityForm variant="compact" />
           </div>
         </section>
       </div>
-
-      <GremmyReminderModal reminders={gremmyReminders} openOnLogin={resolvedSearchParams?.gremmy === "welcome"} />
+      <GremmyReminderModal
+        reminders={gremmyReminders}
+        openOnLogin={resolvedSearchParams?.gremmy === "welcome"}
+      />
       <CashInputStrip />
     </div>
   );

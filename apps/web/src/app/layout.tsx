@@ -5,9 +5,9 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Cashpile.ai — AI-First Financial Platform",
+  title: "Cashpile.ai — Clean up your finances with AI",
   description:
-    "AI-first personal finance, cash flow, books, and tax workflows — unified.",
+    "Import your finances, clean them up with AI, and see an actionable Cashboard to better your finances.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

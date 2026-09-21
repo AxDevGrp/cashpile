@@ -1,5 +1,7 @@
 "use server";
 
+import { hasTaxTestingAccess, assertTaxTestingAccess } from "@/lib/tax-access";
+
 import { createServerSupabaseClient } from "@cashpile/db";
 import { revalidatePath } from "next/cache";
 import type { BooksTransaction } from "../types";
@@ -77,6 +79,8 @@ export async function listTransactions(params: {
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthenticated");
+  const taxEnabled = hasTaxTestingAccess(user);
+  if (params.taxEntityId || params.udaId) assertTaxTestingAccess(user);
 
   // Support both new taxEntityId and deprecated udaId
   const entityId = params.taxEntityId ?? params.udaId;
@@ -141,11 +145,11 @@ export async function listTransactions(params: {
           .eq("user_id", user.id)
           .in("id", financialAccountIds)
       : Promise.resolve({ data: [], error: null }),
-    (supabase as any)
+    taxEnabled ? (supabase as any)
       .from("books_tax_transaction_views")
       .select("transaction_id, tax_entity_id, tax_notes, business_percentage")
       .eq("user_id", user.id)
-      .in("transaction_id", transactionIds),
+      .in("transaction_id", transactionIds) : Promise.resolve({ data: [], error: null }),
   ]);
 
   if (categoriesRes.error) {

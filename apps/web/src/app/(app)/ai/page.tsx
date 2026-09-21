@@ -2,23 +2,21 @@
 
 import { useChat } from "ai/react";
 import { useState, useRef, useEffect } from "react";
-import { Bot, Send, Sparkles, BookOpen, TrendingUp, Activity, Loader2 } from "lucide-react";
+import { Bot, Send, Sparkles, BookOpen, Loader2 } from "lucide-react";
 import { PageHeader } from "@cashpile/ui";
 
 const SUGGESTED = [
-  "How exposed is my portfolio to tomorrow's Fed announcement?",
-  "What's my most profitable trading setup this month?",
-  "How does my business cash flow compare to my trading P&L?",
-  "Which instruments should I watch based on upcoming macro events?",
+  "What should I review first?",
+  "How can I reduce unnecessary spending?",
+  "Which transactions need categorizing?",
+  "Can I afford $250 this week?",
 ];
 
 // Map tool names to readable loading labels
-const TOOL_LABELS: Record<string, { label: string; icon: React.ElementType }> = {
-  get_books_summary: { label: "checking Books…", icon: BookOpen },
-  get_trades_snapshot: { label: "checking Trades…", icon: TrendingUp },
-  get_pulse_events: { label: "checking Pulse events…", icon: Activity },
-  get_pulse_alerts: { label: "checking Pulse alerts…", icon: Activity },
-};
+const TOOL_LABELS: Record<string, { label: string; icon: React.ElementType }> =
+  {
+    get_books_summary: { label: "checking Books…", icon: BookOpen },
+  };
 
 function ToolCallIndicator({ toolName }: { toolName: string }) {
   const info = TOOL_LABELS[toolName] ?? { label: "thinking…", icon: Loader2 };
@@ -61,7 +59,7 @@ function MessageBubble({
         {toolInvocations?.map((t, i) =>
           t.state !== "result" ? (
             <ToolCallIndicator key={i} toolName={t.toolName} />
-          ) : null
+          ) : null,
         )}
         {/* Text content */}
         {content && (
@@ -114,7 +112,7 @@ export default function AIPage() {
       <div className="px-6 py-4 border-b shrink-0">
         <PageHeader
           title="AI Assistant"
-          description="Ask anything about your finances across Books, Trades, and Pulse"
+          description="Get help cleaning up your finances and improving your cash flow"
         />
       </div>
 
@@ -128,7 +126,8 @@ export default function AIPage() {
             </div>
             <h3 className="font-semibold text-lg mb-2">Meet Cash</h3>
             <p className="text-muted-foreground text-sm mb-8 max-w-md mx-auto text-center">
-              I have live access to your Books, Trades, and Pulse data simultaneously. Ask anything about your full financial picture.
+              I can help you review transactions, spot spending patterns, and
+              understand your cash flow.
             </p>
             <div className="grid sm:grid-cols-2 gap-3 w-full max-w-2xl">
               {SUGGESTED.map((q) => (
@@ -153,7 +152,10 @@ export default function AIPage() {
                 content={m.content}
                 toolInvocations={
                   "toolInvocations" in m
-                    ? (m.toolInvocations as Array<{ toolName: string; state: string }>)
+                    ? (m.toolInvocations as Array<{
+                        toolName: string;
+                        state: string;
+                      }>)
                     : undefined
                 }
               />
@@ -213,7 +215,7 @@ export default function AIPage() {
             </div>
           </div>
           <p className="text-center text-[11px] text-muted-foreground mt-2">
-            Cash has live access to your Books, Trades, and Pulse data.
+            Cash can help you review your finances and cash flow.
           </p>
         </form>
       </div>

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useTaxAccess } from "@/components/tax-access-provider";
 import { PageHeader } from "@cashpile/ui";
 import { Button } from "@cashpile/ui";
 import { Badge } from "@cashpile/ui";
@@ -132,6 +133,7 @@ export default function TransactionsClient({
   emptyQueryMessage = "Search or filter transactions to see results.",
 }: Props) {
   const router = useRouter();
+  const taxEnabled = useTaxAccess();
   const searchParams = useSearchParams();
   const [rows, setRows] = useState(transactions);
   const [count, setCount] = useState(totalCount);
@@ -179,9 +181,9 @@ export default function TransactionsClient({
       : "all";
   const hasActiveQuery = Boolean(
     filters.search?.trim() ||
-    filters.taxEntityId ||
+    (taxEnabled && filters.taxEntityId) ||
     filters.accountId ||
-    filters.udaId ||
+    (taxEnabled && filters.udaId) ||
     filters.categoryId ||
     filters.filter ||
     filters.from ||
@@ -236,9 +238,10 @@ export default function TransactionsClient({
       setClientError(undefined);
       try {
         const params = new URLSearchParams(searchParams.toString());
-        if (filters.taxEntityId && !params.has("taxEntityId")) params.set("taxEntityId", filters.taxEntityId);
+        if (!taxEnabled) { params.delete("taxEntityId"); params.delete("udaId"); }
+        if (taxEnabled && filters.taxEntityId && !params.has("taxEntityId")) params.set("taxEntityId", filters.taxEntityId);
         if (filters.accountId && !params.has("accountId")) params.set("accountId", filters.accountId);
-        if (filters.udaId && !params.has("udaId")) params.set("udaId", filters.udaId);
+        if (taxEnabled && filters.udaId && !params.has("udaId")) params.set("udaId", filters.udaId);
         if (filters.categoryId && !params.has("categoryId")) params.set("categoryId", filters.categoryId);
         if (filters.filter && !params.has("filter")) params.set("filter", filters.filter);
         if (filters.from && !params.has("from")) params.set("from", filters.from);
@@ -273,7 +276,7 @@ export default function TransactionsClient({
     return () => {
       cancelled = true;
     };
-  }, [filters.accountId, filters.categoryId, filters.filter, filters.from, filters.search, filters.taxEntityId, filters.to, filters.udaId, searchParams, shouldLoadTransactions]);
+  }, [filters.accountId, filters.categoryId, filters.filter, filters.from, filters.search, taxEnabled, filters.taxEntityId, filters.to, filters.udaId, searchParams, shouldLoadTransactions]);
 
   useEffect(() => {
     setSearchDraft(filters.search ?? "");
@@ -474,12 +477,13 @@ export default function TransactionsClient({
       const taxAssigned = Number(data.taxAssigned ?? 0);
       toast.success(
         nextCategory
-          ? `Updated ${data.updated ?? ids.length} selected transaction${ids.length === 1 ? "" : "s"}, saved ${learnedRules} learned rule${learnedRules === 1 ? "" : "s"}, applied to ${appliedMatches} other match${appliedMatches === 1 ? "" : "es"}, and assigned ${taxAssigned} to Tax Entities`
+          ? `Updated ${data.updated ?? ids.length} selected transaction${ids.length === 1 ? "" : "s"}, saved ${learnedRules} learned rule${learnedRules === 1 ? "" : "s"}, applied to ${appliedMatches} other match${appliedMatches === 1 ? "" : "es"}${taxEnabled ? `, and assigned ${taxAssigned} to Tax Entities` : ""}`
           : `Updated ${data.updated ?? ids.length} selected transaction${ids.length === 1 ? "" : "s"}`
       );
       if (appliedMatches > 0) {
         router.refresh();
         const params = new URLSearchParams(searchParams.toString());
+        if (!taxEnabled) { params.delete("taxEntityId"); params.delete("udaId"); }
         params.set("limit", String(pageSize));
         const refreshed = await fetch(`/api/books/transactions?${params.toString()}`, { cache: "no-store" });
         if (refreshed.ok) {
@@ -562,8 +566,8 @@ export default function TransactionsClient({
       if (!res.ok) throw new Error(data.error ?? "Unable to categorize transactions");
 
       const summary = useAI
-        ? `Categorized ${data.categorized} of ${data.scanned} reviewed transactions (${data.learnedMatches} learned, ${data.ruleMatches} rules, ${data.aiMatches} AI). Saved ${data.learnedRulesSaved ?? 0} learned rule${data.learnedRulesSaved === 1 ? "" : "s"}, queued ${data.reviewSuggestions ?? 0} AI suggestion${data.reviewSuggestions === 1 ? "" : "s"} for review, and assigned ${data.taxAssigned ?? 0} to Tax Entities. ${data.needsReview} still need review.`
-        : `Applied rules to ${data.categorized} of ${data.scanned} uncategorized transactions (${data.learnedMatches} learned, ${data.ruleMatches} rules) and assigned ${data.taxAssigned ?? 0} to Tax Entities. ${data.needsReview} still need review.`;
+        ? `Categorized ${data.categorized} of ${data.scanned} reviewed transactions (${data.learnedMatches} learned, ${data.ruleMatches} rules, ${data.aiMatches} AI). Saved ${data.learnedRulesSaved ?? 0} learned rule${data.learnedRulesSaved === 1 ? "" : "s"}, queued ${data.reviewSuggestions ?? 0} AI suggestion${data.reviewSuggestions === 1 ? "" : "s"} for review, ${taxEnabled ? `and assigned ${data.taxAssigned ?? 0} to Tax Entities. ` : ""}${data.needsReview} still need review.`
+        : `Applied rules to ${data.categorized} of ${data.scanned} uncategorized transactions (${data.learnedMatches} learned, ${data.ruleMatches} rules) ${taxEnabled ? `and assigned ${data.taxAssigned ?? 0} to Tax Entities. ` : ""}${data.needsReview} still need review.`;
       setCategorizeSummary(summary);
       setCategorizeNeedsReview(Number(data.needsReview ?? 0));
       setCategorizeReviewSuggestions(Number(data.reviewSuggestions ?? 0));
@@ -1068,7 +1072,7 @@ export default function TransactionsClient({
               <th className="p-3 text-left font-medium">Description</th>
               <th className="p-3 text-left font-medium">Account</th>
               <th className="p-3 text-left font-medium">Category</th>
-              <th className="p-3 text-left font-medium">Tax Entity</th>
+              {taxEnabled && <th className="p-3 text-left font-medium">Tax Entity</th>}
               <th className="p-3 text-right font-medium">Amount</th>
               <th className="p-3 text-left font-medium">Flags</th>
             </tr>
@@ -1076,13 +1080,13 @@ export default function TransactionsClient({
           <tbody>
             {isLoading ? (
               <tr>
-                <td colSpan={8} className="p-8 text-center text-muted-foreground">
+                <td colSpan={taxEnabled ? 8 : 7} className="p-8 text-center text-muted-foreground">
                   Loading transactions…
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={8} className="p-8 text-center text-muted-foreground">
+                <td colSpan={taxEnabled ? 8 : 7} className="p-8 text-center text-muted-foreground">
                   No transactions yet.{" "}
                   <Link href="/books/transactions/import" className="underline">
                     Import your first CSV
@@ -1143,7 +1147,7 @@ export default function TransactionsClient({
                       </SelectContent>
                     </Select>
                   </td>
-                  <td className="p-3">
+{taxEnabled &&                   <td className="p-3">
                     <Select
                       value={taxEntitySelectValue(tx)}
                       onValueChange={(value) => {
@@ -1163,7 +1167,7 @@ export default function TransactionsClient({
                         ))}
                       </SelectContent>
                     </Select>
-                  </td>
+                  </td>}
                   <td className={`p-3 text-right tabular-nums font-medium ${tx.amount < 0 ? "text-red-600" : "text-green-600"}`}>
                     {formatCurrency(tx.amount)}
                   </td>
@@ -1202,7 +1206,7 @@ export default function TransactionsClient({
                         </>
                       );
                     })()}
-                    {getTaxAssignments(tx).map((assignment, index) => (
+                    {taxEnabled && getTaxAssignments(tx).map((assignment, index) => (
                       <Badge
                         key={`${assignment.entityName}-${index}`}
                         variant="secondary"

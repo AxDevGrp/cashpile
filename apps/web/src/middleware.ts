@@ -1,12 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { isTaxTestingAllowed, isTaxTestingPath } from "@/lib/tax-access-policy";
 
-const APP_ROUTES = ["/cashboard", "/books", "/trades", "/pulse", "/ai", "/settings"];
+const APP_ROUTES = ["/cashboard", "/cashflow", "/books", "/trades", "/pulse", "/ai", "/settings"];
 const AGENT_RATE_LIMIT = { requests: 120, windowMs: 60_000 };
 const agentRateLimit = new Map<string, { count: number; resetAt: number }>();
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  if (isTaxTestingPath(pathname)) {
+    const testerEmails = process.env.CASHPILE_TAX_TESTER_EMAILS;
+    if (!testerEmails?.trim()) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      { cookies: { getAll: () => request.cookies.getAll(), setAll: () => {} } }
+    );
+    const { data: { user }, error } = await supabase.auth.getUser();
+    if (error || !isTaxTestingAllowed(user, testerEmails)) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+  }
 
   // Skip static assets and auth callback
   if (pathname.startsWith("/_next/") || pathname.startsWith("/api/auth/") || pathname === "/favicon.ico") {

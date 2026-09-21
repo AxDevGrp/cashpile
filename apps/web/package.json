@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "test:books": "node --test src/modules/books/services/*.test.ts"
+    "test:books": "node --test src/modules/books/services/*.test.ts",
+    "test:release": "node --test src/lib/*.test.ts src/modules/agent/*.test.ts"
   },
   "dependencies": {
     "@cashpile/ai": "workspace:*",
