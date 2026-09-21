@@ -3,8 +3,10 @@
 import Link from "next/link";
 import { PageHeader, Button, Badge, Card, CardHeader, CardTitle, CardContent, CardDescription } from "@cashpile/ui";
 import type { TaxEntity } from "@/modules/books/types";
+import { ReadWorkspaceV2 } from "../../../_components/read-workspace-v2";
 
 interface Props {
+  uiV2: boolean;
   taxEntities: TaxEntity[];
   categoryCounts: Record<string, number>;
 }
@@ -27,14 +29,14 @@ const ENTITY_TYPE_COLORS: Record<string, string> = {
   rental_property: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
 };
 
-export default function EntitiesClient({ taxEntities, categoryCounts }: Props) {
-  return (
-    <div className="space-y-6 p-6">
-      <PageHeader title="Tax Entities" description="Manage your business entities for tax reporting" actions={
-        <Link href="/books/entities/new">
-          <Button>New Tax Entity</Button>
-        </Link>
-      } />
+export default function EntitiesClient({ taxEntities, categoryCounts, uiV2 }: Props) {
+  const actions = <Link href="/books/entities/new"><Button>New Tax Entity</Button></Link>;
+  const content = (
+    <div
+      className={uiV2 ? "space-y-6" : "space-y-6 p-6"}
+      data-read-workspace-content={uiV2 || undefined}
+    >
+      {!uiV2 && <PageHeader title="Tax Entities" description="Manage your business entities for tax reporting" actions={actions} />}
 
       {taxEntities.length === 0 ? (
         <div className="rounded-lg border p-12 text-center text-muted-foreground">
@@ -78,4 +80,5 @@ export default function EntitiesClient({ taxEntities, categoryCounts }: Props) {
       )}
     </div>
   );
+  return uiV2 ? <ReadWorkspaceV2 id="entities" actions={actions}>{content}</ReadWorkspaceV2> : content;
 }

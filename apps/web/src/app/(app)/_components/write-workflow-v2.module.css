@@ -1,0 +1,7 @@
+.workflow { box-sizing: border-box; width: 100%; min-height: 100%; overflow-x: hidden; padding: clamp(24px, 4vw, 48px); color: #0b1936; }
+.guide { display: flex; width: min(1120px, 100%); align-items: center; justify-content: space-between; gap: 16px; margin: 0 auto 20px; padding: 12px 14px; border: 1px solid #d6e8e2; border-radius: 14px; background: #fbfffd; color: #087155; font-size: 13px; }
+.content { width: min(1120px, 100%); margin: 0 auto; }
+.workflow :is(a,button,input,select,textarea):focus-visible { outline: 3px solid rgba(13,128,95,.45); outline-offset: 3px; }
+.dialogSurface { border-color: #d6e8e2; background: #fffefb; color: #0b1936; box-shadow: 0 24px 70px rgba(11,25,54,.16); }
+@media (max-width:760px) { .workflow { padding: 20px 16px 96px; } .guide { align-items: flex-start; flex-direction: column; } }
+@media (prefers-reduced-motion:reduce) { .workflow * { transition-duration:.01ms !important; } }

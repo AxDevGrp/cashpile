@@ -2,6 +2,7 @@ import { listTaxEntities } from "@/modules/books/actions/entity.actions";
 import { listAccounts } from "@/modules/books/actions/account.actions";
 import { createServerSupabaseClient } from "@cashpile/db";
 import AccountsClient from "./_components/accounts-client";
+import { isUiV2Enabled } from "@/components/ui-v2";
 
 export const metadata = { title: "Accounts — Books | Cashpile" };
 
@@ -28,6 +29,7 @@ export default async function AccountsPage() {
       taxEntities={taxEntities} 
       accounts={accounts} 
       plaidItems={plaidItems} 
+      uiV2={isUiV2Enabled()}
     />
   );
 }

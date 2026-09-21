@@ -7,6 +7,7 @@ interface SkeletonProps {
 export function Skeleton({ className }: SkeletonProps) {
   return (
     <div
+      aria-hidden="true"
       className={cn("animate-pulse rounded-md bg-muted", className)}
     />
   );
@@ -58,7 +59,8 @@ export function SkeletonTable({ rows = 5, cols = 4 }: { rows?: number; cols?: nu
 
 export function PageSkeleton({ cards = 3 }: { cards?: number }) {
   return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto">
+    <div className="p-6 space-y-6 max-w-7xl mx-auto" role="status" aria-live="polite">
+      <span className="sr-only">Loading page</span>
       {/* page header */}
       <div className="space-y-2">
         <Skeleton className="h-7 w-48" />

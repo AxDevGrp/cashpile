@@ -3,12 +3,16 @@
 import { createServerSupabaseClient } from "@cashpile/db";
 import { revalidatePath } from "next/cache";
 import type { TaxEntity } from "../types";
+import { getTaxModuleAccess, requireTaxModuleAccess } from "@/lib/tax-access";
 
 // ─── Tax Entity CRUD ───────────────────────────────────────────────────────
 // Tax Entities represent businesses, LLCs, rental properties, etc. for tax reporting.
 // Financial accounts can be linked to Tax Entities.
 
 export async function listTaxEntities(): Promise<TaxEntity[]> {
+  const { canUseTax } = await getTaxModuleAccess();
+  if (!canUseTax) return [];
+
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthenticated");
@@ -24,6 +28,7 @@ export async function listTaxEntities(): Promise<TaxEntity[]> {
 }
 
 export async function getTaxEntity(id: string): Promise<TaxEntity | null> {
+  await requireTaxModuleAccess();
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthenticated");
@@ -42,6 +47,7 @@ export async function getTaxEntity(id: string): Promise<TaxEntity | null> {
 export async function createTaxEntity(
   input: Omit<TaxEntity, "id" | "user_id" | "created_at" | "updated_at">
 ): Promise<TaxEntity> {
+  await requireTaxModuleAccess();
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthenticated");
@@ -62,6 +68,7 @@ export async function updateTaxEntity(
   id: string, 
   input: Partial<Omit<TaxEntity, "id" | "user_id" | "created_at" | "updated_at">>
 ): Promise<TaxEntity> {
+  await requireTaxModuleAccess();
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthenticated");
@@ -81,6 +88,7 @@ export async function updateTaxEntity(
 }
 
 export async function deleteTaxEntity(id: string): Promise<void> {
+  await requireTaxModuleAccess();
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthenticated");

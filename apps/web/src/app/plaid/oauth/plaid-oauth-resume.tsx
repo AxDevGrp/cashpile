@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePlaidLink } from "react-plaid-link";
 import { Button } from "@cashpile/ui";
+import { isUiV2Enabled } from "@/components/ui-v2";
+import { Phase7Surface } from "@/app/_components/phase-7-surface";
 
 function readImportOptions() {
   try {
@@ -136,19 +138,48 @@ export default function PlaidOAuthResume() {
     open();
   }, [linkToken, open, ready]);
 
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-6">
-      <div className="max-w-md w-full rounded-xl border bg-card p-6 text-center space-y-4">
-        <div>
+  const uiV2 = isUiV2Enabled();
+  const panel = (
+    <div
+      data-phase-7-panel
+      className="max-w-md w-full rounded-xl border bg-card p-6 text-center space-y-4"
+    >
+      <div>
+        {!uiV2 && (
           <h1 className="text-xl font-semibold">Finishing Plaid Link</h1>
-          <p className="mt-2 text-sm text-muted-foreground">{message}</p>
-        </div>
-        {error && <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{error}</div>}
-        <div className="flex justify-center gap-2">
-          <Button onClick={() => ready && open()} disabled={!ready || !linkToken}>Resume Plaid</Button>
-          <Link href="/books/accounts"><Button variant="outline">Back to Accounts</Button></Link>
-        </div>
+        )}
+        <p
+          role="status"
+          aria-live="polite"
+          className="mt-2 text-sm text-muted-foreground"
+        >
+          {message}
+        </p>
       </div>
+      {error && (
+        <div
+          role="alert"
+          className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
+        >
+          {error}
+        </div>
+      )}
+      <div className="flex justify-center gap-2">
+        <Button onClick={() => ready && open()} disabled={!ready || !linkToken}>
+          Resume Plaid
+        </Button>
+        <Link href="/books/accounts">
+          <Button variant="outline">Back to Accounts</Button>
+        </Link>
+      </div>
+    </div>
+  );
+
+  return uiV2 ? (
+    <Phase7Surface id="plaid-oauth">{panel}</Phase7Surface>
+  ) : (
+    <div className="min-h-screen flex items-center justify-center bg-background p-6">
+      {panel}
     </div>
   );
 }

@@ -7,7 +7,11 @@
     "dev": "turbo dev",
     "lint": "turbo lint",
     "typecheck": "turbo typecheck",
-    "format": "prettier --write \"**/*.{ts,tsx,md}\""
+    "format": "prettier --write \"**/*.{ts,tsx,md}\"",
+    "ui-migration:guard:capture": "node scripts/ui-migration/protected-path-guard.js capture",
+    "ui-migration:guard:check": "node scripts/ui-migration/protected-path-guard.js check",
+    "ui-migration:routes": "node scripts/ui-migration/route-manifest.js",
+    "ui-migration:test": "node --test scripts/ui-migration/test/*.test.js && node scripts/ui-migration/route-manifest.js"
   },
   "devDependencies": {
     "turbo": "^2.3.3",

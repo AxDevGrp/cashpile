@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireTaxModuleAccess } from "@/lib/tax-access";
 import { generateMappedTaxWorkbook } from "@/modules/books/actions/tax-workbook.actions";
 
 export const runtime = "nodejs";
@@ -6,6 +7,7 @@ export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest, { params }: { params: { templateId: string } }) {
   try {
+    await requireTaxModuleAccess();
     const body = await req.json();
     const taxEntityId = String(body.taxEntityId ?? "");
     const taxEntityName = String(body.taxEntityName ?? "tax-entity");

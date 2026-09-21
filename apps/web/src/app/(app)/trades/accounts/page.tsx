@@ -2,6 +2,8 @@ import { listPropAccounts } from "@/modules/trades/actions/account.actions";
 import { createServerSupabaseClient } from "@cashpile/db";
 import { RulesService } from "@/modules/trades/services/rules.service";
 import AccountsClient from "./_components/accounts-client";
+import { WriteWorkflowV2 } from "../../_components/write-workflow-v2";
+import { isUiV2Enabled } from "@/components/ui-v2";
 
 export const metadata = { title: "Accounts — Trades | Cashpile" };
 
@@ -26,5 +28,6 @@ export default async function TradeAccountsPage() {
     rulesResults.map(({ accountId, result }) => [accountId, result])
   );
 
-  return <AccountsClient accounts={accounts} rulesMap={rulesMap} />;
+  const content = <AccountsClient accounts={accounts} rulesMap={rulesMap} />;
+  return isUiV2Enabled() ? <WriteWorkflowV2 id="trade-accounts">{content}</WriteWorkflowV2> : content;
 }

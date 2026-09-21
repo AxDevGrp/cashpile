@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireTaxModuleAccess } from "@/lib/tax-access";
 import { assignTransactions, unassignTransactions } from "@/modules/books/actions/tax.actions";
 
 export async function POST(req: NextRequest) {
+  try {
+    await requireTaxModuleAccess();
+  } catch {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
   const body = await req.json();
   // Support both new taxEntityId and deprecated udaId
   const taxEntityId = body.taxEntityId ?? body.udaId;
@@ -28,6 +35,12 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  try {
+    await requireTaxModuleAccess();
+  } catch {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
   const body = await req.json();
   // Support both new taxEntityId and deprecated udaId
   const taxEntityId = body.taxEntityId ?? body.udaId;

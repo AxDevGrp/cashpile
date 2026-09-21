@@ -7,6 +7,7 @@ import { triggerPredictionForEvent } from "@/modules/pulse/actions/event.actions
 import type { PulseEvent, EventCategory, EventSeverity } from "@/modules/pulse/types";
 
 interface Props {
+  uiV2?: boolean;
   events: PulseEvent[];
   filters: {
     category?: string;
@@ -50,7 +51,7 @@ function timeAgo(isoDate: string): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
-export default function EventsClient({ events, filters }: Props) {
+export default function EventsClient({ events, filters, uiV2 }: Props) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -76,14 +77,14 @@ export default function EventsClient({ events, filters }: Props) {
   }
 
   return (
-    <div className="space-y-6">
-      <PageHeader
+    <div className="space-y-6" data-read-workspace-content={uiV2 || undefined}>
+      {!uiV2 && <PageHeader
         title="Market Events"
         description="Global financial events ingested from Reuters, Yahoo Finance & Investing.com"
-      />
+      />}
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-3 items-end">
+      <div className="flex flex-wrap gap-3 items-end" data-read-workspace-controls={uiV2 || undefined}>
         <div className="flex flex-col gap-1">
           <label className="text-xs text-muted-foreground">Category</label>
           <select

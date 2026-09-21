@@ -5,6 +5,7 @@ import { PageHeader } from "@cashpile/ui";
 import type { CorrelationCell, EventCategory } from "@/modules/pulse/types";
 
 interface Props {
+  uiV2?: boolean;
   grid: CorrelationCell[];
   selectedInstruments: string[];
   defaultInstruments: string[];
@@ -53,6 +54,7 @@ export default function CorrelationsClient({
   defaultInstruments,
   watchlistInstruments,
   days,
+  uiV2,
 }: Props) {
   const router = useRouter();
   const pathname = usePathname();
@@ -77,14 +79,14 @@ export default function CorrelationsClient({
   const hasData = grid.some((c) => c.bullish_count + c.bearish_count + c.neutral_count > 0);
 
   return (
-    <div className="space-y-6">
-      <PageHeader
+    <div className="space-y-6" data-read-workspace-content={uiV2 || undefined}>
+      {!uiV2 && <PageHeader
         title="Market Correlations"
         description="How each event category historically impacts your instruments"
-      />
+      />}
 
       {/* Controls */}
-      <div className="flex flex-wrap gap-4 items-start">
+      <div className="flex flex-wrap gap-4 items-start" data-read-workspace-controls={uiV2 || undefined}>
         <div>
           <p className="text-xs text-muted-foreground mb-2">Instruments</p>
           <div className="flex flex-wrap gap-1.5">

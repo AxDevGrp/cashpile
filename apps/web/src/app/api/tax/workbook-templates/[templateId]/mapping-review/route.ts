@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireTaxModuleAccess } from "@/lib/tax-access";
 import {
   getTaxWorkbookMappingReview,
   listTaxWorkbookTargets,
@@ -9,6 +10,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest, { params }: { params: { templateId: string } }) {
   try {
+    await requireTaxModuleAccess();
     const { searchParams } = new URL(req.url);
     const taxEntityId = searchParams.get("taxEntityId");
     const year = Number(searchParams.get("year") ?? new Date().getFullYear());

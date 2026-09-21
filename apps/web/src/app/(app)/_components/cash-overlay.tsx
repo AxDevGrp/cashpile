@@ -5,6 +5,7 @@ import { createContext, useContext, useEffect, useRef, useState, useCallback } f
 import { useChat } from "ai/react";
 import { X, Send, Loader2, BookOpen, Sparkles, Zap, WalletCards } from "lucide-react";
 import { TopupModal } from "@/components/ai/TopupModal";
+import { isUiV2Enabled } from "@/components/ui-v2";
 
 // ─── Context ──────────────────────────────────────────────────────────────────
 
@@ -86,16 +87,26 @@ function MessageBubble({
 // ─── Insufficient credits banner ──────────────────────────────────────────────
 
 function InsufficientCreditsBanner({ onTopup }: { onTopup: () => void }) {
+  const uiV2 = isUiV2Enabled();
+
   return (
-    <div className="mx-5 mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 flex items-center gap-3">
-      <Zap className="h-4 w-4 text-amber-400 shrink-0" />
+    <div
+      className="mx-5 mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 flex items-center gap-3"
+      role="alert"
+    >
+      <Zap className="h-4 w-4 text-amber-400 shrink-0" aria-hidden="true" />
       <div className="flex-1 min-w-0">
-        <p className="text-xs font-medium text-amber-300">No AI credits remaining</p>
-        <p className="text-[11px] text-muted-foreground">Top up to continue chatting with Cash.</p>
+        <p className={`text-xs font-medium ${uiV2 ? "text-amber-900" : "text-amber-300"}`}>
+          No AI credits remaining
+        </p>
+        <p className={`text-[11px] ${uiV2 ? "text-amber-950/75" : "text-muted-foreground"}`}>
+          Top up to continue chatting with Cash.
+        </p>
       </div>
       <button
         onClick={onTopup}
         className="shrink-0 rounded-lg bg-amber-500 px-3 py-1.5 text-[11px] font-semibold text-black hover:bg-amber-400 transition-colors"
+        type="button"
       >
         Top up
       </button>
@@ -127,10 +138,13 @@ function CashOverlayModal({
 }) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
   const submittedRequestRef = useRef(0);
   const [noCredits, setNoCredits] = useState(false);
   const [topupOpen, setTopupOpen] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
+  const uiV2 = isUiV2Enabled();
 
   const { messages, input, setInput, handleSubmit, status, setMessages, append } = useChat({
     api: "/api/ai/chat",
@@ -166,8 +180,13 @@ function CashOverlayModal({
   }, [isOpen, setMessages]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+    bottomRef.current?.scrollIntoView({
+      behavior:
+        uiV2 && window.matchMedia("(prefers-reduced-motion: reduce)").matches
+          ? "auto"
+          : "smooth",
+    });
+  }, [messages, uiV2]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -175,6 +194,45 @@ function CashOverlayModal({
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [isOpen, onClose]);
+
+  useEffect(() => {
+    if (!isOpen || !uiV2) return;
+    previousFocusRef.current = document.activeElement as HTMLElement | null;
+    return () => previousFocusRef.current?.focus();
+  }, [isOpen, uiV2]);
+
+  useEffect(() => {
+    if (!isOpen || !uiV2 || topupOpen) return;
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+
+    const trapFocus = (event: KeyboardEvent) => {
+      if (event.key !== "Tab") return;
+      const focusable = Array.from(
+        dialog.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ),
+      ).filter((element) => element.getClientRects().length > 0);
+      if (focusable.length === 0) {
+        event.preventDefault();
+        dialog.focus();
+        return;
+      }
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    window.addEventListener("keydown", trapFocus);
+    return () => window.removeEventListener("keydown", trapFocus);
+  }, [isOpen, topupOpen, uiV2]);
 
   if (!isOpen) return null;
 
@@ -194,7 +252,12 @@ function CashOverlayModal({
         <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
 
         <div
-          className="relative w-full max-w-2xl h-[70vh] flex flex-col rounded-2xl glass-card shadow-2xl shadow-black/40 overflow-hidden"
+          ref={dialogRef}
+          className={`relative w-full max-w-2xl flex flex-col rounded-2xl glass-card shadow-2xl shadow-black/40 overflow-hidden ${uiV2 ? "h-[70dvh] max-h-[720px]" : "h-[70vh]"}`}
+          role={uiV2 ? "dialog" : undefined}
+          aria-modal={uiV2 ? "true" : undefined}
+          aria-labelledby={uiV2 ? "cash-overlay-title" : undefined}
+          tabIndex={uiV2 ? -1 : undefined}
           data-agent-surface="cash-overlay"
           data-agent-primary-action="chat-with-cash"
           data-agent-tool-endpoint="/api/ai/chat"
@@ -205,7 +268,7 @@ function CashOverlayModal({
               C
             </div>
             <div>
-              <div className="font-semibold text-sm">Cash</div>
+              <div id="cash-overlay-title" className="font-semibold text-sm">Cash</div>
               <div className="text-[11px] text-muted-foreground">Your AI financial intelligence</div>
             </div>
             <div className="ml-auto flex items-center gap-2">
@@ -213,6 +276,8 @@ function CashOverlayModal({
                 onClick={() => setTopupOpen(true)}
                 className="hidden sm:flex items-center gap-1.5 rounded-lg border border-border/60 px-2.5 py-1 text-[11px] text-muted-foreground hover:border-primary/40 hover:text-foreground transition-colors"
                 title="Top up AI credits"
+                aria-label="Top up AI credits"
+                type="button"
               >
                 <Zap className="h-3 w-3 text-primary" />
                 Credits
@@ -223,6 +288,8 @@ function CashOverlayModal({
               <button
                 onClick={onClose}
                 className="p-1.5 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                aria-label="Close Cash"
+                type="button"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -237,7 +304,11 @@ function CashOverlayModal({
           )}
 
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
+          <div
+            className="flex-1 overflow-y-auto px-5 py-4 space-y-5"
+            aria-live={uiV2 ? "polite" : undefined}
+            aria-busy={uiV2 ? isLoading : undefined}
+          >
             {messages.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center gap-4">
                 <p className="text-sm text-muted-foreground text-center max-w-xs">
@@ -249,6 +320,7 @@ function CashOverlayModal({
                       key={q}
                       onClick={() => { setInput(q); inputRef.current?.focus(); }}
                       className="text-left text-xs border rounded-xl px-3.5 py-2.5 hover:border-primary/40 hover:bg-accent/40 transition-colors flex items-start gap-2"
+                      type="button"
                     >
                       <Sparkles className="h-3 w-3 text-primary mt-0.5 shrink-0" />
                       {q}
@@ -281,7 +353,10 @@ function CashOverlayModal({
                   </div>
                 )}
                 {chatError && (
-                  <div className="ml-9 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                  <div
+                    className="ml-9 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive"
+                    role="alert"
+                  >
                     {chatError}
                   </div>
                 )}
@@ -299,6 +374,7 @@ function CashOverlayModal({
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 placeholder={noCredits ? "Top up to continue…" : "Ask Cash anything…"}
+                aria-label="Ask Cash"
                 disabled={isLoading || noCredits}
                 className="flex-1 h-10 rounded-xl border bg-muted/50 px-4 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
               />

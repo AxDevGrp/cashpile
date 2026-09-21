@@ -2,6 +2,8 @@ import { createServerSupabaseClient } from "@cashpile/db";
 import { PerformanceService } from "@/modules/trades/services/performance.service";
 import { listPropAccounts } from "@/modules/trades/actions/account.actions";
 import PerformanceClient from "./_components/performance-client";
+import { ReadWorkspaceV2 } from "../../_components/read-workspace-v2";
+import { isUiV2Enabled } from "@/components/ui-v2";
 
 export const metadata = { title: "Performance — Trades | Cashpile" };
 
@@ -15,7 +17,7 @@ export default async function PerformancePage({ searchParams }: PageProps) {
   const activeAccountId = params.accountId ?? accounts[0]?.id ?? null;
 
   if (!activeAccountId || accounts.length === 0) {
-    return (
+    const client = (
       <PerformanceClient
         accounts={accounts}
         activeAccountId={null}
@@ -25,8 +27,10 @@ export default async function PerformancePage({ searchParams }: PageProps) {
         bySetup={[]}
         from={params.from}
         to={params.to}
+        uiV2={isUiV2Enabled()}
       />
     );
+    return isUiV2Enabled() ? <ReadWorkspaceV2 id="performance">{client}</ReadWorkspaceV2> : client;
   }
 
   const supabase = await createServerSupabaseClient();
@@ -42,7 +46,7 @@ export default async function PerformancePage({ searchParams }: PageProps) {
     svc.getPnlBySetup(user.id, activeAccountId),
   ]);
 
-  return (
+  const client = (
     <PerformanceClient
       accounts={accounts}
       activeAccountId={activeAccountId}
@@ -52,6 +56,8 @@ export default async function PerformancePage({ searchParams }: PageProps) {
       bySetup={bySetup}
       from={params.from}
       to={params.to}
+      uiV2={isUiV2Enabled()}
     />
   );
+  return isUiV2Enabled() ? <ReadWorkspaceV2 id="performance">{client}</ReadWorkspaceV2> : client;
 }

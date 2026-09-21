@@ -2,6 +2,8 @@ import { listWatchlist } from "@/modules/pulse/actions/watchlist.actions";
 import { getCorrelationGrid } from "@/modules/pulse/services/prediction.service";
 import { createServerSupabaseClient } from "@cashpile/db";
 import CorrelationsClient from "./_components/correlations-client";
+import { ReadWorkspaceV2 } from "../../_components/read-workspace-v2";
+import { isUiV2Enabled } from "@/components/ui-v2";
 
 export const metadata = { title: "Correlations — Pulse | Cashpile" };
 
@@ -26,13 +28,15 @@ export default async function PulseCorrelationsPage({ searchParams }: PageProps)
   const supabase = await createServerSupabaseClient();
   const grid = await getCorrelationGrid(supabase, selectedInstruments, days);
 
-  return (
+  const client = (
     <CorrelationsClient
       grid={grid}
       selectedInstruments={selectedInstruments}
       defaultInstruments={DEFAULT_INSTRUMENTS}
       watchlistInstruments={watchlistInstruments}
       days={days}
+      uiV2={isUiV2Enabled()}
     />
   );
+  return isUiV2Enabled() ? <ReadWorkspaceV2 id="correlations">{client}</ReadWorkspaceV2> : client;
 }

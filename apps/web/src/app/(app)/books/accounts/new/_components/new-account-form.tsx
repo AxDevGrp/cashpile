@@ -53,7 +53,7 @@ export default function NewAccountForm({ taxEntities }: Props) {
       {error && <div className="rounded-md bg-destructive/10 border border-destructive/40 p-3 text-sm text-destructive">{error}</div>}
 
       <form onSubmit={handleSubmit} className="space-y-5">
-        <div className="space-y-2">
+        {taxEntities.length > 0 && <div className="space-y-2">
           <label className="text-sm font-medium">Tax Entity (optional)</label>
           <Select value={taxEntityId} onValueChange={setTaxEntityId}>
             <SelectTrigger><SelectValue placeholder="Select a Tax Entity or leave empty for personal account" /></SelectTrigger>
@@ -63,7 +63,7 @@ export default function NewAccountForm({ taxEntities }: Props) {
             </SelectContent>
           </Select>
           <p className="text-xs text-muted-foreground">Assign this account to a Tax Entity for business purposes, or leave empty for personal use.</p>
-        </div>
+        </div>}
 
         <div className="space-y-1">
           <label className="text-sm font-medium">Account name</label>

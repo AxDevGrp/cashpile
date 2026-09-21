@@ -1,6 +1,8 @@
 import { createServerSupabaseClient } from "@cashpile/db";
 import { PageHeader } from "@cashpile/ui";
 import SettingsClient from "./_components/settings-client";
+import { WriteWorkflowV2 } from "../_components/write-workflow-v2";
+import { isUiV2Enabled } from "@/components/ui-v2";
 
 export const metadata = { title: "Settings | Cashpile" };
 
@@ -19,10 +21,11 @@ export default async function SettingsPage() {
     deepseek: !!(process.env.DEEPSEEK_API_KEY),
   };
 
-  return (
+  const content = (
     <div className="p-6 max-w-3xl mx-auto space-y-8">
       <PageHeader title="Settings" description="Manage your profile, preferences, and integrations" />
       <SettingsClient profile={profile} integrations={integrations} />
     </div>
   );
+  return isUiV2Enabled() ? <WriteWorkflowV2 id="settings">{content}</WriteWorkflowV2> : content;
 }

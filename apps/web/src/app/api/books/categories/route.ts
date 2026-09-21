@@ -3,6 +3,15 @@ import { createCategory, listCategories, updateCategory } from "@/modules/books/
 
 const CATEGORY_TYPES = new Set(["income", "expense", "transfer", "asset", "liability", "equity"]);
 
+function categoryErrorMessage(error: any) {
+  const message = String(error.message ?? "Unable to save category");
+  return message.includes("books_categories_user_id_name_key") ||
+    message.includes("books_categories_user_id_top_level_name_key") ||
+    message.includes("books_categories_user_id_parent_name_key")
+    ? "A category with that name already exists in the selected parent category"
+    : message;
+}
+
 export async function GET() {
   try {
     const categories = await listCategories();
@@ -33,10 +42,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ category, categories }, { status: 201 });
   } catch (e: any) {
-    const message = e.message?.includes("books_categories_user_id_name_key")
-      ? "A category with that name already exists"
-      : e.message;
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: categoryErrorMessage(e) }, { status: 500 });
   }
 }
 
@@ -52,9 +58,6 @@ export async function PATCH(req: NextRequest) {
     const categories = await listCategories();
     return NextResponse.json({ category, categories });
   } catch (e: any) {
-    const message = e.message?.includes("books_categories_user_id_name_key")
-      ? "A category with that name already exists"
-      : e.message;
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: categoryErrorMessage(e) }, { status: 500 });
   }
 }

@@ -1,0 +1,9 @@
+.workspace { box-sizing: border-box; width: 100%; min-height: 100%; overflow-x: hidden; padding: clamp(28px, 5vw, 64px) clamp(18px, 5vw, 64px) 100px; }
+.content { width: min(1120px, 100%); margin: 28px auto 0; }
+.headerActions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
+.content [data-read-workspace-controls] { display: flex; padding: 14px; border: 1px solid #e3e0d7; border-radius: 16px; background: rgba(255,255,253,.82); }
+.content :is(table, [role="table"]) { border: 1px solid #e3e0d7; border-radius: 14px; }
+.content [data-read-workspace-content] > :is(section, div) { scroll-margin-top: 16px; }
+.workspace :is(a, button, input, select):focus-visible { outline: 3px solid rgba(13,128,95,.45); outline-offset: 3px; }
+@media (max-width: 760px) { .workspace { padding: 28px 18px 96px; } .headerActions { justify-content: flex-start; } }
+@media (prefers-reduced-motion: reduce) { .workspace *, .workspace *::before, .workspace *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; } }

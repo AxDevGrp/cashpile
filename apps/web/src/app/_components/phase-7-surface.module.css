@@ -1,0 +1,175 @@
+.surface,
+.embeddedSurface {
+  box-sizing: border-box;
+  display: grid;
+  width: 100%;
+  place-items: center;
+  padding: clamp(24px, 6vw, 64px) 18px;
+  background: #f8f7f2;
+  color: #0b1936;
+}
+
+.surface {
+  min-height: 100dvh;
+}
+
+.embeddedSurface {
+  min-height: 100%;
+}
+
+.inner {
+  width: min(100%, 430px);
+  text-align: center;
+}
+
+.cash {
+  width: 84px;
+  height: 84px;
+  object-fit: contain;
+  filter: drop-shadow(0 12px 18px rgba(11, 25, 54, 0.11));
+}
+
+.inner :is(h1, h2) {
+  margin: 14px 0 0;
+  font-size: clamp(28px, 7vw, 36px);
+  font-weight: 760;
+  letter-spacing: -0.045em;
+  line-height: 1.05;
+}
+
+.detail {
+  margin: 9px auto 0;
+  max-width: 38ch;
+  color: #65738a;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.inner > :is(form, [data-phase-7-panel]) {
+  margin-top: 24px;
+  text-align: left;
+}
+
+.surface :is(a, button, input):focus-visible,
+.embeddedSurface :is(a, button, input):focus-visible {
+  outline: 3px solid rgba(13, 128, 95, 0.5);
+  outline-offset: 3px;
+}
+
+.loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 22px;
+  color: #087155;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.loading svg {
+  width: 18px;
+  height: 18px;
+  animation: phase7Spin 1s linear infinite;
+}
+
+.skeleton {
+  display: grid;
+  gap: 10px;
+  margin-top: 28px;
+}
+
+.skeleton span {
+  height: 14px;
+  border-radius: 7px;
+  background: #e8e5dc;
+  animation: phase7Pulse 1.6s ease-in-out infinite;
+}
+
+.skeleton span:nth-child(2) {
+  width: 82%;
+}
+
+.skeleton span:nth-child(3) {
+  width: 64%;
+}
+
+.alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 24px;
+  padding: 14px;
+  border: 1px solid #efd3d3;
+  border-radius: 14px;
+  background: #fffafa;
+  color: #8f3030;
+  text-align: left;
+}
+
+.alert svg {
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+
+.alert p {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.primaryAction {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  margin-top: 20px;
+  padding: 10px 16px;
+  border: 0;
+  border-radius: 12px;
+  background: #0d805f;
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+@keyframes phase7Spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes phase7Pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@media (max-width: 360px) {
+  .surface,
+  .embeddedSurface {
+    padding-right: 14px;
+    padding-left: 14px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .surface *,
+  .embeddedSurface * {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .surface,
+  .embeddedSurface {
+    background: #f8f7f2;
+  }
+}

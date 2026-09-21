@@ -4,6 +4,7 @@ import { cn } from "@cashpile/ui";
 import { Zap } from "lucide-react";
 import { PLAN_MONTHLY_CREDITS } from "@cashpile/db";
 import type { Plan } from "@cashpile/db";
+import { isUiV2Enabled } from "@/components/ui-v2/model";
 
 interface Props {
   className?: string;
@@ -36,6 +37,7 @@ export async function CreditBalance({ className }: Props) {
 
   const isWarning = balance.total > 0 && balance.total < maxCredits * 0.2;
   const isEmpty = balance.total <= 0;
+  const uiV2 = isUiV2Enabled();
 
   return (
     <div className={cn("space-y-1.5", className)}>
@@ -49,7 +51,7 @@ export async function CreditBalance({ className }: Props) {
           className={cn(
             "font-medium tabular-nums",
             isEmpty && "text-destructive",
-            isWarning && !isEmpty && "text-amber-400",
+            isWarning && !isEmpty && (uiV2 ? "text-amber-700" : "text-amber-400"),
             !isEmpty && !isWarning && "text-foreground"
           )}
         >
@@ -58,7 +60,14 @@ export async function CreditBalance({ className }: Props) {
       </div>
 
       {/* Progress bar */}
-      <div className="h-1 w-full rounded-full bg-muted overflow-hidden">
+      <div
+        className="h-1 w-full rounded-full bg-muted overflow-hidden"
+        role="progressbar"
+        aria-label="AI subscription credits remaining"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={subscriptionPct}
+      >
         <div
           className={cn(
             "h-full rounded-full transition-all",
@@ -72,10 +81,17 @@ export async function CreditBalance({ className }: Props) {
 
       {/* State hint */}
       {isEmpty && (
-        <p className="text-[10px] text-destructive">No credits — top up to use AI</p>
+        <p className="text-[10px] text-destructive" role="status">
+          {uiV2 ? "No credits. Top up to use AI" : "No credits — top up to use AI"}
+        </p>
       )}
       {isWarning && !isEmpty && (
-        <p className="text-[10px] text-amber-400">Credits running low</p>
+        <p
+          className={cn("text-[10px]", uiV2 ? "text-amber-700" : "text-amber-400")}
+          role="status"
+        >
+          Credits running low
+        </p>
       )}
       {balance.topupCredits > 0 && (
         <p className="text-[10px] text-muted-foreground">

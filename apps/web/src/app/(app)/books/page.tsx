@@ -4,6 +4,10 @@ import { PageHeader, Card, CardContent } from "@cashpile/ui";
 import Link from "next/link";
 import { listAiInstructionOptions } from "@/modules/books/actions/ai-review.actions";
 import { AskCashpilePanel } from "./_components/ask-cashpile-panel";
+import { canUseTaxModule } from "@/lib/tax-access";
+import { ModuleHomeV2 } from "../_components/module-home-v2";
+import { isUiV2Enabled } from "@/components/ui-v2";
+import { shouldRenderModuleEntrance } from "@/components/ui-v2/module-home-model";
 
 async function getBooksDataStatus(userId: string) {
   const supabase = await createServerSupabaseClient();
@@ -42,15 +46,21 @@ async function getBooksDataStatus(userId: string) {
   };
 }
 
-export default async function BooksPage() {
+export default async function BooksPage({ searchParams }: { searchParams?: Promise<{ view?: string }> }) {
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
+
+  const canUseTax = canUseTaxModule(user.id);
 
   const [status, aiOptions] = await Promise.all([
     getBooksDataStatus(user.id),
     listAiInstructionOptions(),
   ]);
+  const resolvedSearchParams = await searchParams;
+  const insight = status.uncategorizedCount > 0
+    ? { id: "uncategorized", severity: "attention" as const, title: `${status.uncategorizedCount.toLocaleString()} transactions need categories`, detail: "A quick review keeps your books current.", actionLabel: "Categorize" }
+    : { id: "transactions", severity: "info" as const, title: `${status.transactionCount.toLocaleString()} transactions in Books`, detail: "Your records are ready for review." };
 
   const workingTasks = [
     {
@@ -88,14 +98,14 @@ export default async function BooksPage() {
       valueLabel: "financial accounts",
       icon: Landmark,
     },
-    {
+    ...(canUseTax ? [{
       href: "/books/entities",
       label: "Entities",
       desc: "Set up LLCs, rentals, businesses, and other tax/reporting entities.",
       value: status.entityCount.toLocaleString(),
       valueLabel: "entities",
       icon: Building2,
-    },
+    }] : []),
     {
       href: "/books/category-rules",
       label: "Category rules",
@@ -106,11 +116,13 @@ export default async function BooksPage() {
     },
   ];
 
+  if (shouldRenderModuleEntrance(isUiV2Enabled(), resolvedSearchParams?.view)) return <ModuleHomeV2 id="books" insight={insight} actionHref={status.uncategorizedCount > 0 ? "/books/transactions?filter=uncategorized" : "/books?view=details"} />;
+
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
       <PageHeader
         title="Books"
-        description="Manage the financial data Cashpile uses for cash flow, Cashboard, reporting, and taxes."
+        description={canUseTax ? "Manage the financial data Cashpile uses for cash flow, Cashboard, reporting, and taxes." : "Manage the financial data Cashpile uses for cash flow, Cashboard, and reporting."}
         actions={
           <Link href="/books/transactions/import" className="flex items-center gap-2 bg-emerald-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-emerald-700 transition-colors">
             <Upload className="h-4 w-4" /> Import transactions
@@ -121,15 +133,15 @@ export default async function BooksPage() {
       <div className="rounded-xl border bg-card p-5">
         <div className="text-sm font-medium mb-1">Recommended workflow</div>
         <p className="text-sm text-muted-foreground max-w-3xl">
-          Use <span className="font-medium text-foreground">Transactions</span> as the daily workspace: pick an account to view its ledger, or search globally when you need to find something. Accounts, Entities, and Rules are setup/data-cleanup tools.
+          Use <span className="font-medium text-foreground">Transactions</span> as the daily workspace: pick an account to view its ledger, or search globally when you need to find something. {canUseTax ? "Accounts, Entities, and Rules are setup/data-cleanup tools." : "Accounts and Rules are setup/data-cleanup tools."}
         </p>
       </div>
 
       <AskCashpilePanel
         categories={aiOptions.categories}
-        taxEntities={aiOptions.taxEntities}
+        taxEntities={canUseTax ? aiOptions.taxEntities : []}
         accounts={aiOptions.accounts}
-        description="Use plain English to categorize transactions, assign Tax Entities, set account defaults, and save rules so Cashpile does the bookkeeping work going forward."
+        description={canUseTax ? "Use plain English to categorize transactions, assign Tax Entities, set account defaults, and save rules so Cashpile does the bookkeeping work going forward." : "Use plain English to categorize transactions and save rules so Cashpile does the bookkeeping work going forward."}
       />
 
       <section className="space-y-3">

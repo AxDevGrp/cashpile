@@ -1,0 +1,577 @@
+{
+  "version": 1,
+  "files": [
+    {
+      "path": "apps/web/src/app/api/agent/capabilities/route.ts",
+      "sha256": "45f8ffb403393ef0a6f4081692d487d0e6f36d75e7b3a96a1bf0fdb505d100db"
+    },
+    {
+      "path": "apps/web/src/app/api/agent/confirmations/route.ts",
+      "sha256": "75303fe9e56702c1e55654a823291be7e324445098920d169a13c24445aa14ed"
+    },
+    {
+      "path": "apps/web/src/app/api/agent/mcp/route.ts",
+      "sha256": "c933fdfe2112f9d3500b868fd3c096b05c5563cc308044326f8981682b88211d"
+    },
+    {
+      "path": "apps/web/src/app/api/agent/resources/route.ts",
+      "sha256": "06a7e1f064d9537bfef62400d6c4b894a508cd46fe1fd15405db9513c389a959"
+    },
+    {
+      "path": "apps/web/src/app/api/agent/tools/call/route.ts",
+      "sha256": "bf6bd1bf29216b8a1998b6dbda6d57691e325f08ec7d1347230bffa66f4298d0"
+    },
+    {
+      "path": "apps/web/src/app/api/ai/chat/route.ts",
+      "sha256": "9b8884b0e64685a97db250a3184e4604c9bc8a3779e5c772ac2d6fc4774b8631"
+    },
+    {
+      "path": "apps/web/src/app/api/auth/callback/route.ts",
+      "sha256": "089e9781d3820e8a2b32ccb3fc5f38e148435cc53a1e81459329052d36f1a6bb"
+    },
+    {
+      "path": "apps/web/src/app/api/billing/balance/route.ts",
+      "sha256": "08e4afd1ba0d8ab28d1b069b883bee3a29452eecad9ab6a7facf2fe92a1f189e"
+    },
+    {
+      "path": "apps/web/src/app/api/billing/topup/route.ts",
+      "sha256": "99f82a040ed9ae5ebf0ed6da4eff171ec4635aa7389cad5854ad0800fd200078"
+    },
+    {
+      "path": "apps/web/src/app/api/books/ai-review/route.ts",
+      "sha256": "84b458b434480ee07de815af12591ede7e99be7e141fc933ef702e6575255f71"
+    },
+    {
+      "path": "apps/web/src/app/api/books/categories/route.ts",
+      "sha256": "235179c081d366bc3743fddd3171529191619193d43f699519678461dd8c533c"
+    },
+    {
+      "path": "apps/web/src/app/api/books/category-rules/route.ts",
+      "sha256": "22ac82d2d9aa1826c24b99117228f8458f13031414295cd44441d0484cd45e71"
+    },
+    {
+      "path": "apps/web/src/app/api/books/transactions/route.ts",
+      "sha256": "3e3687b62307fa680d4fe441a9e7200463d44e4900421b24a6663e8f8626896d"
+    },
+    {
+      "path": "apps/web/src/app/api/cashflow/affordability/route.ts",
+      "sha256": "75745bbe5ff857abb601acbdea6fc74cd58c3e8e334501caf3f341eabfe9b233"
+    },
+    {
+      "path": "apps/web/src/app/api/cashflow/snapshot/route.ts",
+      "sha256": "5cc981a89eff9c40bc14f340ba66ab5ce8bb52258a18570b5904b9134f28de88"
+    },
+    {
+      "path": "apps/web/src/app/api/cron/reset-credits/route.ts",
+      "sha256": "2be0c3f65a354105ec77585bab8c8e4f4b043d51eda757ac623c321cb611734c"
+    },
+    {
+      "path": "apps/web/src/app/api/cron/sync-plaid/route.ts",
+      "sha256": "6e13d7ceb60a1ba0d98f3f5460d6036ddbfefc53b0d3c4b9b21a6373377cbc9b"
+    },
+    {
+      "path": "apps/web/src/app/api/features/route.ts",
+      "sha256": "17fd6fbde0ab94ea03c70fbed2bc43da7b690a7cce4c3a8c974db98c04719cf4"
+    },
+    {
+      "path": "apps/web/src/app/api/health/route.ts",
+      "sha256": "3901e9fde167b01f61fb89cbf16134148315a697a7d1993fcc4624a8418a752f"
+    },
+    {
+      "path": "apps/web/src/app/api/plaid/backfill/route.ts",
+      "sha256": "bf5e7a7e1356b886f5d0d753e8d47217852d4b02b7bb2e93327f094adac75307"
+    },
+    {
+      "path": "apps/web/src/app/api/plaid/exchange-token/route.ts",
+      "sha256": "24cd9e1710014f57dd7480342aeea3877c9847425408473c19a17a01b81146fa"
+    },
+    {
+      "path": "apps/web/src/app/api/plaid/link-token/route.ts",
+      "sha256": "3ca0f59557968f563e44260c678e07b8d795cc76f8e4ab62920a5a84320db3bf"
+    },
+    {
+      "path": "apps/web/src/app/api/plaid/status/route.ts",
+      "sha256": "5bc0778d248083ddba67191880be7a1c74db0c71005f0ec13505ea92091e7bf0"
+    },
+    {
+      "path": "apps/web/src/app/api/plaid/sync/route.ts",
+      "sha256": "cc1395ffce953966a0f24aedb4ea2e11b6361d11eb0b742b66dfe755a38c88ee"
+    },
+    {
+      "path": "apps/web/src/app/api/plaid/webhook/route.ts",
+      "sha256": "a610cc4edfef64289343e08bbb219d7423f9b0f0531e3fb4b79b26b17585c0bd"
+    },
+    {
+      "path": "apps/web/src/app/api/pulse/ingest-feeds/route.ts",
+      "sha256": "741de696ca82ae3265af5bc3e9778e068370a1fa64c34d93559b0e155c8e0ec6"
+    },
+    {
+      "path": "apps/web/src/app/api/stripe/webhook/route.ts",
+      "sha256": "2ce276926918d7b599022ccdcc267f6697d44c4fa5684b12396d6317b9152c1f"
+    },
+    {
+      "path": "apps/web/src/app/api/tax/assignment/route.ts",
+      "sha256": "33a9fd2f59dd34257d2756b667122ba4316477af42ff4f4e78284ee89fa47d40"
+    },
+    {
+      "path": "apps/web/src/app/api/tax/export/route.ts",
+      "sha256": "1d397c8142b130a4f3ae9a76c30b835c33d84fd0f5d9b98839880cdff3811067"
+    },
+    {
+      "path": "apps/web/src/app/api/tax/report/route.ts",
+      "sha256": "b1635910f1df8551dfa5deddf972fc4e11c4574a1a601b3011c77449047ca0c3"
+    },
+    {
+      "path": "apps/web/src/app/api/tax/workbook-templates/[templateId]/export/route.ts",
+      "sha256": "32ebdc9d78dda331b685ca63ed7f96dda35ef57ad4411f6891909b92347e766a"
+    },
+    {
+      "path": "apps/web/src/app/api/tax/workbook-templates/[templateId]/mapping-review/route.ts",
+      "sha256": "8cb8e8ba6ef17e5254d4f46fa370336c99da8705d1aaea7213e709f2a1778a1b"
+    },
+    {
+      "path": "apps/web/src/app/api/tax/workbook-templates/[templateId]/mappings/route.ts",
+      "sha256": "80edc72bab509c44a4e376c48f70f52d59f1ea2d790ab1e02168f6040c255096"
+    },
+    {
+      "path": "apps/web/src/app/api/tax/workbook-templates/route.ts",
+      "sha256": "f7397e360219ec8f436e86b8b47b9412ff5a0da1b80003e41f4af29c8a412926"
+    },
+    {
+      "path": "apps/web/src/app/api/waitlist/route.ts",
+      "sha256": "9a179fca9a61939f9aaeb9f209617fd9d4664511daf93433371149411cddb36a"
+    },
+    {
+      "path": "apps/web/src/lib/plaid-backfill.ts",
+      "sha256": "778ea583a7076c1b8c0b4bffb12cb6725d1899b710b594277092243458fee4b5"
+    },
+    {
+      "path": "apps/web/src/lib/plaid-sync.ts",
+      "sha256": "02b5e3f044f2f7a05bd18bb3b107335e2c7a4412f8da824e6771fce8399c1ccf"
+    },
+    {
+      "path": "apps/web/src/lib/plaid.ts",
+      "sha256": "00d155b53e092599c6c43abb59306edfddb30030ff34904a5b12eb8660c5401c"
+    },
+    {
+      "path": "apps/web/src/lib/tax-access.ts",
+      "sha256": "dcdbd4d1603e722d5b45bb46707eb787c38dbae62ed0ed460664bd1aa2325921"
+    },
+    {
+      "path": "apps/web/src/middleware.ts",
+      "sha256": "7774c8074f1958ec7fe9595323d186ffd9c9bf378792f057fe6a2e316046b5c8"
+    },
+    {
+      "path": "apps/web/src/modules/agent/audit.ts",
+      "sha256": "4ec0128d52d5b37e3c81dc1ae231666a3df13bdecdefd2cae9506595d4ab9044"
+    },
+    {
+      "path": "apps/web/src/modules/agent/auth.ts",
+      "sha256": "76e3f85964d294e81029af35ab8c707771635d839c8640d1ba7b3492634dc7e3"
+    },
+    {
+      "path": "apps/web/src/modules/agent/capabilities.ts",
+      "sha256": "535638e5aa150f0fa2e8b041b85a6efc7924fef2a616c051c2e5c63fa5db959e"
+    },
+    {
+      "path": "apps/web/src/modules/agent/confirmation.ts",
+      "sha256": "b9c1d01332ab5bcf608a8f7a08f96fdc38a87971f043ba39db0bdd43d3c95290"
+    },
+    {
+      "path": "apps/web/src/modules/agent/executor.ts",
+      "sha256": "863e14219631023617744d2eb51d8ba1fa87a0b5a0829dfe72cfe4a331c810bd"
+    },
+    {
+      "path": "apps/web/src/modules/agent/types.ts",
+      "sha256": "2ee42143430dccca7f2d859b810be10214fa49d609cc9c2a7a8f5016670bd603"
+    },
+    {
+      "path": "apps/web/src/modules/books/actions/account.actions.ts",
+      "sha256": "b469725496ce32561c7ba9504f2bf8d675b216d6d67d75854bc9c1c0083340bd"
+    },
+    {
+      "path": "apps/web/src/modules/books/actions/ai-review.actions.ts",
+      "sha256": "0a2833f704e94a3cd34546e8778ade87b032ee0d06f85a1370a2c4ef598ef03e"
+    },
+    {
+      "path": "apps/web/src/modules/books/actions/category-rule.actions.ts",
+      "sha256": "8d33414a85057715a6099026b321e7cbb4c06a192f45751545416fae5c99e565"
+    },
+    {
+      "path": "apps/web/src/modules/books/actions/category.actions.ts",
+      "sha256": "2dd62d03bbfaf96246e882ff4cf1ba0c04d741278acda69f4f1a0033b0f42221"
+    },
+    {
+      "path": "apps/web/src/modules/books/actions/duplicate.actions.ts",
+      "sha256": "923e50f09f8115d54b478ce7c9c8f9dac41196734bb79f2896991cfda6dba4f9"
+    },
+    {
+      "path": "apps/web/src/modules/books/actions/entity.actions.ts",
+      "sha256": "c493590ac3a8344bba10c5359c2e0f1f65fc308ccea30f1d945f41a0f1ef0bb4"
+    },
+    {
+      "path": "apps/web/src/modules/books/actions/import.actions.ts",
+      "sha256": "6541cf4b1ff757e67e89d03d104938e68c6dea60476bb0a3740b7dac8d498de5"
+    },
+    {
+      "path": "apps/web/src/modules/books/actions/tax-workbook.actions.ts",
+      "sha256": "263457e8ee79ccdc8f7cc0bae090a9d805def27c01c03111969241f25e09b4f0"
+    },
+    {
+      "path": "apps/web/src/modules/books/actions/tax.actions.ts",
+      "sha256": "f09b86821e89654c16668a142c787cccaa7dfd96f47f91618951d49ba2a23f97"
+    },
+    {
+      "path": "apps/web/src/modules/books/actions/transaction.actions.ts",
+      "sha256": "bb899cbc9c810aaec1184b34f733a6713b0e0ba57f1b7455676e0dc308fa3b0d"
+    },
+    {
+      "path": "apps/web/src/modules/books/services/account-scoped-rules.test.ts",
+      "sha256": "6433324c1114a5dd58e1fd6a5fb3a25c7cf7245e235d213d1ff1d354895fbe0b"
+    },
+    {
+      "path": "apps/web/src/modules/books/services/ai-review-suggestions.ts",
+      "sha256": "df36e2b972ae90e5ca4f7aa545f517ff9565ad54616fd3cc8eb3b17e75ee944e"
+    },
+    {
+      "path": "apps/web/src/modules/books/services/categorization-engine.test.ts",
+      "sha256": "24ca79d56a6a99dbab9cd4dd241944ff274d16033f4ba150c92a36127355fee3"
+    },
+    {
+      "path": "apps/web/src/modules/books/services/categorization-engine.ts",
+      "sha256": "fb818dc2aa670a77a08c2e2663dd001990a8a921639441289b8f33eea089b686"
+    },
+    {
+      "path": "apps/web/src/modules/books/services/csv-parser.ts",
+      "sha256": "59e57e1a661c6a1f1999289d4c3284963f0d2c970511ea9199c40a957fb3e44f"
+    },
+    {
+      "path": "apps/web/src/modules/books/services/duplicate-detection.test.ts",
+      "sha256": "56f55b4a94446834d81b6eaf6ad14006a68a4adde634db0727f25c56eabd58e7"
+    },
+    {
+      "path": "apps/web/src/modules/books/services/duplicate-detection.ts",
+      "sha256": "c5b7a2c2ecd45b03d45f600397e0159d08fa061e9b480c14f3759435b9a49a4b"
+    },
+    {
+      "path": "apps/web/src/modules/books/services/report.service.ts",
+      "sha256": "11034c9f09a20f27c0b10638b37b4c4c6d86cea41918a2967c2556e9ced4f60a"
+    },
+    {
+      "path": "apps/web/src/modules/books/services/rule-matching.ts",
+      "sha256": "54b64478adf50909fc6c5d1c9b01e205540a834f1e821379a14cbb505b6235aa"
+    },
+    {
+      "path": "apps/web/src/modules/books/services/system-category-rules.ts",
+      "sha256": "e92649b6d2dbae16d9c8653f6076751ac5cd49208cbe97b0bbfb20bdb95effb2"
+    },
+    {
+      "path": "apps/web/src/modules/books/services/tax-rule-engine.ts",
+      "sha256": "ed47e0d3d36d928c29a737ea5f6996c39ad8e7310feb2a7062fca85504bd0de8"
+    },
+    {
+      "path": "apps/web/src/modules/books/services/tax-workbook.test.ts",
+      "sha256": "345d1c2d9bab6245b927ddcf991cfcc9c1c220a602ac95cc64224782c3e97d09"
+    },
+    {
+      "path": "apps/web/src/modules/books/services/tax-workbook.ts",
+      "sha256": "9f31deceee127249b2ca22f5667e5653cd865d9b820d411277ddc9e114d820ab"
+    },
+    {
+      "path": "apps/web/src/modules/books/services/transaction-import.ts",
+      "sha256": "afe9d6905017c2a2b7433568f6467080b5164b777f4e41601410a5b03a29f4fc"
+    },
+    {
+      "path": "apps/web/src/modules/books/services/transfer-detection.ts",
+      "sha256": "637683da1738950f3750f7e909f2aab7ed67d1f8f13f9eaec0dea48a1dc8bfc1"
+    },
+    {
+      "path": "apps/web/src/modules/books/types.ts",
+      "sha256": "985420b1550ee449758eebfb29ed39a5bda80546d9746cf7008b8fb9065005b1"
+    },
+    {
+      "path": "apps/web/src/modules/pulse/actions/alert.actions.ts",
+      "sha256": "785bcc38bb053ee41dcf9828f6a699edebd1d26f13a5dcbb8b3ebdb2f98f78b2"
+    },
+    {
+      "path": "apps/web/src/modules/pulse/actions/event.actions.ts",
+      "sha256": "3fdeeee2de7e429b87be4321881291f19ea7f134818c4d5c5f3d77a9ac58d144"
+    },
+    {
+      "path": "apps/web/src/modules/pulse/actions/feed.actions.ts",
+      "sha256": "aedac3117ac0924ebeb056c9284746df4b5f03c07aa6a31bf08e01829b357720"
+    },
+    {
+      "path": "apps/web/src/modules/pulse/actions/user.actions.ts",
+      "sha256": "b9b981e2afe175dbc2c7ed0ab52c02cf2132e2de9d158ce3bd30e5fef6db9e3d"
+    },
+    {
+      "path": "apps/web/src/modules/pulse/actions/watchlist.actions.ts",
+      "sha256": "ef05ee6a74c9aae90d643c73569b09edc085063dc6d53082622f2a2f8a9c7712"
+    },
+    {
+      "path": "apps/web/src/modules/pulse/config/plan-limits.ts",
+      "sha256": "6999a7b3f781f64151388081277be2cb2cbacaff59113a9e85d1b7b19f9268a6"
+    },
+    {
+      "path": "apps/web/src/modules/pulse/services/feed.service.ts",
+      "sha256": "710a299b67282f7d25a6829b8014649b26ff5d380ba9d002015e4faa3b0aa06e"
+    },
+    {
+      "path": "apps/web/src/modules/pulse/services/prediction.service.ts",
+      "sha256": "57dd2b072c40f3c72bda81441335164e6566a188fd4ae3b9d12d548cad3bdebc"
+    },
+    {
+      "path": "apps/web/src/modules/pulse/services/x-feed.service.ts",
+      "sha256": "b69db6751448e7a08c8fe85441e2e8f7c42a690b67b4144433f73521920ba7cb"
+    },
+    {
+      "path": "apps/web/src/modules/pulse/types.ts",
+      "sha256": "26d77ccf770950f0256d4891f7c9e1630c29dcec31b2d0e28057bc97ee8b6506"
+    },
+    {
+      "path": "apps/web/src/modules/trades/actions/account.actions.ts",
+      "sha256": "30848e91f999352c1a5fdd9bece1da9e1904d486912a26f12fe3855ed709db9c"
+    },
+    {
+      "path": "apps/web/src/modules/trades/actions/session.actions.ts",
+      "sha256": "5644993aa7db37a9ca47e5a129f7c3acfa4e127f72ae82d95a2f2c45bd8d85ae"
+    },
+    {
+      "path": "apps/web/src/modules/trades/actions/trade.actions.ts",
+      "sha256": "b2051819267b2062d1fa7a267f66e03c40c387dbd275bcb4b7bbc475ed75b252"
+    },
+    {
+      "path": "apps/web/src/modules/trades/services/performance.service.ts",
+      "sha256": "b67327eaef9dd6a5c1b16e280558eabbb8c4690450733491a51afdcc85583ee0"
+    },
+    {
+      "path": "apps/web/src/modules/trades/services/rules.service.ts",
+      "sha256": "ddc132fad6e008dfd95fbbbae1760eda9278be72375717d56c3e9d15e6eb41bc"
+    },
+    {
+      "path": "apps/web/src/modules/trades/types.ts",
+      "sha256": "27393573fd504220326b2807aee271ba228487ded84da7c421253de06385f180"
+    },
+    {
+      "path": "packages/ai/package.json",
+      "sha256": "67de4e2360d0196a6bfe839775115830c835aaaeef0d9919a5e9815195bb0738"
+    },
+    {
+      "path": "packages/ai/src/books/categorization.ts",
+      "sha256": "ca66f019647859b42d9adb852fec1148426a9cafe391e70445e0f102e0cb220d"
+    },
+    {
+      "path": "packages/ai/src/books/index.ts",
+      "sha256": "8a3857330ccf3e7040aa42c6ce92fe6fe815f3c61641dd08061e5b018213e71b"
+    },
+    {
+      "path": "packages/ai/src/books/instruction-parser.ts",
+      "sha256": "f6596c831403d1eae4c4c678a350a8526c020cc0629c12cf599be3ac1fa8e53f"
+    },
+    {
+      "path": "packages/ai/src/cashflow/index.ts",
+      "sha256": "ed74ce1494605d807f06f5deac3e97ee92548d237811053924ad3f9a1c4075ad"
+    },
+    {
+      "path": "packages/ai/src/cashflow/service.ts",
+      "sha256": "a6f3817d47a7239b0f379b66083e11b1398c02de4303937ce6810fa84b6382d8"
+    },
+    {
+      "path": "packages/ai/src/cashflow/types.ts",
+      "sha256": "3e81067d10038e46804e90d174bf914442d9b8d3b81f69161e77485820073932"
+    },
+    {
+      "path": "packages/ai/src/client.ts",
+      "sha256": "ed0e87509238c8551e39956f98b1a3bb36823b24ebbfbe7369e63cba067959a6"
+    },
+    {
+      "path": "packages/ai/src/credits.ts",
+      "sha256": "230930a902f8380ee328da98e393620a8ac1151823ba0ebd17b400b17c3f280d"
+    },
+    {
+      "path": "packages/ai/src/cross-module/assistant.ts",
+      "sha256": "e6a655f52d89f1ce9d2e9b6d8169dfe68f793b9c0ac7a2edff9e031d4d18d985"
+    },
+    {
+      "path": "packages/ai/src/cross-module/index.ts",
+      "sha256": "961b526ba55e5180b57ef70866d9c9cec29173ab0b53e32a777bfa6082efd34f"
+    },
+    {
+      "path": "packages/ai/src/index.ts",
+      "sha256": "07c7dcac5e65962eab1add4d2e5f14339a29ba4914692c7d70cd8e5e4dfbc498"
+    },
+    {
+      "path": "packages/ai/src/orchestrator/index.ts",
+      "sha256": "99ac4fab07593e95cb4e9c5ad44bee122ebb7b596f9f02b4717a0a4009848342"
+    },
+    {
+      "path": "packages/ai/src/orchestrator/orchestrator.ts",
+      "sha256": "3fc0380392d499117512c4bb8273ee7bfb042fa686752d5513b9b860feecb0d3"
+    },
+    {
+      "path": "packages/ai/src/orchestrator/tools.ts",
+      "sha256": "ffb55b9d70c00ce27c501e927dfb55c7936d6f25977144d1faa4d8a40468f0da"
+    },
+    {
+      "path": "packages/ai/src/pulse/event-analyzer.ts",
+      "sha256": "d348eeba2a8dc806f8e912e19dfcd897b55d2065eb2ad8ad0b4d3e3a5dc99a06"
+    },
+    {
+      "path": "packages/ai/src/pulse/index.ts",
+      "sha256": "3bebaafacd4bc3ea127c8b2036a94bf844ee4d138f36a2490d323b5152a39f9d"
+    },
+    {
+      "path": "packages/ai/src/pulse/mirofish-client.ts",
+      "sha256": "08182ce5a7f469dc16e77ea0134118365ec95b355ec2e35b3de61c885312a7c7"
+    },
+    {
+      "path": "packages/ai/src/pulse/seed-formatter.ts",
+      "sha256": "475f1a1d391402e938a85e4ed86b07a994f0d290863aaceaf1bc72f30b627592"
+    },
+    {
+      "path": "packages/ai/src/pulse/types-shared.ts",
+      "sha256": "4ab57ee9d756cf2643b562b9a6e82356946b0a8428fa7a825c8892a1c44e8315"
+    },
+    {
+      "path": "packages/ai/src/trades/index.ts",
+      "sha256": "c8463212dddf6eb09fa9e1ff59bfb46bfc254dc2ee5b23ee22c3bb2464cfc673"
+    },
+    {
+      "path": "packages/ai/src/trades/journal-analysis.ts",
+      "sha256": "4e451bbb5fd7565b47c243691909245a42fc7365cb3a9548abb0a9f59a57254b"
+    },
+    {
+      "path": "packages/ai/tsconfig.json",
+      "sha256": "9092fcedb116c9920c2d7a838b648f1bc3e1aa1df2b97d3dc88389176d44ba8b"
+    },
+    {
+      "path": "packages/db/migrations/001_shared_foundation.sql",
+      "sha256": "76a5dd685c818842d7b1b3f09ee2c7d842fde875dbaf3cf84e14bcf4246efa5b"
+    },
+    {
+      "path": "packages/db/migrations/002_books_module.sql",
+      "sha256": "9e5c88de07b01a33970d5fc3eea297290bd90d53b9815d3fc84d33eebff9d029"
+    },
+    {
+      "path": "packages/db/migrations/003_trades_module.sql",
+      "sha256": "0f72ff5d710ce80045789ae14a8041e67c26a1f73a1e813cb05a4a2c1aff3c97"
+    },
+    {
+      "path": "packages/db/migrations/004_pulse_module.sql",
+      "sha256": "41430046999820148e11da4d5eaa32bd63d4567f30624ac1432ae23cef60506f"
+    },
+    {
+      "path": "packages/db/migrations/005_ai_credits.sql",
+      "sha256": "8992651753b8a5bb0b56ecb9a5df9b3864a7637fbf31472cc79ecccf419f39c1"
+    },
+    {
+      "path": "packages/db/migrations/005_pulse_seed_data.sql",
+      "sha256": "bcbb93c72fee40f7be779d0baa06c91713bd8e23ff718350445a8f9188546174"
+    },
+    {
+      "path": "packages/db/migrations/006_stacks_export_partA.sql",
+      "sha256": "30e5b851082dfe6f9305506cf8b793e2b25b6693e2f13d2827b56f28eadfb457"
+    },
+    {
+      "path": "packages/db/migrations/006_stacks_import.sql",
+      "sha256": "24e3060af3896a1053b4a7cb2f982e328715f5ff129ac2f41f4a717945507865"
+    },
+    {
+      "path": "packages/db/migrations/007_plaid.sql",
+      "sha256": "4f3d2cff3deb3d25b08d0bafa36be27b19550d37144eaab06b760e9d8fd93051"
+    },
+    {
+      "path": "packages/db/migrations/008_tax_module.sql",
+      "sha256": "1e3d11e38193a0a6467eab9f299ebe0cdbc32fb9b433f250731a36466d2829d7"
+    },
+    {
+      "path": "packages/db/migrations/009_tax_entity_refactor.sql",
+      "sha256": "f91b291bca7b8b0e916820cc53b7880460e45e2e676fab1ac287d541e3cb42bd"
+    },
+    {
+      "path": "packages/db/migrations/010_agentic_layer.sql",
+      "sha256": "38386aaa3d60135f58d2c69285704007453a0c7c98898bc6acf12e1f737c6a61"
+    },
+    {
+      "path": "packages/db/migrations/011_plaid_live_import.sql",
+      "sha256": "e0c4c485dee2c040df92ff86e1d91579f4548b43fda644b0f418ca23b28a5ac6"
+    },
+    {
+      "path": "packages/db/migrations/012_plaid_account_unique_constraint.sql",
+      "sha256": "2662d8751233304bbfead264b0bab994bc328c94fb8e3b1bbb33a614d1064912"
+    },
+    {
+      "path": "packages/db/migrations/013_financial_accounts_user_rls.sql",
+      "sha256": "bfa5932b2e49655b9766fba362a3a81b321346a3ddfed2d2b18f6613378df09b"
+    },
+    {
+      "path": "packages/db/migrations/014_plaid_import_options.sql",
+      "sha256": "097cac38967963cf32aefa30ec75305fc1e03fe18dd9eb21e02783f004548ba8"
+    },
+    {
+      "path": "packages/db/migrations/015_cashflow_copilot.sql",
+      "sha256": "461079a180af5ed8ba4929cbaa081c98048e0079d811cf24c526c118c77ae2b6"
+    },
+    {
+      "path": "packages/db/migrations/016_tax_entity_schema_completion.sql",
+      "sha256": "55d150d7ffc6fd33d8c7377edb5930ff906fccee01f77a4717ec3f4407231bee"
+    },
+    {
+      "path": "packages/db/migrations/017_books_category_rules.sql",
+      "sha256": "0075927c74a29a2bb36950232fd1f543d5b7386203b3b4face30526b8f0fd97f"
+    },
+    {
+      "path": "packages/db/migrations/018_transaction_dedupe.sql",
+      "sha256": "c8d3d742d3cfec9222c5a2d1133c4edf37c25569784ae25844dbbd399ba568f4"
+    },
+    {
+      "path": "packages/db/migrations/019_waitlist_signups.sql",
+      "sha256": "c58aceb745e85cd3448a0eb3bd3580a108e2a9fb4834a868b7ce3a98995f8d19"
+    },
+    {
+      "path": "packages/db/migrations/020_account_scoped_book_rules.sql",
+      "sha256": "96d55ab689137ecd3a51240fce1d83c2f7190976b2a4db47291d91b62e6a73ab"
+    },
+    {
+      "path": "packages/db/migrations/021_books_category_parent_scoped_names.sql",
+      "sha256": "bfa81a99388972f84d5fdc0bf4bba1be5c973f8753686c9bb00fa14ce36e9789"
+    },
+    {
+      "path": "packages/db/migrations/022_tax_workbook_templates.sql",
+      "sha256": "684d4d4028e615e53e4f3a0712d65474dc2d6053de7d39114e987033b149f174"
+    },
+    {
+      "path": "packages/db/migrations/run_stacks_migration.mjs",
+      "sha256": "3bad6a15826dd23729fb5a8074e2aa7521c9a088edc3dc73b9d9f91bc3383ed4"
+    },
+    {
+      "path": "packages/db/package.json",
+      "sha256": "608079154dfe0c93ca95e85616370895cd3752d9d9754aacee54a62f6a12bb5f"
+    },
+    {
+      "path": "packages/db/src/client.ts",
+      "sha256": "7f382866bfa6f8cf2fd376d482e7bb9aa015f358a9bac7bce5d6bf40bde65f7c"
+    },
+    {
+      "path": "packages/db/src/credits.ts",
+      "sha256": "56b30d38e7d7767bbc57ada2d66af27307c767e109e91580749df0c42cc836b2"
+    },
+    {
+      "path": "packages/db/src/index.ts",
+      "sha256": "df548fd2ed3ddca93793cecb6eb3b2f2d118312644c403d8bd152c7017dc5de4"
+    },
+    {
+      "path": "packages/db/src/server.ts",
+      "sha256": "ca33022daf1e2480ae6f680e43293fe94a9316c96705525e81dda7730e6b0cb9"
+    },
+    {
+      "path": "packages/db/src/types.ts",
+      "sha256": "846e8175c334739adbe7bc3c37fadadcc69a5a380efc074b87a9f1e8ad17319c"
+    },
+    {
+      "path": "packages/db/tsconfig.json",
+      "sha256": "6f9f1719e861edb5695c538506da749ee71090d52b82cecf767d19cdf56f824d"
+    }
+  ]
+}

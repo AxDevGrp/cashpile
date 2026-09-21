@@ -46,6 +46,7 @@ interface Props {
   lockedAccountId?: string;
   requireQuery?: boolean;
   emptyQueryMessage?: string;
+  showTaxModule?: boolean;
 }
 
 function buildPageNumbers(currentPage: number, totalPages: number) {
@@ -130,6 +131,7 @@ export default function TransactionsClient({
   lockedAccountId,
   requireQuery = false,
   emptyQueryMessage = "Search or filter transactions to see results.",
+  showTaxModule = false,
 }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -152,9 +154,6 @@ export default function TransactionsClient({
     confidence: number;
     method: string;
   }>>([]);
-  const [backfillSummary, setBackfillSummary] = useState<string | null>(null);
-  const [isBackfilling, setIsBackfilling] = useState(false);
-  const [backfillYear, setBackfillYear] = useState("2025");
   const [searchDraft, setSearchDraft] = useState(filters.search ?? "");
   const [isAddCategoryOpen, setIsAddCategoryOpen] = useState(false);
   const [addCategoryForTransactionId, setAddCategoryForTransactionId] = useState<string | null>(null);
@@ -179,7 +178,7 @@ export default function TransactionsClient({
       : "all";
   const hasActiveQuery = Boolean(
     filters.search?.trim() ||
-    filters.taxEntityId ||
+    (showTaxModule && filters.taxEntityId) ||
     filters.accountId ||
     filters.udaId ||
     filters.categoryId ||
@@ -201,6 +200,10 @@ export default function TransactionsClient({
   const aiReviewHref = categorizationAccountId
     ? `/books/transactions/ai-review?accountId=${encodeURIComponent(categorizationAccountId)}`
     : "/books/transactions/ai-review";
+  const reviewSuggestionCount = Math.max(
+    categorizeReviewSuggestions,
+    rows.filter((transaction) => categorySuggestion(transaction) !== null).length,
+  );
   const aiReviewHrefForTransaction = (tx: BooksTransaction) => {
     const accountId = tx.account_id;
     return accountId
@@ -236,7 +239,7 @@ export default function TransactionsClient({
       setClientError(undefined);
       try {
         const params = new URLSearchParams(searchParams.toString());
-        if (filters.taxEntityId && !params.has("taxEntityId")) params.set("taxEntityId", filters.taxEntityId);
+        if (showTaxModule && filters.taxEntityId && !params.has("taxEntityId")) params.set("taxEntityId", filters.taxEntityId);
         if (filters.accountId && !params.has("accountId")) params.set("accountId", filters.accountId);
         if (filters.udaId && !params.has("udaId")) params.set("udaId", filters.udaId);
         if (filters.categoryId && !params.has("categoryId")) params.set("categoryId", filters.categoryId);
@@ -474,7 +477,7 @@ export default function TransactionsClient({
       const taxAssigned = Number(data.taxAssigned ?? 0);
       toast.success(
         nextCategory
-          ? `Updated ${data.updated ?? ids.length} selected transaction${ids.length === 1 ? "" : "s"}, saved ${learnedRules} learned rule${learnedRules === 1 ? "" : "s"}, applied to ${appliedMatches} other match${appliedMatches === 1 ? "" : "es"}, and assigned ${taxAssigned} to Tax Entities`
+          ? `Updated ${data.updated ?? ids.length} selected transaction${ids.length === 1 ? "" : "s"}, saved ${learnedRules} learned rule${learnedRules === 1 ? "" : "s"}, applied to ${appliedMatches} other match${appliedMatches === 1 ? "" : "es"}, ${showTaxModule ? `and assigned ${taxAssigned} to Tax Entities` : ""}`
           : `Updated ${data.updated ?? ids.length} selected transaction${ids.length === 1 ? "" : "s"}`
       );
       if (appliedMatches > 0) {
@@ -497,54 +500,6 @@ export default function TransactionsClient({
     }
   }
 
-  async function runPlaidBackfill() {
-    const accountId = lockedAccountId ?? filters.accountId;
-    const target = accountId ? "the selected account" : "all active Plaid-connected accounts";
-    if (!window.confirm(`Backfill ${backfillYear} Plaid transactions for ${target}? This may take a minute and will not duplicate existing Plaid transactions.`)) return;
-
-    setIsBackfilling(true);
-    setBackfillSummary(null);
-    try {
-      const res = await fetch("/api/plaid/backfill", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          account_id: accountId || undefined,
-          start_date: `${backfillYear}-01-01`,
-          end_date: `${backfillYear}-12-31`,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Plaid backfill failed");
-
-      const totalReturned = (data.results ?? []).reduce((sum: number, result: any) => sum + Number(result.plaid_returned ?? 0), 0);
-      const totalUpserted = (data.results ?? []).reduce((sum: number, result: any) => sum + Number(result.upserted ?? 0), 0);
-      const totalCategorized = (data.results ?? []).reduce((sum: number, result: any) => sum + Number(result.categorized ?? 0), 0);
-      const reconnectCount = (data.results ?? []).filter((result: any) => result.needs_reconnect_for_more_history).length;
-      const summary = reconnectCount > 0
-        ? `Backfill finished: Plaid returned ${totalReturned} transactions, upserted ${totalUpserted}, and auto-categorized ${totalCategorized}. ${reconnectCount} item(s) returned no 2025 history and may need reconnecting with 24-month history.`
-        : `Backfill finished: Plaid returned ${totalReturned} transactions, upserted ${totalUpserted}, and auto-categorized ${totalCategorized}.`;
-      setBackfillSummary(summary);
-      toast.success(summary);
-      router.refresh();
-      const params = new URLSearchParams(searchParams.toString());
-      params.set("limit", String(pageSize));
-      const refreshed = await fetch(`/api/books/transactions?${params.toString()}`, { cache: "no-store" });
-      if (refreshed.ok) {
-        const refreshedData = await refreshed.json();
-        setRows(refreshedData.transactions ?? []);
-        setCount(refreshedData.count ?? 0);
-        setCategoryOptions(refreshedData.categories ?? []);
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Plaid backfill failed";
-      toast.error(message);
-      setBackfillSummary(message);
-    } finally {
-      setIsBackfilling(false);
-    }
-  }
-
   async function runBulkCategorization(useAI = true) {
     setIsCategorizing(true);
     setCategorizeMode(useAI ? "ai" : "rules");
@@ -562,8 +517,8 @@ export default function TransactionsClient({
       if (!res.ok) throw new Error(data.error ?? "Unable to categorize transactions");
 
       const summary = useAI
-        ? `Categorized ${data.categorized} of ${data.scanned} reviewed transactions (${data.learnedMatches} learned, ${data.ruleMatches} rules, ${data.aiMatches} AI). Saved ${data.learnedRulesSaved ?? 0} learned rule${data.learnedRulesSaved === 1 ? "" : "s"}, queued ${data.reviewSuggestions ?? 0} AI suggestion${data.reviewSuggestions === 1 ? "" : "s"} for review, and assigned ${data.taxAssigned ?? 0} to Tax Entities. ${data.needsReview} still need review.`
-        : `Applied rules to ${data.categorized} of ${data.scanned} uncategorized transactions (${data.learnedMatches} learned, ${data.ruleMatches} rules) and assigned ${data.taxAssigned ?? 0} to Tax Entities. ${data.needsReview} still need review.`;
+        ? `Categorized ${data.categorized} of ${data.scanned} reviewed transactions (${data.learnedMatches} learned, ${data.ruleMatches} rules, ${data.aiMatches} AI). Saved ${data.learnedRulesSaved ?? 0} learned rule${data.learnedRulesSaved === 1 ? "" : "s"}, queued ${data.reviewSuggestions ?? 0} AI suggestion${data.reviewSuggestions === 1 ? "" : "s"} for review, ${showTaxModule ? `and assigned ${data.taxAssigned ?? 0} to Tax Entities. ` : ""}${data.needsReview} still need review.`
+        : `Applied rules to ${data.categorized} of ${data.scanned} uncategorized transactions (${data.learnedMatches} learned, ${data.ruleMatches} rules) ${showTaxModule ? `and assigned ${data.taxAssigned ?? 0} to Tax Entities. ` : ""}${data.needsReview} still need review.`;
       setCategorizeSummary(summary);
       setCategorizeNeedsReview(Number(data.needsReview ?? 0));
       setCategorizeReviewSuggestions(Number(data.reviewSuggestions ?? 0));
@@ -618,7 +573,7 @@ export default function TransactionsClient({
         const taxAssigned = Number(data.taxAssigned ?? 0);
         toast.success(
           appliedMatches > 0
-            ? `Categorized as ${nextCategory.name}; rule applied to ${appliedMatches} matching uncategorized transaction${appliedMatches === 1 ? "" : "s"} and assigned ${taxAssigned} to Tax Entities`
+            ? `Categorized as ${nextCategory.name}; rule applied to ${appliedMatches} matching uncategorized transaction${appliedMatches === 1 ? "" : "s"} ${showTaxModule ? `and assigned ${taxAssigned} to Tax Entities` : ""}`
             : `Categorized as ${nextCategory.name}; scanned existing Uncategorized transactions and found no other matches`
         );
         if (appliedMatches > 0) {
@@ -773,26 +728,57 @@ export default function TransactionsClient({
 
       <PageHeader title={title} description={headerDescription} actions={
         <div className="flex flex-wrap gap-2">
-          <Button onClick={() => runBulkCategorization(false)} disabled={isCategorizing}>
-            {isCategorizing && categorizeMode === "rules" ? "Applying rules…" : "Apply Rules"}
-          </Button>
-          <Button onClick={() => runBulkCategorization(true)} disabled={isCategorizing} variant="outline">
-            {isCategorizing && categorizeMode === "ai" ? "Categorizing…" : "Rules + AI"}
-          </Button>
-          <Link href={aiReviewHref}>
-            <Button variant="outline">AI Review</Button>
-          </Link>
+          <details className="group relative">
+            <summary className="flex h-10 cursor-pointer list-none items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground ring-offset-background transition-colors hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 [&::-webkit-details-marker]:hidden">
+              Clean up transactions
+              <span className="text-xs">▾</span>
+            </summary>
+            <div className="absolute right-0 z-20 mt-2 w-72 rounded-md border bg-popover p-3 text-popover-foreground shadow-md">
+              <p className="mb-3 text-sm text-muted-foreground">
+                Cash applies trusted rules and high-confidence AI matches. Anything uncertain stays for your review.
+              </p>
+              <div className="space-y-1">
+                <button
+                  type="button"
+                  className="block w-full rounded-sm px-3 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50"
+                  onClick={(event) => {
+                    event.currentTarget.closest("details")?.removeAttribute("open");
+                    runBulkCategorization(true);
+                  }}
+                  disabled={isCategorizing}
+                >
+                  {isCategorizing && categorizeMode === "ai" ? "Categorizing…" : "Start smart cleanup"}
+                </button>
+                <button
+                  type="button"
+                  className="block w-full rounded-sm px-3 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50"
+                  onClick={(event) => {
+                    event.currentTarget.closest("details")?.removeAttribute("open");
+                    runBulkCategorization(false);
+                  }}
+                  disabled={isCategorizing}
+                >
+                  {isCategorizing && categorizeMode === "rules" ? "Applying rules…" : "Use rules only"}
+                </button>
+              </div>
+            </div>
+          </details>
+          {reviewSuggestionCount > 0 && (
+            <Link
+              href={aiReviewHref}
+              className="inline-flex h-10 items-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium ring-offset-background transition-colors hover:bg-accent hover:text-accent-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+            >
+              Review {reviewSuggestionCount} suggestion{reviewSuggestionCount === 1 ? "" : "s"}
+            </Link>
+          )}
           <details className="group relative">
             <summary className="flex h-10 cursor-pointer list-none items-center gap-2 rounded-md border border-input bg-background px-4 py-2 text-sm font-medium ring-offset-background transition-colors hover:bg-accent hover:text-accent-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 [&::-webkit-details-marker]:hidden">
-              Category
+              More
               <span className="text-xs text-muted-foreground">▾</span>
             </summary>
-            <div className="absolute right-0 z-20 mt-2 w-48 rounded-md border bg-popover p-1 text-popover-foreground shadow-md">
-              <Link
-                href="/books/category-rules"
-                className="block rounded-sm px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground"
-              >
-                Rules
+            <div className="absolute right-0 z-20 mt-2 w-56 rounded-md border bg-popover p-1 text-popover-foreground shadow-md">
+              <Link href="/books/category-rules" className="block rounded-sm px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground">
+                Manage category rules
               </Link>
               <button
                 type="button"
@@ -802,7 +788,7 @@ export default function TransactionsClient({
                   openAddCategory();
                 }}
               >
-                Add Category
+                Add category
               </button>
               <button
                 type="button"
@@ -813,32 +799,37 @@ export default function TransactionsClient({
                 }}
                 disabled={categoryOptions.length === 0}
               >
-                Edit Category
+                Edit category
               </button>
+              <Link href="/books/transactions/duplicates" className="block rounded-sm px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground">
+                Find duplicate transactions
+              </Link>
+              <Link href="/books/transactions/import" className="block rounded-sm px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground">
+                Import transactions
+              </Link>
             </div>
           </details>
-          <Link href="/books/transactions/duplicates">
-            <Button variant="outline">Duplicate Review</Button>
-          </Link>
-          <Button onClick={runPlaidBackfill} disabled={isBackfilling} variant="outline">
-            {isBackfilling ? "Backfilling Plaid…" : `Backfill Plaid ${backfillYear}`}
-          </Button>
-          <select
-            className="h-10 rounded-md border border-border bg-background px-3 text-sm"
-            value={backfillYear}
-            onChange={(event) => setBackfillYear(event.target.value)}
-            disabled={isBackfilling}
-            aria-label="Backfill year"
-          >
-            {yearOptions.map((year) => (
-              <option key={year} value={year}>{year}</option>
-            ))}
-          </select>
-          <Link href="/books/transactions/import">
-            <Button variant="outline">Import CSV</Button>
-          </Link>
         </div>
       } />
+
+      {isCategorizing && (
+        <div
+          role="status"
+          aria-live="polite"
+          aria-busy="true"
+          className="rounded-2xl border border-primary/30 bg-primary/5 px-4 py-3"
+        >
+          <p className="font-medium text-foreground">Cash is cleaning up transactions</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {categorizeMode === "rules"
+              ? "Applying high-confidence category rules; uncertain items remain for review."
+              : "Applying high-confidence rules and AI matches; uncertain items remain for review."}
+          </p>
+          <div role="progressbar" aria-label="Categorization in progress" className="mt-3 h-2 overflow-hidden rounded-full bg-primary/15">
+            <div className="h-full w-2/3 rounded-full bg-primary animate-pulse" />
+          </div>
+        </div>
+      )}
 
       {categorizeSummary && (
         <div className="space-y-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
@@ -846,13 +837,19 @@ export default function TransactionsClient({
             <span>{categorizeSummary}</span>
             {categorizeNeedsReview > 0 && (
               <div className="flex flex-wrap gap-2">
-                <Link href={aiReviewHref}>
-                  <Button variant="outline" size="sm">
-                    {categorizeReviewSuggestions > 0 ? `Review ${categorizeReviewSuggestions} AI suggestion${categorizeReviewSuggestions === 1 ? "" : "s"}` : "Review suggestions"}
-                  </Button>
-                </Link>
-                <Link href={uncategorizedHref}>
-                  <Button variant="outline" size="sm">View Uncategorized</Button>
+                {reviewSuggestionCount > 0 && (
+                  <Link
+                    href={aiReviewHref}
+                    className="inline-flex h-8 items-center rounded-md border border-input bg-background px-3 text-sm font-medium ring-offset-background transition-colors hover:bg-accent hover:text-accent-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                  >
+                    Review {reviewSuggestionCount} suggestion{reviewSuggestionCount === 1 ? "" : "s"}
+                  </Link>
+                )}
+                <Link
+                  href={uncategorizedHref}
+                  className="inline-flex h-8 items-center rounded-md border border-input bg-background px-3 text-sm font-medium ring-offset-background transition-colors hover:bg-accent hover:text-accent-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                >
+                  View Uncategorized
                 </Link>
               </div>
             )}
@@ -871,12 +868,6 @@ export default function TransactionsClient({
               </div>
             </div>
           )}
-        </div>
-      )}
-
-      {backfillSummary && (
-        <div className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
-          {backfillSummary}
         </div>
       )}
 
@@ -1068,7 +1059,7 @@ export default function TransactionsClient({
               <th className="p-3 text-left font-medium">Description</th>
               <th className="p-3 text-left font-medium">Account</th>
               <th className="p-3 text-left font-medium">Category</th>
-              <th className="p-3 text-left font-medium">Tax Entity</th>
+              {showTaxModule && <th className="p-3 text-left font-medium">Tax Entity</th>}
               <th className="p-3 text-right font-medium">Amount</th>
               <th className="p-3 text-left font-medium">Flags</th>
             </tr>
@@ -1076,13 +1067,13 @@ export default function TransactionsClient({
           <tbody>
             {isLoading ? (
               <tr>
-                <td colSpan={8} className="p-8 text-center text-muted-foreground">
+                <td colSpan={showTaxModule ? 8 : 7} className="p-8 text-center text-muted-foreground">
                   Loading transactions…
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={8} className="p-8 text-center text-muted-foreground">
+                <td colSpan={showTaxModule ? 8 : 7} className="p-8 text-center text-muted-foreground">
                   No transactions yet.{" "}
                   <Link href="/books/transactions/import" className="underline">
                     Import your first CSV
@@ -1143,7 +1134,7 @@ export default function TransactionsClient({
                       </SelectContent>
                     </Select>
                   </td>
-                  <td className="p-3">
+                  {showTaxModule && <td className="p-3">
                     <Select
                       value={taxEntitySelectValue(tx)}
                       onValueChange={(value) => {
@@ -1163,7 +1154,7 @@ export default function TransactionsClient({
                         ))}
                       </SelectContent>
                     </Select>
-                  </td>
+                  </td>}
                   <td className={`p-3 text-right tabular-nums font-medium ${tx.amount < 0 ? "text-red-600" : "text-green-600"}`}>
                     {formatCurrency(tx.amount)}
                   </td>
@@ -1202,7 +1193,7 @@ export default function TransactionsClient({
                         </>
                       );
                     })()}
-                    {getTaxAssignments(tx).map((assignment, index) => (
+                    {showTaxModule && getTaxAssignments(tx).map((assignment, index) => (
                       <Badge
                         key={`${assignment.entityName}-${index}`}
                         variant="secondary"

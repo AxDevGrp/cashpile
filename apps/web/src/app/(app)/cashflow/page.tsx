@@ -4,13 +4,24 @@ import { createServerSupabaseClient } from "@cashpile/db";
 import { formatCurrency, PageHeader } from "@cashpile/ui";
 import { getCashflowSnapshot } from "@cashpile/ai";
 import { AffordabilityForm } from "@/components/cashflow/affordability-form";
+import { ModuleHomeV2 } from "../_components/module-home-v2";
+import { isUiV2Enabled } from "@/components/ui-v2";
+import { shouldRenderModuleEntrance } from "@/components/ui-v2/module-home-model";
 
-export default async function CashflowPage() {
+export default async function CashflowPage({ searchParams }: { searchParams?: Promise<{ view?: string }> }) {
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
 
   const snapshot = await getCashflowSnapshot(user.id, 30).catch(() => null);
+  const resolvedSearchParams = await searchParams;
+  const insight = !snapshot
+    ? { id: "connect", severity: "info" as const, title: "Connect accounts", detail: "Sync transactions to start planning cash flow.", actionLabel: "Open detailed workspace" }
+    : snapshot.safeToSpend <= 0
+      ? { id: "safe-to-spend", severity: "critical" as const, title: "Cash is tight", detail: "Review upcoming bills before extra spending.", actionLabel: "Check affordability" }
+      : { id: "safe-to-spend", severity: "info" as const, title: `${formatCurrency(snapshot.safeToSpend)} is safe to spend`, detail: "This estimate accounts for upcoming bills and your buffer.", actionLabel: "Check affordability" };
+
+  if (shouldRenderModuleEntrance(isUiV2Enabled(), resolvedSearchParams?.view)) return <ModuleHomeV2 id="cashflow" insight={insight} actionHref="/cashflow?view=details" />;
 
   return (
     <div className="px-6 py-8 max-w-6xl mx-auto space-y-6">

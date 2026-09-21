@@ -21,6 +21,10 @@ import { generateCashboardBriefing, getCashflowSnapshot } from "@cashpile/ai";
 import { CashInputStrip } from "./_components/cash-input-strip";
 import { GremmyReminderModal, type GremmyReminder } from "./_components/gremmy-reminder-modal";
 import { AffordabilityForm } from "@/components/cashflow/affordability-form";
+import { HomeV2 } from "./_components/home-v2";
+import { isUiV2Enabled } from "@/components/ui-v2";
+import { shouldRenderAiFirstHome } from "@/components/ui-v2/home-model";
+import { canUseTaxModule } from "@/lib/tax-access";
 
 // ─── Data helpers ────────────────────────────────────────────────────────────
 
@@ -749,7 +753,7 @@ function MoneyGremlin() {
 export default async function CashboardPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ gremmy?: string }>;
+  searchParams?: Promise<{ gremmy?: string; view?: string }>;
 }) {
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -768,6 +772,7 @@ export default async function CashboardPage({
   const aiBudget = buildAiBudget(booksData.transactions, booksData.categories);
   const gremmyReminders = buildGremmyReminders({ cashflow, subscriptions: subscriptionSummary, moneyLeaks, aiBudget, reminderInput });
   const resolvedSearchParams = await searchParams;
+  const canUseTax = canUseTaxModule(user.id);
 
   const affordabilityStatus = !cashflow
     ? "Needs data"
@@ -865,6 +870,15 @@ export default async function CashboardPage({
     { label: "Protect rent money", detail: cashflow ? `Projected low: ${formatCurrency(cashflow.forecast.projectedLowBalance)}` : "Connect accounts for protection signals", href: "/cashflow", Icon: ShieldAlert },
     { label: "Boost savings", detail: aiBudget.needsLabels ? "Label spending to improve AI targets" : `Suggested target: ${formatCurrency(aiBudget.suggestedTarget)}/mo`, href: "/cashflow", Icon: Coins },
   ];
+
+  if (shouldRenderAiFirstHome(isUiV2Enabled(), resolvedSearchParams?.view)) {
+    return (
+      <>
+        <HomeV2 canUseTax={canUseTax} reminder={gremmyReminders[0]} />
+        <GremmyReminderModal reminders={gremmyReminders} openOnLogin={resolvedSearchParams?.gremmy === "welcome"} />
+      </>
+    );
+  }
 
   return (
     <div className="cp-dashboard flex min-h-full flex-col bg-[#f7f5ef] text-[#101828]">

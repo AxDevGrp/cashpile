@@ -17,9 +17,16 @@ CREATE TABLE IF NOT EXISTS public.books_categories (
     parent_category_id INTEGER REFERENCES public.books_categories(id),
     is_system BOOLEAN DEFAULT false,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    UNIQUE(user_id, name)
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS books_categories_user_id_top_level_name_key
+    ON public.books_categories(user_id, name)
+    WHERE parent_category_id IS NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS books_categories_user_id_parent_name_key
+    ON public.books_categories(user_id, parent_category_id, name)
+    WHERE parent_category_id IS NOT NULL;
 
 ALTER TABLE public.books_categories ENABLE ROW LEVEL SECURITY;
 

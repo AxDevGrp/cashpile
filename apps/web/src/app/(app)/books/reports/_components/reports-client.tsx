@@ -7,6 +7,7 @@ import { formatCurrency } from "@cashpile/ui";
 import type { TaxEntity, PnLReport, CashFlowReport, ScheduleEReport } from "@/modules/books/types";
 
 interface Props {
+  uiV2?: boolean;
   entities: TaxEntity[];
   selectedEntityId: string;
   year: number;
@@ -15,7 +16,7 @@ interface Props {
   scheduleE: ScheduleEReport | null;
 }
 
-export default function ReportsClient({ entities, selectedEntityId, year, pnl, cashFlow, scheduleE }: Props) {
+export default function ReportsClient({ entities, selectedEntityId, year, pnl, cashFlow, scheduleE, uiV2 }: Props) {
   const router = useRouter();
 
   function update(key: string, value: string) {
@@ -28,11 +29,11 @@ export default function ReportsClient({ entities, selectedEntityId, year, pnl, c
   const years = Array.from({ length: 5 }, (_, i) => currentYear - i);
 
   return (
-    <div className="space-y-6">
-      <PageHeader title="Reports" description="P&L, cash flow, and Schedule E summaries" />
+    <div className="space-y-6" data-read-workspace-content={uiV2 || undefined}>
+      {!uiV2 && <PageHeader title="Reports" description="P&L, cash flow, and Schedule E summaries" />}
 
       {/* Filters */}
-      <div className="flex gap-3">
+      <div className="flex gap-3" data-read-workspace-controls={uiV2 || undefined}>
         <Select value={selectedEntityId} onValueChange={(v) => update("entityId", v)}>
           <SelectTrigger className="w-52"><SelectValue /></SelectTrigger>
           <SelectContent>

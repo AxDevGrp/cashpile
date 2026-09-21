@@ -1,6 +1,8 @@
 import { listTrades } from "@/modules/trades/actions/trade.actions";
 import { listPropAccounts } from "@/modules/trades/actions/account.actions";
 import JournalClient from "./_components/journal-client";
+import { WriteWorkflowV2 } from "../../_components/write-workflow-v2";
+import { isUiV2Enabled } from "@/components/ui-v2";
 
 export const metadata = { title: "Trade Journal — Trades | Cashpile" };
 
@@ -30,7 +32,7 @@ export default async function JournalPage({
     limit: 100,
   });
 
-  return (
+  const content = (
     <JournalClient
       trades={trades}
       totalCount={count}
@@ -38,4 +40,5 @@ export default async function JournalPage({
       filters={searchParams}
     />
   );
+  return isUiV2Enabled() ? <WriteWorkflowV2 id="journal">{content}</WriteWorkflowV2> : content;
 }

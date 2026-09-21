@@ -1,5 +1,7 @@
 import { listEvents } from "@/modules/pulse/actions/event.actions";
 import EventsClient from "./_components/events-client";
+import { ReadWorkspaceV2 } from "../../_components/read-workspace-v2";
+import { isUiV2Enabled } from "@/components/ui-v2";
 
 export const metadata = { title: "Events — Pulse | Cashpile" };
 
@@ -24,5 +26,6 @@ export default async function PulseEventsPage({ searchParams }: PageProps) {
     limit: 50,
   });
 
-  return <EventsClient events={events} filters={params} />;
+  const client = <EventsClient events={events} filters={params} uiV2={isUiV2Enabled()} />;
+  return isUiV2Enabled() ? <ReadWorkspaceV2 id="events">{client}</ReadWorkspaceV2> : client;
 }

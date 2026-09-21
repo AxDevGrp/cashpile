@@ -16,6 +16,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@cashpile/ui";
+import { isUiV2Enabled } from "@/components/ui-v2";
+import workflowStyles from "@/app/(app)/_components/write-workflow-v2.module.css";
 
 interface Props {
   taxEntityId?: string; // NEW: Use tax_entity_id instead of udaId
@@ -290,7 +292,7 @@ export default function PlaidLinkButton({
       {error && <p className="text-xs text-destructive max-w-64">{error}</p>}
 
       <Dialog open={optionsOpen} onOpenChange={setOptionsOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className={`sm:max-w-md ${isUiV2Enabled() ? workflowStyles.dialogSurface : ""}`}>
           <DialogHeader>
             <DialogTitle>{isUpdateMode ? "Reconnect bank" : "Plaid import options"}</DialogTitle>
             <DialogDescription>

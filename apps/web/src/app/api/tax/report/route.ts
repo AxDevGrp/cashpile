@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireTaxModuleAccess } from "@/lib/tax-access";
 import { generateTaxReport } from "@/modules/books/actions/tax.actions";
 
 export async function GET(req: NextRequest) {
+  try {
+    await requireTaxModuleAccess();
+  } catch {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
   const { searchParams } = new URL(req.url);
   // Support both new taxEntityId and deprecated udaId
   const taxEntityId = searchParams.get("taxEntityId") ?? searchParams.get("udaId");

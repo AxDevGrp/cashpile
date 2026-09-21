@@ -11,6 +11,8 @@ import {
   cn,
 } from "@cashpile/ui";
 import { Zap, Loader2, CreditCard } from "lucide-react";
+import { isUiV2Enabled } from "@/components/ui-v2";
+import workflowStyles from "@/app/(app)/_components/write-workflow-v2.module.css";
 
 interface TopupOption {
   amount: 5 | 10 | 25;
@@ -60,7 +62,7 @@ export function TopupModal({ open, onOpenChange }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-sm">
+      <DialogContent className={`sm:max-w-sm ${isUiV2Enabled() ? workflowStyles.dialogSurface : ""}`}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Zap className="h-4 w-4 text-primary" />

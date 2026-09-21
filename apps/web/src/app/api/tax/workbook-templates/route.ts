@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireTaxModuleAccess } from "@/lib/tax-access";
 import {
   listTaxWorkbookTemplates,
   uploadAndAnalyzeTaxWorkbook,
@@ -9,6 +10,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
+    await requireTaxModuleAccess();
     const templates = await listTaxWorkbookTemplates();
     return NextResponse.json({ templates });
   } catch (e: any) {
@@ -18,6 +20,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
+    await requireTaxModuleAccess();
     const formData = await req.formData();
     const result = await uploadAndAnalyzeTaxWorkbook(formData);
     return NextResponse.json(result, { status: 201 });

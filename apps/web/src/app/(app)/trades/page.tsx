@@ -1,8 +1,13 @@
 import { TrendingUp, Plus } from "lucide-react";
 import { PageHeader } from "@cashpile/ui";
 import Link from "next/link";
+import { ModuleHomeV2 } from "../_components/module-home-v2";
+import { isUiV2Enabled } from "@/components/ui-v2";
+import { shouldRenderModuleEntrance } from "@/components/ui-v2/module-home-model";
 
-export default function TradesPage() {
+export default async function TradesPage({ searchParams }: { searchParams?: Promise<{ view?: string }> }) {
+  const resolvedSearchParams = await searchParams;
+  if (shouldRenderModuleEntrance(isUiV2Enabled(), resolvedSearchParams?.view)) return <ModuleHomeV2 id="trades" insight={{ id: "trades-ready", severity: "info", title: "Ready when you are", detail: "Use the journal to keep your trading routine organized." }} />;
   return (
     <div className="p-6 max-w-7xl mx-auto">
       <PageHeader

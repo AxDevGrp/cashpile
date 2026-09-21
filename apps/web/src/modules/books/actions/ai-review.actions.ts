@@ -6,6 +6,7 @@ import { categorizeTransactions as aiCategorizeTransactions, parseBooksInstructi
 import { createCategoryRule } from "./category-rule.actions";
 import { assignTransactions, createTaxAssignmentRule } from "./tax.actions";
 import { assignAccountToTaxEntity } from "./account.actions";
+import { canUseTaxModule } from "@/lib/tax-access";
 
 function normalizePattern(value: string | null | undefined) {
   return (value ?? "")
@@ -303,19 +304,22 @@ export async function listAiInstructionOptions(): Promise<{
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthenticated");
+  const canUseTax = canUseTaxModule(user.id);
 
-  const [{ data: categories, error: categoryError }, { data: taxEntities, error: entityError }, { data: accounts, error: accountError }] = await Promise.all([
+  const [{ data: categories, error: categoryError }, entityResult, { data: accounts, error: accountError }] = await Promise.all([
     (supabase as any)
       .from("books_categories")
       .select("id, name, category_type, parent_category_id")
       .eq("user_id", user.id)
       .order("name"),
-    (supabase as any)
-      .from("books_business_entities")
-      .select("id, name, entity_type")
-      .eq("user_id", user.id)
-      .eq("is_active", true)
-      .order("name"),
+    canUseTax
+      ? (supabase as any)
+        .from("books_business_entities")
+        .select("id, name, entity_type")
+        .eq("user_id", user.id)
+        .eq("is_active", true)
+        .order("name")
+      : Promise.resolve({ data: [], error: null }),
     (supabase as any)
       .from("books_financial_accounts")
       .select("id, name, institution_name, last_four_digits, tax_entity_id")
@@ -325,12 +329,12 @@ export async function listAiInstructionOptions(): Promise<{
   ]);
 
   if (categoryError) throw new Error(categoryError.message);
-  if (entityError) throw new Error(entityError.message);
+  if (entityResult.error) throw new Error(entityResult.error.message);
   if (accountError) throw new Error(accountError.message);
 
   return {
     categories: categories ?? [],
-    taxEntities: taxEntities ?? [],
+    taxEntities: entityResult.data ?? [],
     accounts: accounts ?? [],
   };
 }
@@ -347,6 +351,7 @@ export async function listAiReviewSuggestions(limit = 40, accountId?: string | n
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthenticated");
+  const canUseTax = canUseTaxModule(user.id);
   const scopedAccountId = isUuid(accountId) ? accountId : null;
 
   let transactionQuery = (supabase as any)
@@ -358,19 +363,21 @@ export async function listAiReviewSuggestions(limit = 40, accountId?: string | n
     .limit(5000);
   if (scopedAccountId) transactionQuery = transactionQuery.eq("financial_account_id", scopedAccountId);
 
-  const [{ data: transactions, error: txError }, { data: categories, error: categoryError }, { data: taxEntities, error: entityError }, { data: accounts, error: accountError }] = await Promise.all([
+  const [{ data: transactions, error: txError }, { data: categories, error: categoryError }, entityResult, { data: accounts, error: accountError }] = await Promise.all([
     transactionQuery,
     (supabase as any)
       .from("books_categories")
       .select("id, name, category_type, parent_category_id")
       .eq("user_id", user.id)
       .order("name"),
-    (supabase as any)
-      .from("books_business_entities")
-      .select("id, name, entity_type")
-      .eq("user_id", user.id)
-      .eq("is_active", true)
-      .order("name"),
+    canUseTax
+      ? (supabase as any)
+        .from("books_business_entities")
+        .select("id, name, entity_type")
+        .eq("user_id", user.id)
+        .eq("is_active", true)
+        .order("name")
+      : Promise.resolve({ data: [], error: null }),
     (supabase as any)
       .from("books_financial_accounts")
       .select("id, name, institution_name, last_four_digits, tax_entity_id")
@@ -381,7 +388,7 @@ export async function listAiReviewSuggestions(limit = 40, accountId?: string | n
 
   if (txError) throw new Error(txError.message);
   if (categoryError) throw new Error(categoryError.message);
-  if (entityError) throw new Error(entityError.message);
+  if (entityResult.error) throw new Error(entityResult.error.message);
   if (accountError) throw new Error(accountError.message);
 
   let categoryRulesRes = await (supabase as any)
@@ -401,11 +408,13 @@ export async function listAiReviewSuggestions(limit = 40, accountId?: string | n
     categoryRulesRes = { data: [] };
   }
 
-  let taxRulesRes = await (supabase as any)
-    .from("books_tax_assignment_rules")
-    .select("pattern, match_type, tax_entity_id, financial_account_id")
-    .eq("user_id", user.id)
-    .eq("is_active", true);
+  let taxRulesRes = canUseTax
+    ? await (supabase as any)
+      .from("books_tax_assignment_rules")
+      .select("pattern, match_type, tax_entity_id, financial_account_id")
+      .eq("user_id", user.id)
+      .eq("is_active", true)
+    : { data: [], error: null };
   if (taxRulesRes.error && isMissingAccountScopeColumn(taxRulesRes.error)) {
     taxRulesRes = await (supabase as any)
       .from("books_tax_assignment_rules")
@@ -418,12 +427,13 @@ export async function listAiReviewSuggestions(limit = 40, accountId?: string | n
     taxRulesRes = { data: [] };
   }
 
+  const taxEntities = entityResult.data ?? [];
   const taxEntityById = new Map<string, any>((taxEntities ?? []).map((entity: any) => [String(entity.id), entity]));
   const categoryByName = new Map<string, any>((categories ?? []).map((category: any) => [String(category.name).toLowerCase(), category]));
   const categoryById = new Map<string, any>((categories ?? []).map((category: any) => [String(category.id), category]));
 
   const transactionIds = (transactions ?? []).map((tx: any) => tx.id);
-  const taxAssignedIds = await getTaxAssignedTransactionIds(supabase as any, user.id, transactionIds);
+  const taxAssignedIds = canUseTax ? await getTaxAssignedTransactionIds(supabase as any, user.id, transactionIds) : new Set<string>();
   const categoryRules = categoryRulesRes.data ?? [];
   const taxRules = taxRulesRes.data ?? [];
   const patternHasRule = (rules: any[], pattern: string, accountId: string | null) => rules.some((rule: any) => {
@@ -527,8 +537,8 @@ export async function listAiReviewSuggestions(limit = 40, accountId?: string | n
       totalAmount,
       firstDate: rows[rows.length - 1]?.date ?? null,
       lastDate: rows[0]?.date ?? null,
-      suggestedTaxEntityId: account?.tax_entity_id ?? null,
-      suggestedTaxEntityName: account?.tax_entity_id ? taxEntityById.get(String(account.tax_entity_id))?.name ?? null : null,
+      suggestedTaxEntityId: canUseTax ? account?.tax_entity_id ?? null : null,
+      suggestedTaxEntityName: canUseTax && account?.tax_entity_id ? taxEntityById.get(String(account.tax_entity_id))?.name ?? null : null,
       suggestedCategoryId: category?.id ?? null,
       suggestedCategoryName: category?.name ?? null,
       confidence,
@@ -550,7 +560,7 @@ export async function listAiReviewSuggestions(limit = 40, accountId?: string | n
     totalSuggestions: sortedSuggestions.length,
     limit,
     categories: categories ?? [],
-    taxEntities: taxEntities ?? [],
+    taxEntities: canUseTax ? taxEntities ?? [] : [],
     accounts: accounts ?? [],
     activeAccount: scopedAccountId
       ? (accounts ?? []).find((account: any) => String(account.id) === scopedAccountId) ?? null
@@ -571,6 +581,8 @@ export async function acceptAiReviewSuggestion(input: {
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthenticated");
+  const canUseTax = canUseTaxModule(user.id);
+  if (!canUseTax && (input.taxEntityId || input.applyAccountDefault)) throw new Error("Tax module is not available");
 
   const transactionIds = [...new Set(input.transactionIds)].filter(Boolean);
   if (transactionIds.length === 0) throw new Error("No transactions selected");
@@ -668,6 +680,8 @@ export async function applyAiInstruction(input: {
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthenticated");
+  const canUseTax = canUseTaxModule(user.id);
+  if (!canUseTax && (input.taxEntityId || input.setAccountDefault)) throw new Error("Tax module is not available");
 
   const instruction = input.instruction.trim();
   if (instruction.length < 8) throw new Error("Tell Cashpile what should go where.");

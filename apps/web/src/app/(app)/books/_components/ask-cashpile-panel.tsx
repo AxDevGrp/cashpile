@@ -42,6 +42,7 @@ export function AskCashpilePanel({
   description?: string;
 }) {
   const router = useRouter();
+  const showTaxModule = taxEntities.length > 0;
   const [categoryOptions, setCategoryOptions] = useState(categories);
   const [instruction, setInstruction] = useState("");
   const [accountId, setAccountId] = useState(defaultAccountId);
@@ -59,8 +60,8 @@ export function AskCashpilePanel({
     accountId,
     pattern: pattern.trim(),
     categoryId,
-    taxEntityId,
-    setAccountDefault,
+    taxEntityId: showTaxModule ? taxEntityId : "",
+    setAccountDefault: showTaxModule ? setAccountDefault : false,
   });
   const hasFreshPreview = Boolean(preview && previewSignature === currentSignature);
 
@@ -89,9 +90,9 @@ export function AskCashpilePanel({
           accountId: accountId || null,
           pattern: pattern || null,
           categoryId: categoryId || null,
-          taxEntityId: taxEntityId || null,
+          taxEntityId: showTaxModule ? taxEntityId || null : null,
           applyToExisting: true,
-          setAccountDefault,
+          setAccountDefault: showTaxModule ? setAccountDefault : false,
         }),
       });
       const data = await res.json();
@@ -145,12 +146,12 @@ export function AskCashpilePanel({
               setInstruction(event.target.value);
               clearPreview();
             }}
-            placeholder={'Example: Charges from "ANTHROPIC" on Amex Blue Plus AxDevGrp belong to Axial Development Group and Software & Subscriptions.'}
+            placeholder={showTaxModule ? 'Example: Charges from "ANTHROPIC" on Amex Blue Plus belong to Axial Development Group and Software & Subscriptions.' : 'Example: Charges from "ANTHROPIC" on Amex Blue Plus are Software & Subscriptions.'}
           />
         </label>
 
         <details className="rounded-lg border bg-background/70 p-3">
-          <summary className="cursor-pointer text-sm font-medium">Optional: confirm exact account, merchant, category, or Tax Entity</summary>
+          <summary className="cursor-pointer text-sm font-medium">{showTaxModule ? "Optional: confirm exact account, merchant, category, or Tax Entity" : "Optional: confirm exact account, merchant, or category"}</summary>
           <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             <label className="space-y-1 text-sm">
               <span className="font-medium">Account</span>
@@ -199,7 +200,7 @@ export function AskCashpilePanel({
               />
             </label>
 
-            <label className="space-y-1 text-sm">
+            {showTaxModule && <label className="space-y-1 text-sm">
               <span className="font-medium">Tax Entity</span>
               <select
                 className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
@@ -214,11 +215,11 @@ export function AskCashpilePanel({
                   <option key={entity.id} value={entity.id}>{entity.name}</option>
                 ))}
               </select>
-            </label>
+            </label>}
           </div>
         </details>
 
-        {accountId && taxEntityId && (
+        {showTaxModule && accountId && taxEntityId && (
           <label className="flex items-center gap-2 text-sm text-muted-foreground">
             <input
               type="checkbox"
@@ -239,7 +240,7 @@ export function AskCashpilePanel({
               <div>Account: {preview.inferredAccountName ?? "All / not specified"}</div>
               <div>Pattern: {preview.inferredPattern ?? "Account-wide"}</div>
               <div>Category: {preview.inferredCategoryName ?? "No category change"}</div>
-              <div>Tax Entity: {preview.inferredTaxEntityName ?? "No Tax Entity change"}</div>
+              {showTaxModule && <div>Tax Entity: {preview.inferredTaxEntityName ?? "No Tax Entity change"}</div>}
               <div>Matches: {preview.matchedTransactions} transaction{preview.matchedTransactions === 1 ? "" : "s"}</div>
               <div>Uncategorized to update: {preview.uncategorizedMatches}</div>
               <div>Scope: {preview.ruleScope === "account" ? "This account only" : "All accounts"}</div>
@@ -249,7 +250,7 @@ export function AskCashpilePanel({
             <div className="mt-2 text-xs">
               Will save: {[
                 preview.willCreateCategoryRule ? "category rule" : null,
-                preview.willCreateTaxRule ? "Tax Entity rule" : null,
+                showTaxModule && preview.willCreateTaxRule ? "Tax Entity rule" : null,
                 preview.willSetAccountDefault ? "account default" : null,
               ].filter(Boolean).join(", ") || "current transaction updates only"}
             </div>

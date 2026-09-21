@@ -1,6 +1,11 @@
 "use client";
+
 import { AlertTriangle } from "lucide-react";
+import { isUiV2Enabled } from "@/components/ui-v2";
+import { Phase7ErrorSurface } from "@/app/_components/phase-7-surface";
+
 export default function DashboardError({ error, reset }: { error: Error; reset: () => void }) {
+  if (isUiV2Enabled()) return <Phase7ErrorSurface id="dashboard-error" detail={error.message} onRetry={reset} />;
   return (
     <div className="flex flex-col items-center justify-center h-full gap-4 p-12 text-center">
       <AlertTriangle className="h-8 w-8 text-yellow-500" />

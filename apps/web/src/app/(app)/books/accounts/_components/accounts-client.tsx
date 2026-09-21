@@ -6,6 +6,7 @@ import { PageHeader, Button, Badge, Card, CardHeader, CardTitle, CardContent } f
 import PlaidLinkButton from "@/components/plaid-link-button";
 import type { TaxEntity, BooksAccount } from "@/modules/books/types";
 import { assignAccountToTaxEntity, createAccount, mergeFinancialAccounts, updateAccount } from "@/modules/books/actions/account.actions";
+import { ReadWorkspaceV2 } from "../../../_components/read-workspace-v2";
 
 interface PlaidItem {
   id: string;
@@ -18,6 +19,7 @@ interface PlaidItem {
 }
 
 interface Props {
+  uiV2: boolean;
   taxEntities: TaxEntity[];
   accounts: BooksAccount[];
   plaidItems: PlaidItem[];
@@ -149,7 +151,8 @@ function AccountCard({
     }
   }
 
-  const assignedEntity = taxEntities.find(e => e.id === account.tax_entity_id);
+  const showTaxModule = taxEntities.length > 0;
+  const assignedEntity = showTaxModule ? taxEntities.find(e => e.id === account.tax_entity_id) : null;
   const isPlaidLinked = Boolean(plaidItem || account.plaid_account_id || account.plaid_item_id);
   const canReconnectPlaidItem = Boolean(plaidItem?.id && plaidItem?.item_id);
 
@@ -244,10 +247,10 @@ function AccountCard({
           )}
         </div>
 
-        {/* Tax Entity Assignment */}
+        {/* Account Actions */}
         <div className="pt-2 border-t border-border">
           <div className="flex items-center justify-between">
-            <div className="text-sm">
+            {showTaxModule && <div className="text-sm">
               {assignedEntity ? (
                 <div className="flex items-center gap-2">
                   <span className="text-muted-foreground">Tax Entity:</span>
@@ -256,21 +259,21 @@ function AccountCard({
               ) : (
                 <span className="text-muted-foreground">Not assigned to a Tax Entity</span>
               )}
-            </div>
+            </div>}
             <div className="flex gap-1">
               <Link href={`/books/accounts/${account.id}/transactions`}>
                 <Button size="sm" variant="outline" className="h-6 px-2 text-xs">
                   Transactions
                 </Button>
               </Link>
-              <Button
+              {showTaxModule && <Button
                 size="sm"
                 variant="ghost"
                 className="h-6 px-2 text-xs"
                 onClick={() => setIsAssigning(!isAssigning)}
               >
                 {isAssigning ? "Cancel" : assignedEntity ? "Change" : "Assign"}
-              </Button>
+              </Button>}
               <Button
                 size="sm"
                 variant="ghost"
@@ -305,7 +308,7 @@ function AccountCard({
                 </select>
                 {canReconnectPlaidItem ? (
                   <PlaidLinkButton
-                    taxEntityId={account.tax_entity_id ?? undefined}
+                    taxEntityId={showTaxModule ? account.tax_entity_id ?? undefined : undefined}
                     updatePlaidItemId={plaidItem!.id}
                     updateItemId={plaidItem!.item_id}
                     backfillAccountId={account.id}
@@ -313,7 +316,7 @@ function AccountCard({
                   />
                 ) : (
                   <PlaidLinkButton
-                    taxEntityId={account.tax_entity_id ?? undefined}
+                    taxEntityId={showTaxModule ? account.tax_entity_id ?? undefined : undefined}
                     replaceAccountId={account.id}
                     label="Connect bank again"
                   />
@@ -325,7 +328,7 @@ function AccountCard({
             </div>
           )}
           
-          {isAssigning && (
+          {showTaxModule && isAssigning && (
             <div className="mt-2 space-y-2">
               <select
                 className="w-full bg-background border border-border rounded-md px-3 py-1.5 text-sm"
@@ -579,7 +582,7 @@ function AddManualAccountModal({
             </label>
           </div>
 
-          <label className="block text-sm space-y-1">
+          {taxEntities.length > 0 && <label className="block text-sm space-y-1">
             <span className="text-muted-foreground">Tax Entity</span>
             <select
               className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm"
@@ -593,7 +596,7 @@ function AddManualAccountModal({
                 </option>
               ))}
             </select>
-          </label>
+          </label>}
         </div>
 
         <div className="p-4 border-t border-border flex justify-end gap-2">
@@ -667,7 +670,7 @@ function PlaidAccountActions({ onAddManual }: { onAddManual: () => void }) {
   );
 }
 
-export default function AccountsClient({ taxEntities, accounts, plaidItems }: Props) {
+export default function AccountsClient({ taxEntities, accounts, plaidItems, uiV2 }: Props) {
   const [localAccounts, setLocalAccounts] = useState(accounts);
   const [mergeTarget, setMergeTarget] = useState<BooksAccount | null>(null);
   const [addManualOpen, setAddManualOpen] = useState(false);
@@ -717,14 +720,17 @@ export default function AccountsClient({ taxEntities, accounts, plaidItems }: Pr
   const unassignedAccounts = accountsByEntity.get(null) ?? [];
 
   if (taxEntities.length === 0 && localAccounts.length === 0) {
-    return (
-      <div className="space-y-6 p-6">
-        <BackButton />
+    const content = (
+      <div
+        className={uiV2 ? "space-y-6" : "space-y-6 p-6"}
+        data-read-workspace-content={uiV2 || undefined}
+      >
+        {!uiV2 && <><BackButton />
         <PageHeader
           title="Accounts"
           description="Manage real financial accounts. Accounts can be connected through Plaid or added manually."
           actions={<PlaidAccountActions onAddManual={() => setAddManualOpen(true)} />}
-        />
+        /></>}
         <div className="rounded-lg border p-12 text-center text-muted-foreground">
           <p className="mb-4">No accounts yet.</p>
           <div className="flex justify-center gap-2">
@@ -741,20 +747,24 @@ export default function AccountsClient({ taxEntities, accounts, plaidItems }: Pr
         )}
       </div>
     );
+    return uiV2 ? <ReadWorkspaceV2 id="accounts" actions={<><BackButton /><PlaidAccountActions onAddManual={() => setAddManualOpen(true)} /></>}>{content}</ReadWorkspaceV2> : content;
   }
 
-  return (
-    <div className="space-y-6 p-6">
-      <BackButton />
+  const content = (
+    <div
+      className={uiV2 ? "space-y-6" : "space-y-6 p-6"}
+      data-read-workspace-content={uiV2 || undefined}
+    >
+      {!uiV2 && <><BackButton />
       <PageHeader
         title="Accounts"
         description="Manage real financial accounts, including Plaid-connected and manually added accounts."
         actions={<PlaidAccountActions onAddManual={() => setAddManualOpen(true)} />}
-      />
+      /></>}
 
-      {/* Tax Entities with Accounts */}
+      {/* Accounts */}
       <div className="space-y-8">
-        {taxEntities.map((entity) => {
+        {taxEntities.length > 0 && taxEntities.map((entity) => {
           const entityAccounts = accountsByEntity.get(entity.id) ?? [];
           const institutionalAccounts = entityAccounts.filter(isInstitutionalAccount);
           const logicalAccounts = entityAccounts.filter((account) => !isInstitutionalAccount(account));
@@ -814,7 +824,7 @@ export default function AccountsClient({ taxEntities, accounts, plaidItems }: Pr
         {unassignedAccounts.length > 0 && (
           <div className="space-y-3">
             <div className="flex items-center gap-2">
-              <h2 className="text-lg font-semibold text-muted-foreground">Unassigned Accounts</h2>
+              <h2 className="text-lg font-semibold text-muted-foreground">{taxEntities.length > 0 ? "Unassigned Accounts" : "Accounts"}</h2>
               <Badge variant="outline">Personal</Badge>
             </div>
             <div className="space-y-4">
@@ -882,4 +892,5 @@ export default function AccountsClient({ taxEntities, accounts, plaidItems }: Pr
       )}
     </div>
   );
+  return uiV2 ? <ReadWorkspaceV2 id="accounts" actions={<><BackButton /><PlaidAccountActions onAddManual={() => setAddManualOpen(true)} /></>}>{content}</ReadWorkspaceV2> : content;
 }

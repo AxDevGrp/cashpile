@@ -29,6 +29,7 @@ const NAV_ITEMS: NavItem[] = [
 ];
 
 interface SidebarProps {
+  showTaxModule?: boolean;
   /** Desktop: whether the sidebar is pinned open (shows labels) */
   pinned?: boolean;
   onPin?: () => void;
@@ -107,13 +108,16 @@ function NavContent({
   onPin,
   onMobileClose,
   forMobile = false,
+  showTaxModule = false,
 }: {
   pinned: boolean;
+  showTaxModule?: boolean;
   onPin?: () => void;
   onMobileClose?: () => void;
   forMobile?: boolean;
 }) {
   const pathname = usePathname();
+  const navItems = showTaxModule ? NAV_ITEMS : NAV_ITEMS.filter((item) => item.href !== "/books/tax");
 
   return (
     <div className="flex flex-col h-full">
@@ -149,7 +153,7 @@ function NavContent({
 
       {/* Nav items */}
       <nav className="flex-1 py-5 px-3 space-y-2 overflow-y-auto">
-        {NAV_ITEMS.map((item) => (
+        {navItems.map((item) => (
           <NavLink
             key={item.href}
             item={item}
@@ -186,6 +190,7 @@ export function Sidebar({
   onPin,
   mobileOpen = false,
   onMobileClose,
+  showTaxModule = false,
 }: SidebarProps) {
   return (
     <>
@@ -198,7 +203,7 @@ export function Sidebar({
           pinned ? "w-64" : "w-16"
         )}
       >
-        <NavContent pinned={pinned} onPin={onPin} />
+        <NavContent pinned={pinned} onPin={onPin} showTaxModule={showTaxModule} />
       </aside>
 
       {/* Mobile backdrop */}
@@ -217,7 +222,7 @@ export function Sidebar({
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
-        <NavContent pinned={true} forMobile={true} onMobileClose={onMobileClose} />
+        <NavContent pinned={true} forMobile={true} onMobileClose={onMobileClose} showTaxModule={showTaxModule} />
       </aside>
     </>
   );

@@ -102,7 +102,7 @@ export default function ImportWizard({ entities, initialUdas }: Props) {
       {/* Step 1 — Upload */}
       {step === 1 && (
         <div className="space-y-4">
-          <div className="space-y-2">
+          {entities.length > 0 && <div className="space-y-2">
             <label className="text-sm font-medium">Entity</label>
             <Select value={entityId} onValueChange={setEntityId}>
               <SelectTrigger><SelectValue placeholder="Select entity" /></SelectTrigger>
@@ -110,7 +110,7 @@ export default function ImportWizard({ entities, initialUdas }: Props) {
                 {entities.map((e) => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}
               </SelectContent>
             </Select>
-          </div>
+          </div>}
 
           <div className="space-y-2">
             <label className="text-sm font-medium">Account</label>

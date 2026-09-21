@@ -1,6 +1,7 @@
 "use server";
 
 import { createServerSupabaseClient } from "@cashpile/db";
+import { requireTaxModuleAccess, getTaxModuleAccess } from "@/lib/tax-access";
 import { revalidatePath } from "next/cache";
 import type { BooksUda, BooksAccount, TaxEntity } from "../types";
 
@@ -8,6 +9,7 @@ import type { BooksUda, BooksAccount, TaxEntity } from "../types";
 // Financial accounts can optionally be linked to Tax Entities
 
 export async function getAccountsByTaxEntity(taxEntityId: string): Promise<BooksAccount[]> {
+  await requireTaxModuleAccess();
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthenticated");
@@ -26,6 +28,7 @@ export async function assignAccountToTaxEntity(
   accountId: string,
   taxEntityId: string | null
 ): Promise<BooksAccount & { assigned_transaction_count: number; unassigned_transaction_count: number }> {
+  await requireTaxModuleAccess();
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthenticated");
@@ -139,6 +142,9 @@ export async function listAccounts(taxEntityId?: string): Promise<BooksAccount[]
 export async function createAccount(
   input: Omit<BooksAccount, "id" | "user_id" | "is_active" | "created_at" | "updated_at">
 ) {
+  const { canUseTax } = await getTaxModuleAccess();
+  if (!canUseTax && input.tax_entity_id) throw new Error("Tax module is not available");
+
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthenticated");
@@ -196,6 +202,8 @@ export async function createAccount(
 }
 
 export async function updateAccount(id: string, input: Partial<BooksAccount>) {
+  const { canUseTax } = await getTaxModuleAccess();
+  if (!canUseTax && input.tax_entity_id) throw new Error("Tax module is not available");
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthenticated");
@@ -275,6 +283,7 @@ export async function deleteUda(id: string) {
 }
 
 export async function backfillAssignedAccountTaxViews(): Promise<{ accounts: number; transactions: number }> {
+  await requireTaxModuleAccess();
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthenticated");

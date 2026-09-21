@@ -1,5 +1,7 @@
 import { listAiReviewSuggestions } from "@/modules/books/actions/ai-review.actions";
 import AiReviewClient from "./_components/ai-review-client";
+import { WriteWorkflowV2 } from "../../../_components/write-workflow-v2";
+import { isUiV2Enabled } from "@/components/ui-v2";
 
 export const metadata = { title: "AI Review — Transactions | Cashpile" };
 export const dynamic = "force-dynamic";
@@ -9,5 +11,6 @@ export default async function AiReviewPage({ searchParams }: { searchParams?: { 
   const requestedLimit = Number(searchParams?.limit ?? 100);
   const limit = Number.isFinite(requestedLimit) ? Math.min(Math.max(requestedLimit, 40), 500) : 100;
   const data = await listAiReviewSuggestions(limit, searchParams?.accountId ?? null);
-  return <AiReviewClient initialData={data} />;
+  const content = <AiReviewClient initialData={data} />;
+  return isUiV2Enabled() ? <WriteWorkflowV2 id="ai-review">{content}</WriteWorkflowV2> : content;
 }

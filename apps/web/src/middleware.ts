@@ -3,6 +3,23 @@ import { createServerClient } from "@supabase/ssr";
 
 const APP_ROUTES = ["/cashboard", "/books", "/trades", "/pulse", "/ai", "/settings"];
 const AGENT_RATE_LIMIT = { requests: 120, windowMs: 60_000 };
+
+function isTaxModulePublicEnabled() {
+  return process.env.NEXT_PUBLIC_TAX_MODULE_ENABLED === "true" || process.env.TAX_MODULE_ENABLED === "true";
+}
+
+function isTaxModuleDeveloper(userId: string | null | undefined) {
+  if (!userId) return false;
+  return (process.env.TAX_MODULE_DEV_USER_IDS ?? process.env.ADMIN_USER_IDS ?? "")
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean)
+    .includes(userId);
+}
+
+function canUseTaxModule(userId: string | null | undefined) {
+  return isTaxModulePublicEnabled() || isTaxModuleDeveloper(userId);
+}
 const agentRateLimit = new Map<string, { count: number; resetAt: number }>();
 
 export async function middleware(request: NextRequest) {
@@ -11,6 +28,26 @@ export async function middleware(request: NextRequest) {
   // Skip static assets and auth callback
   if (pathname.startsWith("/_next/") || pathname.startsWith("/api/auth/") || pathname === "/favicon.ico") {
     return NextResponse.next();
+  }
+
+  if (pathname.startsWith("/api/tax/")) {
+    const response = NextResponse.next();
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() { return request.cookies.getAll(); },
+          setAll(cookiesToSet: { name: string; value: string; options?: object }[]) {
+            cookiesToSet.forEach(({ name, value, options }) => response.cookies.set(name, value, options));
+          },
+        },
+      }
+    );
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
+    if (!canUseTaxModule(user.id)) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return response;
   }
 
   // Rate limiting for API routes
@@ -66,6 +103,10 @@ export async function middleware(request: NextRequest) {
 
   if (!user) {
     return NextResponse.redirect(new URL(`/login?next=${encodeURIComponent(pathname)}`, request.url));
+  }
+
+  if ((pathname === "/books/tax" || pathname.startsWith("/books/tax/") || pathname === "/books/entities" || pathname.startsWith("/books/entities/")) && !canUseTaxModule(user.id)) {
+    return NextResponse.rewrite(new URL("/404", request.url));
   }
 
   return response;

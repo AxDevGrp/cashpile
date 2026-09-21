@@ -1,0 +1,6 @@
+.home { box-sizing: border-box; width: 100%; min-height: 100%; overflow-x: hidden; padding: clamp(28px, 5vw, 64px) clamp(18px, 5vw, 64px) 100px; }
+.actions { display: grid; width: min(760px, 100%); grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 32px auto; }
+.details { display: block; width: fit-content; margin: 24px auto 0; color: #087155; font-size: 12px; font-weight: 700; }
+.home a:focus-visible { outline: 3px solid rgba(13, 128, 95, .45); outline-offset: 3px; }
+@media (max-width: 760px) { .home { padding: 28px 18px 96px; } .actions { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (prefers-reduced-motion: reduce) { .home *, .home *::before, .home *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; } }
