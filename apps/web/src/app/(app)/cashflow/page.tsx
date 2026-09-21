@@ -3,7 +3,7 @@ import { AlertTriangle, CalendarDays, ShieldCheck } from "lucide-react";
 import { createServerSupabaseClient } from "@cashpile/db";
 import { formatCurrency, PageHeader } from "@cashpile/ui";
 import { getCashflowSnapshot } from "@cashpile/ai";
-import { AffordabilityForm } from "@/components/cashflow/affordability-form";
+import PlanAccountsClient from "./_components/plan-accounts-client";
 
 export default async function CashflowPage() {
   const supabase = await createServerSupabaseClient();
@@ -44,7 +44,19 @@ export default async function CashflowPage() {
           </div>
 
           <div className="grid lg:grid-cols-[1.4fr_0.9fr] gap-4">
-            <AffordabilityForm />
+            <div className="glass-card rounded-2xl p-5">
+              <h2 className="text-sm font-semibold mb-2">What if?</h2>
+              <p className="text-sm text-muted-foreground">
+                Preview a one-time purchase or a transfer into savings — see the impact on your available cash,
+                your 30-day low point, and your emergency cushion before you commit.
+              </p>
+              <Link
+                href="/cashflow/what-if"
+                className="mt-3 inline-block rounded-lg bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+              >
+                Open What if →
+              </Link>
+            </div>
             <div className="space-y-4">
               <div className="glass-card rounded-2xl p-4">
                 <div className="flex items-center justify-between mb-3">
@@ -72,6 +84,11 @@ export default async function CashflowPage() {
                 </ul>
               </div>
             </div>
+          </div>
+
+          <div className="glass-card rounded-2xl p-4">
+            <h2 className="text-sm font-semibold mb-3">Accounts in my plan</h2>
+            <PlanAccountsClient accounts={snapshot.accounts} />
           </div>
         </>
       )}

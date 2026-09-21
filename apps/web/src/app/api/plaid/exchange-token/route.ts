@@ -180,6 +180,7 @@ export async function POST(req: NextRequest) {
           institution_name: institutionName,
           last_four_digits: acct.mask,
           current_balance:  acct.balances.current ?? 0,
+          available_balance: acct.balances.available ?? null,
           is_active:        true,
           updated_at:       new Date().toISOString(),
         })
@@ -204,6 +205,7 @@ export async function POST(req: NextRequest) {
         institution_name: institutionName,
         last_four_digits: acct.mask,
         current_balance:  acct.balances.current ?? 0,
+        available_balance: acct.balances.available ?? null,
         is_active:        true,
         updated_at:       new Date().toISOString(),
       });

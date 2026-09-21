@@ -12,7 +12,9 @@
     "./cross-module": "./src/cross-module/index.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --test src/cashflow/*.test.ts",
+    "test:cashflow": "node --test src/cashflow/*.test.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^1.3.22",
