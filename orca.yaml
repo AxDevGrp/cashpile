@@ -1,0 +1,4 @@
+# Optional environment-only setup; never launch the pipeline here.
+# scripts:
+#   setup: |
+#     true
