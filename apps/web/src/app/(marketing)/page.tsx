@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, BookOpen, TrendingUp, Activity, Bot, Zap, Shield } from "lucide-react";
+import { ArrowRight, Bot, Landmark, Sparkles, Upload, Zap, Shield } from "lucide-react";
 import WaitlistForm from "./waitlist-form";
 
 const landingStyles = `
@@ -127,16 +127,16 @@ export default function LandingPage() {
                 <span className="cp-gradient-text">cash gremlin</span>
               </h1>
               <p className="cp-hero-copy">
-                A street-smart little money creature that sniffs out leaks, organizes your books, watches your cash, and nudges you before small money messes become expensive ones.
+                Import your finances, clean them up with AI, and see an actionable Cashboard to better your finances.
               </p>
               <WaitlistForm />
               <p className="cp-beta-note">
                 We’re opening Cashpile.ai in private beta. Leave your email and Gremmy will save you a spot on the waiting list.
               </p>
               <div className="cp-proof-row">
-                <div className="cp-proof-pill">AI bookkeeping</div>
-                <div className="cp-proof-pill">Cash-flow guardrails</div>
-                <div className="cp-proof-pill">Tax-ready entities</div>
+                <div className="cp-proof-pill">Connect or import a CSV</div>
+                <div className="cp-proof-pill">AI cleanup with your review</div>
+                <div className="cp-proof-pill">Actionable cash outlook</div>
               </div>
             </div>
 
@@ -147,7 +147,7 @@ export default function LandingPage() {
                 </div>
                 <div className="cp-gremmy-bubble">
                   <strong>“I find the sneaky stuff.”</strong>
-                  <span>Subscriptions, uncategorized transactions, duplicate imports, cash dips, tax buckets — Gremmy keeps watch while you build.</span>
+                  <span>Uncategorized transactions, duplicate imports, recurring charges, and cash dips — Gremmy helps you decide what to review next.</span>
                 </div>
               </div>
             </div>
@@ -157,15 +157,15 @@ export default function LandingPage() {
         <section id="modules" className="cp-modules">
           <div className="cp-container">
             <div className="cp-section-eyebrow">What Gremmy helps with</div>
-            <h2 className="cp-section-title">Your back office, without the back-office headache.</h2>
+            <h2 className="cp-section-title">A clearer next step for your money.</h2>
             <p className="cp-section-copy">
-              Cashpile brings accounting, cash-flow planning, and AI financial context into one friendly workspace built for owners, operators, traders, and financially active builders.
+              Start with the financial data you already have. Cashpile helps you organize it, review it with AI, and understand what to do next.
             </p>
             <div className="cp-module-grid">
               {[
-                { icon: BookOpen, color: "text-emerald-600", iconClass: "cp-icon-emerald", border: "hover:border-emerald-500/50", label: "Books", desc: "Connect accounts, import transactions, clean duplicates, assign entities, and prepare better tax-ready records." },
-                { icon: TrendingUp, color: "text-blue-600", iconClass: "cp-icon-blue", border: "hover:border-blue-500/50", label: "Trades", desc: "Track funded accounts, drawdown, trading behavior, and the decisions that affect your cash pile." },
-                { icon: Activity, color: "text-violet-600", iconClass: "cp-icon-violet", border: "hover:border-violet-500/50", label: "Pulse", desc: "Understand market and business signals with AI context before they hit your accounts." },
+                { icon: Upload, color: "text-emerald-600", iconClass: "cp-icon-emerald", border: "hover:border-emerald-500/50", label: "Import", desc: "Connect an account or upload a CSV to bring your transactions into one place." },
+                { icon: Sparkles, color: "text-blue-600", iconClass: "cp-icon-blue", border: "hover:border-blue-500/50", label: "Clean up with AI", desc: "Review suggested categories, duplicate imports, and rules before applying changes." },
+                { icon: Landmark, color: "text-violet-600", iconClass: "cp-icon-violet", border: "hover:border-violet-500/50", label: "Use your Cashboard", desc: "See spending, recurring charges, and an estimated cash outlook with concrete next actions." },
               ].map(({ icon: Icon, color, iconClass, border, label, desc }) => (
                 <div key={label} className={`cp-module-card ${border}`}>
                   <div className={`cp-icon-box ${iconClass}`}>
@@ -189,13 +189,13 @@ export default function LandingPage() {
             </div>
             <h2 className="cp-section-title">Gremmy is cute. The AI is serious.</h2>
             <p className="cp-section-copy">
-              Ask what changed, what needs attention, what looks risky, and what to fix next — across transactions, accounts, entities, and cash flow.
+              Ask what changed, what needs attention, and what to fix next. Gremmy uses your transactions and cash-flow data, then leaves the decision with you.
             </p>
             <div className="cp-ai-card">
               <div className="cp-ai-card-row">
                 <div className="cp-logo-mark">G</div>
                 <p>
-                  “You have 7 transactions worth reviewing, one account missing a tax entity, and a recurring expense that looks higher than usual. Want me to queue the cleanup?”
+                  “You have 7 transactions worth reviewing and a recurring charge that looks higher than usual. Want me to queue the cleanup?”
                 </p>
               </div>
             </div>

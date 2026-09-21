@@ -1,3 +1,4 @@
+import { getTaxTestingAccessForUser } from "@/lib/tax-access";
 import { createServiceRoleClient } from "@cashpile/db";
 import { checkAffordability, getCashflowSnapshot, detectRecurringItems } from "@cashpile/ai";
 import { AGENT_CAPABILITIES, getAgentCapability } from "./capabilities";
@@ -193,6 +194,9 @@ export async function callAgentCapability(params: {
   }
 
   try {
+    if ((capability.module === "tax" || input.taxEntityId) && !await getTaxTestingAccessForUser(params.principal.userId)) {
+      return { ok: false, capability: capability.name, error: "This feature is not available." };
+    }
     if (capability.requiresConfirmation) {
       if (!params.confirmationToken) {
         const preview = capability.name === "books.transactions.categorize"
@@ -217,14 +221,14 @@ export async function callAgentCapability(params: {
   }
 }
 
-export function getAgentResources() {
+export function getAgentResources(taxEnabled = false) {
   return [
     { uri: "cashpile://cashflow/snapshot", name: "Cash flow snapshot", scopes: ["books:read"] },
     { uri: "cashpile://books/accounts", name: "Books accounts", scopes: ["books:read"] },
     { uri: "cashpile://books/transactions", name: "Books transactions", scopes: ["books:read"] },
     { uri: "cashpile://books/categories", name: "Books categories", scopes: ["books:read"] },
     { uri: "cashpile://tax/reports", name: "Tax reports", scopes: ["tax:read"] },
-  ];
+  ].filter((resource) => taxEnabled || !resource.uri.startsWith("cashpile://tax/"));
 }
 
 export { AGENT_CAPABILITIES };

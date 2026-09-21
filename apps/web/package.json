@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test:books": "node --test src/modules/books/services/*.test.ts",
     "test:ui-v2": "node --test src/components/ui-v2/*.test.ts",
-    "test:lib": "node --test src/lib/*.test.ts"
+    "test:lib": "node --test src/lib/*.test.ts",
+    "test:release": "node --test src/lib/*.test.ts src/modules/agent/*.test.ts"
   },
   "dependencies": {
     "@cashpile/ai": "workspace:*",

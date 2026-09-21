@@ -120,7 +120,7 @@ const SUGGESTED = [
   "Give me a full financial snapshot",
   "Can I afford $250 this week?",
   "What subscriptions am I paying for?",
-  "What should I review for taxes?",
+  "Which transactions need reviewing?",
 ];
 
 function CashOverlayModal({
@@ -312,7 +312,7 @@ function CashOverlayModal({
             {messages.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center gap-4">
                 <p className="text-sm text-muted-foreground text-center max-w-xs">
-                  I have live access to your Books, cash flow, and tax data. Ask anything.
+                  I can help you review transactions and understand your cash flow.
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full">
                   {SUGGESTED.map((q) => (

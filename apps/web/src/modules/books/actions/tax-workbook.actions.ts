@@ -1,5 +1,6 @@
 "use server";
 
+import { assertTaxTestingAccess } from "@/lib/tax-access";
 import { createHash, randomUUID } from "node:crypto";
 import { createServerSupabaseClient } from "@cashpile/db";
 import { revalidatePath } from "next/cache";
@@ -47,6 +48,7 @@ function requireXlsx(file: File) {
 async function getUser(supabase: Supabase) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthenticated");
+  assertTaxTestingAccess(user);
   return user;
 }
 

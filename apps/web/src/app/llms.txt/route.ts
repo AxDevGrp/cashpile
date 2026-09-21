@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { AGENT_CAPABILITIES } from "@/modules/agent/capabilities";
+import { getPublicAgentCapabilities } from "@/modules/agent/capabilities";
 
 export const runtime = "nodejs";
 
@@ -7,7 +7,7 @@ export async function GET(req: NextRequest) {
   const origin = new URL(req.url).origin;
   const body = `# Cashpile.ai
 
-Cashpile.ai is an AI-first financial platform combining Books (accounting), Trades (prop trading), and Pulse (market intelligence).
+Import your finances, clean them up with AI, and use an actionable Cashboard to improve your finances.
 
 ## Agent integration
 
@@ -24,7 +24,7 @@ Agents must request user confirmation before write operations. Cashpile enforces
 
 ## Capabilities
 
-${AGENT_CAPABILITIES.map((capability) => `- ${capability.name}: ${capability.description} Scopes: ${capability.requiredScopes.join(", ")}.`).join("\n")}
+${getPublicAgentCapabilities().map((capability) => `- ${capability.name}: ${capability.description} Scopes: ${capability.requiredScopes.join(", ")}.`).join("\n")}
 `;
 
   return new Response(body, { headers: { "Content-Type": "text/plain; charset=utf-8" } });
