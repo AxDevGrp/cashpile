@@ -57,7 +57,7 @@ function buildNextStep(snapshot: CashflowSnapshot, dismissed: Set<string>): Next
       key: `confirm_recurring:${unconfirmed.length}`,
       title: `Confirm ${unconfirmed.length} detected ${unconfirmed.length === 1 ? "item" : "items"}`,
       observation: `${unconfirmed.length} recurring ${unconfirmed.length === 1 ? "bill or payday is" : "bills and paydays are"} still educated guesses from your history.`,
-      impact: "Confirmed items make Until payday exact instead of estimated.",
+      impact: "Confirmed items sharpen the payday estimate; it stays an estimate, never a guarantee.",
       actionLabel: "Review recurring",
       actionHref: "/cashflow/recurring",
     });

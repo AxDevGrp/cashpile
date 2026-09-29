@@ -217,6 +217,8 @@ export interface Database {
           account_identifier: string | null;
           current_balance: number;
           available_balance: number | null;
+          currency_code: string | null;
+          balance_as_of: string | null;
           cashflow_role: "spending_source" | "reserve" | "credit_liability" | "investment" | "loan" | "ignore" | null;
           cashflow_include: boolean | null;
           is_emergency: boolean | null;
@@ -236,6 +238,8 @@ export interface Database {
           account_identifier?: string | null;
           current_balance?: number;
           available_balance?: number | null;
+          currency_code?: string | null;
+          balance_as_of?: string | null;
           cashflow_role?: "spending_source" | "reserve" | "credit_liability" | "investment" | "loan" | "ignore" | null;
           cashflow_include?: boolean | null;
           is_emergency?: boolean | null;
@@ -252,6 +256,8 @@ export interface Database {
           account_identifier?: string | null;
           current_balance?: number;
           available_balance?: number | null;
+          currency_code?: string | null;
+          balance_as_of?: string | null;
           cashflow_role?: "spending_source" | "reserve" | "credit_liability" | "investment" | "loan" | "ignore" | null;
           cashflow_include?: boolean | null;
           is_emergency?: boolean | null;
@@ -457,6 +463,8 @@ export interface Database {
           description: string;
           merchant: string | null;
           amount: number;
+          provider_data: Json;
+          source_revision: number;
           currency: string;
           type: "debit" | "credit";
           is_transfer: boolean;
@@ -477,6 +485,8 @@ export interface Database {
           description: string;
           merchant?: string | null;
           amount: number;
+          provider_data?: Json;
+          source_revision?: number;
           currency?: string;
           type: "debit" | "credit";
           is_transfer?: boolean;
@@ -490,10 +500,154 @@ export interface Database {
           description?: string;
           merchant?: string | null;
           amount?: number;
+          provider_data?: Json;
+          source_revision?: number;
           date?: string;
           type?: "debit" | "credit";
           is_transfer?: boolean;
           notes?: string | null;
+          updated_at?: string;
+        };
+        Relationships: never[];
+      };
+      books_transaction_interpretations: {
+        Row: {
+          transaction_id: string;
+          user_id: string;
+          kind: "unknown" | "spend" | "income" | "passive_income" | "refund" | "internal_transfer" | "card_payment" | "asset_sale" | "loan_proceeds";
+          source: "unknown" | "provider" | "rule" | "user";
+          review_required: boolean;
+          suggestion: Json | null;
+          revision: number;
+          confirmed_at: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          transaction_id: string;
+          user_id: string;
+          kind?: "unknown" | "spend" | "income" | "passive_income" | "refund" | "internal_transfer" | "card_payment" | "asset_sale" | "loan_proceeds";
+          source?: "unknown" | "provider" | "rule" | "user";
+          review_required?: boolean;
+          suggestion?: Json | null;
+          revision?: number;
+          confirmed_at?: string | null;
+        };
+        Update: {
+          kind?: "unknown" | "spend" | "income" | "passive_income" | "refund" | "internal_transfer" | "card_payment" | "asset_sale" | "loan_proceeds";
+          source?: "unknown" | "provider" | "rule" | "user";
+          review_required?: boolean;
+          suggestion?: Json | null;
+          revision?: number;
+          confirmed_at?: string | null;
+          updated_at?: string;
+        };
+        Relationships: never[];
+      };
+      books_consumer_rules: {
+        Row: {
+          id: string;
+          user_id: string;
+          financial_account_id: string;
+          normalized_description: string;
+          signed_amount_cents: number;
+          kind: "spend" | "income" | "passive_income" | "refund";
+          category_id: number | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          financial_account_id: string;
+          normalized_description: string;
+          signed_amount_cents: number;
+          kind: "spend" | "income" | "passive_income" | "refund";
+          category_id?: number | null;
+        };
+        Update: {
+          kind?: "spend" | "income" | "passive_income" | "refund";
+          category_id?: number | null;
+          updated_at?: string;
+        };
+        Relationships: never[];
+      };
+      books_interpretation_jobs: {
+        Row: {
+          transaction_id: string;
+          user_id: string;
+          source_revision: number;
+          status: "pending" | "processing" | "done" | "failed";
+          attempts: number;
+          available_at: string;
+          lease_token: string | null;
+          leased_until: string | null;
+          last_error_code: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          transaction_id: string;
+          user_id: string;
+          source_revision: number;
+          status?: "pending" | "processing" | "done" | "failed";
+          attempts?: number;
+          available_at?: string;
+          lease_token?: string | null;
+          leased_until?: string | null;
+          last_error_code?: string | null;
+        };
+        Update: {
+          source_revision?: number;
+          status?: "pending" | "processing" | "done" | "failed";
+          attempts?: number;
+          available_at?: string;
+          lease_token?: string | null;
+          leased_until?: string | null;
+          last_error_code?: string | null;
+          updated_at?: string;
+        };
+        Relationships: never[];
+      };
+      books_plaid_items: {
+        Row: {
+          id: string;
+          user_id: string;
+          uda_id: string | null;
+          access_token: string;
+          item_id: string;
+          institution_name: string | null;
+          institution_id: string | null;
+          cursor: string | null;
+          status: string;
+          error_code: string | null;
+          last_synced_at: string | null;
+          sync_lease_token: string | null;
+          sync_leased_until: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          uda_id?: string | null;
+          access_token: string;
+          item_id: string;
+          institution_name?: string | null;
+          institution_id?: string | null;
+          cursor?: string | null;
+          status?: string;
+          error_code?: string | null;
+          last_synced_at?: string | null;
+          sync_lease_token?: string | null;
+          sync_leased_until?: string | null;
+        };
+        Update: {
+          institution_name?: string | null;
+          cursor?: string | null;
+          status?: string;
+          error_code?: string | null;
+          last_synced_at?: string | null;
+          sync_lease_token?: string | null;
+          sync_leased_until?: string | null;
           updated_at?: string;
         };
         Relationships: never[];
@@ -1075,6 +1229,24 @@ export interface Database {
           metadata?: Json;
         };
         Update: Record<string, never>;
+        Relationships: never[];
+      };
+      agent_rate_windows: {
+        Row: {
+          user_id: string;
+          capability: string;
+          window_start: string;
+          request_count: number;
+        };
+        Insert: {
+          user_id: string;
+          capability: string;
+          window_start: string;
+          request_count?: number;
+        };
+        Update: {
+          request_count?: number;
+        };
         Relationships: never[];
       };
     };

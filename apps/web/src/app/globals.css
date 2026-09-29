@@ -83,3 +83,56 @@
     transform: translateY(-1px);
   }
 }
+
+/* ── Stage 05: consumer semantic tokens (scoped; :root/.dark untouched) ─── */
+.cashpile-consumer {
+  --cp-canvas: #181c21;
+  --cp-surface: #252b34;
+  --cp-raised: #303744;
+  --cp-lime: #c7f65a;
+  --cp-on-lime: #11180a;
+  --cp-text: #f5f7fa;
+  --cp-muted: #b8c0cc;
+  --cp-teal: #153f48;
+  --cp-violet: #403958;
+  --cp-slate: #303c54;
+  --cp-border: #46515f;
+  --cp-attention: #f3c76a;
+  --cp-danger: #ff8c88;
+  background-color: var(--cp-canvas);
+  color: var(--cp-text);
+}
+
+.cashpile-consumer .glass-card {
+  background-color: var(--cp-surface);
+  border-color: transparent;
+  backdrop-filter: none;
+}
+
+/* ── Stage 07: sign-in/recovery scoped treatment (no auth behavior change) ── */
+.cashpile-auth {
+  --cp-canvas: #181c21;
+  --cp-surface: #252b34;
+  --cp-border: #46515f;
+  --cp-text: #f5f7fa;
+  background-color: var(--cp-canvas);
+  color: var(--cp-text);
+}
+.cashpile-auth .bg-background {
+  background-color: var(--cp-surface);
+  border-color: var(--cp-border);
+}
+
+/* ── Stage 07: consumer-scope control contrast on reachable supporting surfaces ── */
+.cashpile-consumer input:not([type="checkbox"]):not([type="radio"]),
+.cashpile-consumer select,
+.cashpile-consumer textarea {
+  background-color: var(--cp-raised, #303744);
+  color: var(--cp-text, #f5f7fa);
+  border-color: var(--cp-border, #46515f);
+}
+.cashpile-consumer .glass-card {
+  background-color: var(--cp-surface, #252b34);
+  border-color: var(--cp-border, #46515f);
+  color: var(--cp-text, #f5f7fa);
+}

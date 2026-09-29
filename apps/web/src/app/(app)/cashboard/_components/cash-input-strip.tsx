@@ -41,7 +41,7 @@ export function CashInputStrip() {
             value={value}
             onChange={(e) => setValue(e.target.value)}
             onFocus={() => { if (!value) open(); }}
-            placeholder="Ask Cash anything about your finances…"
+            placeholder="Ask Gremmy anything about your finances…"
             className="flex-1 bg-transparent py-3.5 text-sm placeholder:text-muted-foreground/70 focus:outline-none"
           />
           <div className="pr-3 flex items-center gap-2 shrink-0">
@@ -51,7 +51,7 @@ export function CashInputStrip() {
             <button
               type="submit"
               className="h-7 w-7 rounded-lg bg-primary flex items-center justify-center hover:bg-primary/90 transition-colors"
-              aria-label="Ask Cash"
+              aria-label="Ask Gremmy"
             >
               <ArrowRight className="h-3.5 w-3.5 text-primary-foreground" />
             </button>

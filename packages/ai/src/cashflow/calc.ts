@@ -7,8 +7,16 @@ export interface CalcAccount {
   role: CalcRole;
   included: boolean;
   spendableCents: number | null;
+  /**
+   * Current balance in cents for wealth/debt/cushion. Null means unknown and is
+   * never coerced to zero. Distinct from spendableCents (available ?? current),
+   * which drives forecasting. Undefined falls back to spendable for legacy callers.
+   */
+  currentBalanceCents?: number | null;
   balanceAsOf: string | null;
   isEmergency: boolean;
+  /** Included account currency; null means unknown (never assumed USD). */
+  currencyCode?: string | null;
 }
 
 export interface CalcRecurringItem {
@@ -636,13 +644,19 @@ export function computeNetWorth(accounts: CalcAccount[]): CalcNetWorth {
   let accountsMissingBalance = 0;
   for (const account of accounts) {
     if (!account.included) continue;
-    if (account.spendableCents == null) {
+    const balance = account.currentBalanceCents !== undefined ? account.currentBalanceCents : account.spendableCents;
+    if (balance == null) {
       accountsMissingBalance++;
       continue;
     }
     accountsIncluded++;
-    if (account.role === "credit_liability" || account.role === "loan") liabilityCents += Math.abs(account.spendableCents);
-    else if (account.role !== "ignore") assetCents += account.spendableCents;
+    if (account.role === "credit_liability" || account.role === "loan") {
+      // Positive current balance is debt; a negative credit balance is an asset credit.
+      if (balance > 0) liabilityCents += balance;
+      else assetCents += -balance;
+    } else if (account.role !== "ignore") {
+      assetCents += balance;
+    }
   }
   return { assetCents, liabilityCents, netCents: assetCents - liabilityCents, accountsIncluded, accountsMissingBalance };
 }

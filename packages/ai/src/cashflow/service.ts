@@ -1,6 +1,7 @@
 import { createServiceRoleClient } from "@cashpile/db";
 import type {
   AffordabilityResult,
+  CashboardSnapshot,
   CashflowAccount,
   CashflowDataQuality,
   CashflowForecast,
@@ -14,10 +15,18 @@ import type {
   RecurringItem,
 } from "./types";
 import {
+  buildCashboardMetrics,
+  localCalendarDate,
+  type CashboardAccountInput,
+  type CashboardReceipt,
+  type CashboardScheduledFlow,
+} from "./cashboard";
+import {
   clampHorizonDays,
   computeCashflow,
   computeCushion,
   detectCadence,
+  expandOccurrences,
   isBalanceStale,
   isValidISODate,
   looksLikeSubscription,
@@ -92,18 +101,30 @@ interface AccountRow {
   plaid_item_id: string | null;
   updated_at: string | null;
   is_emergency: boolean | null;
+  currency_code: string | null;
 }
 
 async function getAccountRows(userId: string): Promise<AccountRow[]> {
   const supabase = createServiceRoleClient() as any;
   const { data, error } = await supabase
     .from("books_financial_accounts")
-    .select("id, name, account_type, current_balance, available_balance, cashflow_role, cashflow_include, plaid_item_id, updated_at, is_emergency, is_active")
+    .select("id, name, account_type, current_balance, available_balance, cashflow_role, cashflow_include, plaid_item_id, updated_at, is_emergency, is_active, currency_code")
     .eq("user_id", userId)
     .eq("is_active", true)
     .order("name", { ascending: true });
   if (error) throw new Error(error.message);
   return (data ?? []) as AccountRow[];
+}
+
+async function getUserTimezone(userId: string): Promise<string | null> {
+  const supabase = createServiceRoleClient() as any;
+  const { data } = await supabase
+    .from("user_settings")
+    .select("timezone")
+    .eq("user_id", userId)
+    .maybeSingle();
+  const tz = data?.timezone;
+  return typeof tz === "string" && tz.length > 0 ? tz : null;
 }
 
 export function computeRecurringIdentity(direction: "income" | "expense", merchant: string, amountDollars: number): { stableKey: string; descriptionPattern: string; amountBucket: number } {
@@ -408,15 +429,75 @@ interface LoadedInput {
   balanceStale: boolean;
   missingInputs: string[];
   emergencyTargetMonths: number | null;
+  timezone: string | null;
+  cashboardAccounts: CashboardAccountInput[];
+  receipts: CashboardReceipt[];
+  review: { count: number; debitCents: number; creditCents: number };
+  essentialMonthlyCommitmentsCents: number | null;
+}
+
+interface PassiveReceiptRow {
+  transaction_id: string;
+  kind: string;
+  source: "unknown" | "provider" | "rule" | "user";
+}
+
+async function loadPassiveReceipts(userId: string): Promise<CashboardReceipt[]> {
+  const supabase = createServiceRoleClient() as any;
+  const { data: interps, error } = await supabase
+    .from("books_transaction_interpretations")
+    .select("transaction_id, kind, source")
+    .eq("user_id", userId)
+    .eq("kind", "passive_income");
+  if (error) throw new Error(error.message);
+  const rows = (interps ?? []) as PassiveReceiptRow[];
+  if (!rows.length) return [];
+
+  const byId = new Map(rows.map((r) => [r.transaction_id, r]));
+  const { data: txns, error: txError } = await supabase
+    .from("books_transactions")
+    .select("id, date, description, merchant, amount, financial_account_id, provider_data, metadata")
+    .in("id", [...byId.keys()]);
+  if (txError) throw new Error(txError.message);
+
+  return (txns ?? []).map((tx: any) => {
+    const interp = byId.get(tx.id)!;
+    return {
+      id: tx.id,
+      date: String(tx.date),
+      label: tx.merchant ?? tx.description ?? "Receipt",
+      amountCents: toCents(tx.amount),
+      accountId: tx.financial_account_id ?? "",
+      kind: "passive_income",
+      pending: tx.provider_data?.pending === true || tx.metadata?.pending === true,
+      confirmed: interp.source === "user" || interp.source === "rule",
+    } satisfies CashboardReceipt;
+  });
+}
+
+async function loadReviewSummary(userId: string): Promise<{ count: number; debitCents: number; creditCents: number }> {
+  const supabase = createServiceRoleClient() as any;
+  const { data, error } = await supabase.rpc("consumer_review_summary", {
+    p_user_id: userId,
+    p_account_id: null,
+  });
+  if (error) throw new Error(error.message);
+  return {
+    count: Number(data?.count ?? 0),
+    debitCents: Number(data?.debitCents ?? 0),
+    creditCents: Number(data?.creditCents ?? 0),
+  };
 }
 
 async function buildCalcInput(userId: string, horizonDays: number, scenarios: CalcScenario[]): Promise<LoadedInput> {
-  const today = isoDate();
+  const timezone = await getUserTimezone(userId);
+  const today = localCalendarDate(new Date().toISOString(), timezone ?? "America/New_York").today;
   const accountRows = await getAccountRows(userId);
   const syncTimes = await getPlaidSyncTimes(userId);
 
   const accounts: CashflowAccount[] = [];
   const calcAccounts: CalcAccount[] = [];
+  const cashboardAccounts: CashboardAccountInput[] = [];
   const roles = new Map<string, CashflowRole>();
   const includedIds: string[] = [];
 
@@ -432,7 +513,7 @@ async function buildCalcInput(userId: string, horizonDays: number, scenarios: Ca
       id: row.id,
       name: row.name,
       accountType: row.account_type ?? "other",
-      currentBalance: toDollars(toCents(row.current_balance ?? 0)),
+      currentBalance: row.current_balance == null ? 0 : toDollars(toCents(row.current_balance)),
       role,
       included: row.cashflow_include !== false,
       availableBalance: row.available_balance == null ? null : toDollars(toCents(row.available_balance)),
@@ -444,8 +525,24 @@ async function buildCalcInput(userId: string, horizonDays: number, scenarios: Ca
       role,
       included,
       spendableCents,
+      currentBalanceCents: row.current_balance == null ? null : toCents(row.current_balance),
       balanceAsOf,
       isEmergency: !!row.is_emergency && role === "reserve",
+      currencyCode: row.currency_code ?? null,
+    });
+    cashboardAccounts.push({
+      id: row.id,
+      name: row.name,
+      role,
+      accountType: row.account_type ?? "other",
+      included,
+      currencyCode: row.currency_code ?? null,
+      currentBalanceCents: row.current_balance == null ? null : toCents(row.current_balance),
+      spendableCents,
+      availableKnown: row.available_balance != null,
+      balanceAsOf,
+      isEmergency: !!row.is_emergency && role === "reserve",
+      pendingDebitCents: 0,
     });
   }
 
@@ -492,6 +589,15 @@ async function buildCalcInput(userId: string, horizonDays: number, scenarios: Ca
   const settings = await getCashflowSettings(userId, monthlyRecurringExpenseCents);
   const bufferCents = settings.bufferCents;
 
+  // Cushion denominator: monthly equivalent of included standard recurring cash
+  // outflows (null when there are none — never a confident zero).
+  let essentialMonthlyCommitmentsCents: number | null = null;
+  for (const item of calcRecurring) {
+    if (item.direction !== "expense" || !item.included || item.flowKind !== "standard" || !item.cashEffect) continue;
+    essentialMonthlyCommitmentsCents =
+      (essentialMonthlyCommitmentsCents ?? 0) + monthlyEquivalentCents(item.amountCents, item.cadence);
+  }
+
   let historyDays = 0;
   let historyComplete = false;
   if (txRows.length) {
@@ -501,6 +607,13 @@ async function buildCalcInput(userId: string, horizonDays: number, scenarios: Ca
   }
   const pendingRows = observed.filter((t) => t.pending);
   const pendingNetCents = pendingRows.reduce((s, t) => s + t.amountCents, 0);
+  const pendingDebitsByAccount = new Map<string, number>();
+  for (const t of pendingRows) {
+    if (t.amountCents < 0) pendingDebitsByAccount.set(t.accountId, (pendingDebitsByAccount.get(t.accountId) ?? 0) + -t.amountCents);
+  }
+  for (const a of cashboardAccounts) a.pendingDebitCents = pendingDebitsByAccount.get(a.id) ?? 0;
+
+  const [receipts, review] = await Promise.all([loadPassiveReceipts(userId), loadReviewSummary(userId)]);
 
   const spendingCalcAccounts = calcAccounts.filter((a) => a.included && a.role === "spending_source" && a.spendableCents != null);
   const balanceAsOfValues = spendingCalcAccounts.map((a) => a.balanceAsOf).filter((v): v is string => !!v);
@@ -553,6 +666,11 @@ async function buildCalcInput(userId: string, horizonDays: number, scenarios: Ca
     balanceStale,
     missingInputs,
     emergencyTargetMonths: settings.emergencyTargetMonths,
+    timezone,
+    cashboardAccounts,
+    receipts,
+    review,
+    essentialMonthlyCommitmentsCents,
   };
 }
 
@@ -606,10 +724,10 @@ export async function getCashflowForecast(userId: string, horizonDays = 30, extr
   };
 }
 
-export async function getCashflowSnapshot(userId: string, horizonDays = 30): Promise<CashflowSnapshot> {
-  const h = clampHorizonDays(horizonDays);
-  const loaded = await buildCalcInput(userId, h, []);
-  const result = computeCashflow(loaded.input);
+function assembleCashflowSnapshot(
+  loaded: LoadedInput,
+  result: ReturnType<typeof computeCashflow>
+): CashflowSnapshot {
   const bufferDollars = toDollars(loaded.minimumBufferCents);
   const forecast = mapForecast(loaded.input, result.sim);
 
@@ -685,6 +803,91 @@ export async function getCashflowSnapshot(userId: string, horizonDays = 30): Pro
       accountsIncluded: result.netWorth.accountsIncluded,
       accountsMissingBalance: result.netWorth.accountsMissingBalance,
     },
+  };
+}
+
+export async function getCashflowSnapshot(userId: string, horizonDays = 30): Promise<CashflowSnapshot> {
+  const loaded = await buildCalcInput(userId, clampHorizonDays(horizonDays), []);
+  return assembleCashflowSnapshot(loaded, computeCashflow(loaded.input));
+}
+
+function buildScheduledFlows(input: CalcInput, windowEnd: string): CashboardScheduledFlow[] {
+  const flows: CashboardScheduledFlow[] = [];
+  for (const item of input.recurring) {
+    if (!item.included) continue;
+    if (item.direction === "expense" && !item.cashEffect) continue;
+    if (item.direction === "income" && !item.landsOnSpendable) continue;
+    const kind: CashboardScheduledFlow["kind"] =
+      item.flowKind === "internal_transfer" ? "savings_transfer" : item.flowKind === "card_payment" ? "card_payment" : item.direction === "income" ? "income" : "bill";
+    for (const date of expandOccurrences(item, input.today, windowEnd)) {
+      flows.push({
+        id: `${item.id}-${date}`,
+        date,
+        label: item.merchant,
+        amountCents: item.amountCents,
+        direction: item.direction,
+        consumesSpendingCash: item.direction === "expense",
+        kind,
+        accountId: item.accountIds[0],
+      });
+    }
+  }
+  if (input.essentialWeeklyAllowanceCents && input.essentialWeeklyAllowanceCents > 0) {
+    for (let i = 0; i <= input.horizonDays; i++) {
+      const date = addDays(input.today, i);
+      if (date > windowEnd) break;
+      if (parseDate(date).getUTCDay() === 1) {
+        flows.push({
+          id: `allowance-${date}`,
+          date,
+          label: "Everyday spending",
+          amountCents: input.essentialWeeklyAllowanceCents,
+          direction: "expense",
+          consumesSpendingCash: true,
+          kind: "allowance",
+        });
+      }
+    }
+  }
+  return flows;
+}
+
+export async function getCashboardSnapshot(userId: string): Promise<CashboardSnapshot> {
+  const loaded = await buildCalcInput(userId, clampHorizonDays(30), []);
+  const result = computeCashflow(loaded.input);
+  const cashflow = assembleCashflowSnapshot(loaded, result);
+  const windowEnd = result.paydayWindow.end;
+  const asOf = new Date().toISOString();
+  const timezone = loaded.timezone ?? "America/New_York";
+
+  const { metrics, warnings } = buildCashboardMetrics({
+    asOf,
+    timezone,
+    today: loaded.input.today,
+    monthStart: `${loaded.input.today.slice(0, 7)}-01`,
+    accounts: loaded.cashboardAccounts,
+    scheduledFlows: buildScheduledFlows(loaded.input, windowEnd),
+    windowEnd,
+    payday: { nextPayday: result.paydayWindow.nextPayday, provisional: result.paydayWindow.provisional },
+    bufferCents: loaded.minimumBufferCents,
+    essentialWeeklyAllowanceCents: loaded.input.essentialWeeklyAllowanceCents,
+    essentialMonthlyCommitmentsCents: loaded.essentialMonthlyCommitmentsCents,
+    receipts: loaded.receipts,
+    unresolvedPositiveCents: loaded.review.creditCents,
+    review: loaded.review,
+    thirtyDayShortfallCents: Math.max(0, result.risk.shortfallCents),
+    staleBeforeMs: Date.now() - 48 * 3_600_000,
+  });
+
+  return {
+    version: 1,
+    asOf,
+    timezone,
+    currency: "USD",
+    metrics,
+    cashflow,
+    review: loaded.review,
+    warnings,
   };
 }
 

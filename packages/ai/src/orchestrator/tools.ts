@@ -1,7 +1,41 @@
 import { tool } from "ai";
 import { z } from "zod";
 import { createServiceRoleClient } from "@cashpile/db";
-import { checkAffordability, getCashflowSnapshot } from "../cashflow";
+import { checkAffordability, getCashflowSnapshot, getCashboardSnapshot } from "../cashflow";
+import type { CashboardMetricId, CashboardSnapshot } from "../cashflow/types";
+
+const CASHBOARD_METRIC_IDS: readonly CashboardMetricId[] = [
+  "available",
+  "passive-income",
+  "debt",
+  "cushion",
+  "net-worth",
+];
+
+// Aggregate-only shaping for the in-app assistant: no rows, cashflow snapshot,
+// transactions, account ids or descriptions.
+function toConsumerSummary(snapshot: CashboardSnapshot) {
+  const metrics = {} as Record<CashboardMetricId, unknown>;
+  for (const id of CASHBOARD_METRIC_IDS) {
+    const m = snapshot.metrics[id];
+    metrics[id] = {
+      id: m.id,
+      value: m.value,
+      unit: m.unit,
+      quality: m.quality,
+      period: m.period,
+      asOf: m.asOf,
+      reasons: m.reasons,
+    };
+  }
+  return {
+    version: 1 as const,
+    currency: "USD" as const,
+    asOf: snapshot.asOf,
+    metrics,
+    unresolvedCount: snapshot.review.count,
+  };
+}
 
 // ─── Period helpers ───────────────────────────────────────────────────────────
 
@@ -510,11 +544,18 @@ export function createTools(userId: string) {
     // ── Cash Flow Copilot ─────────────────────────────────────────────────
     get_cashflow_snapshot: tool({
       description:
-        "Fetch the user's cash-flow snapshot: spendable balance, inferred recurring income/bills, projected low balance, minimum buffer, and safe-to-spend amount.",
+        "Fetch the user's cash-flow snapshot: spendable balance, inferred recurring income/bills, projected low balance, minimum buffer, and safe-to-spend amount. This is a 30-day clamped view, not payday availability — use get_cashboard_summary for the consumer payday metrics.",
       parameters: z.object({
         horizonDays: z.number().int().min(7).max(90).default(30),
       }),
       execute: async ({ horizonDays }) => getCashflowSnapshot(userId, horizonDays),
+    }),
+
+    get_cashboard_summary: tool({
+      description:
+        "Fetch the five read-only consumer metrics (availability, identified passive income, debt, cushion, net worth) with quality, period and reasons, plus an unresolved-transaction count. Aggregates only: no transactions, account details or evidence rows.",
+      parameters: z.object({}),
+      execute: async () => toConsumerSummary(await getCashboardSnapshot(userId)),
     }),
 
     check_affordability: tool({

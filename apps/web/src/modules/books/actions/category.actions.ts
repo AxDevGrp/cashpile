@@ -2,6 +2,7 @@
 
 import { createServerSupabaseClient } from "@cashpile/db";
 import { revalidatePath } from "next/cache";
+import { revalidateConsumerPaths } from "@/lib/revalidate-consumer";
 import type { BooksCategory } from "../types";
 
 export async function listCategories(_entityId?: string) {
@@ -45,6 +46,7 @@ export async function createCategory(
 
   if (error) throw new Error(error.message);
   revalidatePath("/books");
+  revalidateConsumerPaths();
   revalidatePath("/books/transactions");
   revalidatePath("/books/category-rules");
   return data as BooksCategory;
@@ -74,6 +76,7 @@ export async function updateCategory(id: string, input: Partial<BooksCategory>) 
 
   if (error) throw new Error(error.message);
   revalidatePath("/books");
+  revalidateConsumerPaths();
   revalidatePath("/books/transactions");
   revalidatePath("/books/category-rules");
   return data as BooksCategory;
@@ -92,6 +95,7 @@ export async function deleteCategory(id: string) {
 
   if (error) throw new Error(error.message);
   revalidatePath("/books");
+  revalidateConsumerPaths();
 }
 
 const DEFAULT_BOOK_CATEGORIES = [

@@ -180,6 +180,55 @@ export interface CashflowSnapshot {
   netWorth?: NetWorth;
 }
 
+// ── Stage 03: typed Cashboard consumer response (contracts.md §5) ────────────
+
+export type CashboardMetricId = "available" | "passive-income" | "debt" | "cushion" | "net-worth";
+export type MetricQuality = "estimated" | "available" | "unavailable";
+
+export interface CashboardMetricRow {
+  id: string;
+  label: string;
+  /** Integer cents for money; unrounded months for cushion; null when unknown. */
+  value: number | null;
+  href?: string;
+}
+
+export interface CashboardMetric {
+  id: CashboardMetricId;
+  value: number | null;
+  unit: "USD_cents" | "months";
+  quality: MetricQuality;
+  /** YYYY-MM-DD; balance metrics use null. */
+  period: { from: string; through: string } | null;
+  asOf: string | null;
+  reasons: string[];
+  rows: CashboardMetricRow[];
+}
+
+export interface CashboardReviewSummary {
+  count: number;
+  debitCents: number;
+  creditCents: number;
+}
+
+export interface CashboardWarning {
+  code: string;
+  message: string;
+  accountId?: string;
+}
+
+export interface CashboardSnapshot {
+  version: 1;
+  /** Snapshot generation time, NOT provider freshness. */
+  asOf: string;
+  timezone: string;
+  currency: "USD";
+  metrics: Record<CashboardMetricId, CashboardMetric>;
+  cashflow: CashflowSnapshot;
+  review: CashboardReviewSummary;
+  warnings: CashboardWarning[];
+}
+
 export interface AffordabilityScenario {
   type: "purchase" | "savings_transfer";
   amount: number;

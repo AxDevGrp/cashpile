@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { CheckCircle2, XCircle, ExternalLink } from "lucide-react";
 import { saveCashflowPreferences, updateProfile } from "../actions";
+import AgentConnectionsPanel from "./agent-connections-panel";
 
 interface Props {
   profile: {
@@ -243,10 +244,11 @@ export default function SettingsClient({ profile, integrations, cashflow }: Prop
         )}
       </section>
 
+      <AgentConnectionsPanel />
+
       {/* Integrations */}
       <section className="rounded-xl border bg-card p-6 space-y-4">
-        <h2 className="font-semibold text-base">Integrations</h2>
-        <div className="space-y-3">
+        <h2 className="font-semibold text-base">Integrations</h2>        <div className="space-y-3">
           {[
             {
               name: "DeepSeek",

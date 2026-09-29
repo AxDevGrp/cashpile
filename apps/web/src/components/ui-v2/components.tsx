@@ -27,20 +27,26 @@ export function AppShellV2({
   navigation,
   pathname,
   mode = "preview",
+  theme = "default",
   mainProps,
+  menuExtra,
 }: {
   children: React.ReactNode;
   navigation: UiV2NavigationItem[];
   pathname: string;
   mode?: "app" | "preview";
+  theme?: "default" | "consumer";
   mainProps?: React.ComponentPropsWithoutRef<"main"> & Record<`data-${string}`, string>;
+  menuExtra?: React.ReactNode;
 }) {
+  const shellClass = mode === "app" ? styles.appShell : styles.shell;
   return (
-    <div className={mode === "app" ? styles.appShell : styles.shell}>
+    <div className={`${shellClass}${theme === "consumer" ? ` ${styles.consumerShell}` : ""}`}>
       <a className={styles.skipLink} href={`#${mainProps?.id ?? "main-content"}`}>
         Skip to main content
       </a>
       <IconRail navigation={navigation} pathname={pathname} />
+      {theme === "consumer" ? <ConsumerMenu signOut={menuExtra} /> : null}
       <main
         {...mainProps}
         id={mainProps?.id ?? "main-content"}
@@ -55,6 +61,24 @@ export function AppShellV2({
       </main>
       <MobileNavigation navigation={navigation} pathname={pathname} />
     </div>
+  );
+}
+
+/** Consumer profile/menu trigger: Settings, Ask Gremmy and Advanced destinations. */
+export function ConsumerMenu({ signOut }: { signOut?: React.ReactNode }) {
+  return (
+    <details className={styles.consumerMenu}>
+      <summary className={styles.consumerMenuSummary}>Menu</summary>
+      <nav className={styles.consumerMenuPanel} aria-label="Profile">
+        <Link href="/settings">Settings</Link>
+        <Link href="/ai">Ask Gremmy</Link>
+        <span className={styles.consumerMenuHeading}>Advanced</span>
+        <Link href="/books">Books</Link>
+        <Link href="/trades">Trades</Link>
+        <Link href="/pulse">Pulse</Link>
+        {signOut}
+      </nav>
+    </details>
   );
 }
 

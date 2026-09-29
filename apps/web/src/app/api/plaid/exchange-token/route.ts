@@ -2,7 +2,20 @@ import { hasTaxTestingAccess } from "@/lib/tax-access";
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient, createServiceRoleClient } from "@cashpile/db";
 import { assertPlaidConfigured, plaidClient } from "@/lib/plaid";
+import { normalizePlaidBalance } from "@/lib/plaid-ingestion";
 import { syncPlaidItem } from "@/lib/plaid-sync";
+
+// Provider balances are written exactly as returned: unknown stays null (never
+// coerced to zero) and the timestamp reflects the successful retrieval.
+function balanceFields(account: { balances?: any }) {
+  const normalized = normalizePlaidBalance(account.balances);
+  return {
+    current_balance: normalized.current_balance,
+    available_balance: normalized.available_balance,
+    currency_code: normalized.currency_code,
+    balance_as_of: new Date().toISOString(),
+  };
+}
 
 // Map Plaid account types to Cashpile account types
 function mapAccountType(type: string, subtype: string | null | undefined): string {
@@ -76,7 +89,7 @@ async function upsertPlaidAccount(serviceClient: any, account: Record<string, an
 
   const { error } = await serviceClient
     .from("books_financial_accounts")
-    .insert(account);
+    .insert({ ...account, cashflow_include: false });
   if (error) throw new Error(error.message);
 }
 
@@ -183,8 +196,7 @@ export async function POST(req: NextRequest) {
           account_type:     mapAccountType(acct.type, acct.subtype),
           institution_name: institutionName,
           last_four_digits: acct.mask,
-          current_balance:  acct.balances.current ?? 0,
-          available_balance: acct.balances.available ?? null,
+          ...balanceFields(acct),
           is_active:        true,
           updated_at:       new Date().toISOString(),
         })
@@ -208,8 +220,7 @@ export async function POST(req: NextRequest) {
         account_type:     mapAccountType(acct.type, acct.subtype),
         institution_name: institutionName,
         last_four_digits: acct.mask,
-        current_balance:  acct.balances.current ?? 0,
-        available_balance: acct.balances.available ?? null,
+        ...balanceFields(acct),
         is_active:        true,
         updated_at:       new Date().toISOString(),
       });

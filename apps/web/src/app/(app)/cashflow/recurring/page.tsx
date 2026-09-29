@@ -1,28 +1,27 @@
 import Link from "next/link";
-import { createServerSupabaseClient } from "@cashpile/db";
 import { detectRecurringItems } from "@cashpile/ai";
 import { PageHeader } from "@cashpile/ui";
+import { getConsumerExperience } from "@/lib/consumer-experience";
 import RecurringReviewClient from "./_components/recurring-review-client";
 import SubscriptionReviewClient from "./_components/subscription-review-client";
 
 export default async function RecurringCashflowPage() {
-  const supabase = await createServerSupabaseClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
-  const items = await detectRecurringItems(user.id).catch(() => []);
+  const { userId, enabled } = await getConsumerExperience();
+  if (!userId) return null;
+  const items = await detectRecurringItems(userId).catch(() => []);
 
   const confirmedCount = items.filter((i) => i.confirmed || i.source === "manual").length;
   const needsReview = items.length - confirmedCount;
   const subscriptions = items.filter((i) => i.isSubscription && i.included !== false);
 
   return (
-    <div className="px-6 py-8 max-w-5xl mx-auto space-y-6">
+    <div className={enabled ? "px-4 sm:px-6 py-8 max-w-5xl mx-auto space-y-6" : "px-6 py-8 max-w-5xl mx-auto space-y-6"}>
       <div className="flex items-center justify-between gap-4">
         <PageHeader
           title="Recurring review"
           description={`Income and bills used by your forecast. ${confirmedCount} confirmed · ${needsReview} need review.`}
         />
-        <Link href="/cashflow" className="text-sm text-primary">← Back</Link>
+        <Link href="/cashflow" className="text-sm underline">← Back</Link>
       </div>
       <RecurringReviewClient items={items} />
 

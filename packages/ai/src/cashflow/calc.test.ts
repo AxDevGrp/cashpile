@@ -589,8 +589,8 @@ describe("WP3 — net worth", () => {
       account(CHECKING, "spending_source", 120000),
       account(SAVINGS, "reserve", 360000, true),
       account("broker", "investment", 500000),
-      account(CARD, "credit_liability", -30000),
-      account("car", "loan", -200000),
+      account(CARD, "credit_liability", 30000),
+      account("car", "loan", 200000),
     ]);
     assert.equal(net.assetCents, 980000);
     assert.equal(net.liabilityCents, 230000);

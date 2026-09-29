@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { getOpenAIClient, DEFAULT_MODEL } from "../client";
+import { getOpenAIClient, DEFAULT_MODEL } from "../client.ts";
 
 export interface TransactionForCategorization {
   id: string;
@@ -111,9 +111,26 @@ function ruleBasedCategorize(tx: TransactionForCategorization, categories: Categ
 
 const BATCH_SIZE = 20; // Process up to 20 transactions per API call
 
+export type BatchCategorizer = (
+  transactions: TransactionForCategorization[],
+  categories: Category[]
+) => Promise<CategorizationResult[]>;
+
 export async function categorizeTransactions(
   transactions: TransactionForCategorization[],
   categories: Category[]
+): Promise<CategorizationResult[]> {
+  return categorizeTransactionsWith(transactions, categories, categorizeWithAI);
+}
+
+/**
+ * Testable core. A failure in one batch must not append fallback rows for IDs
+ * another batch already resolved; fallback is scoped to the failing batch only.
+ */
+export async function categorizeTransactionsWith(
+  transactions: TransactionForCategorization[],
+  categories: Category[],
+  categorizeBatch: BatchCategorizer
 ): Promise<CategorizationResult[]> {
   const results: CategorizationResult[] = [];
   const needsAI: TransactionForCategorization[] = [];
@@ -129,18 +146,14 @@ export async function categorizeTransactions(
   }
 
   // Second pass: AI for unmatched transactions (in batches)
-  if (needsAI.length > 0) {
+  const otherCategory = categories.find((c) => c.name.toLowerCase() === "other");
+  for (let i = 0; i < needsAI.length; i += BATCH_SIZE) {
+    const batch = needsAI.slice(i, i + BATCH_SIZE);
     try {
-      // Process in batches
-      for (let i = 0; i < needsAI.length; i += BATCH_SIZE) {
-        const batch = needsAI.slice(i, i + BATCH_SIZE);
-        const aiResults = await categorizeWithAI(batch, categories);
-        results.push(...aiResults);
-      }
+      const aiResults = await categorizeBatch(batch, categories);
+      results.push(...aiResults);
     } catch {
-      // Fallback to "Other" if AI fails
-      const otherCategory = categories.find((c) => c.name.toLowerCase() === "other");
-      for (const tx of needsAI) {
+      for (const tx of batch) {
         results.push({
           transactionId: tx.id,
           categoryName: otherCategory?.name ?? "Other",

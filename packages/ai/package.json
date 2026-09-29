@@ -13,7 +13,7 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "node --test src/cashflow/*.test.ts",
+    "test": "node --test src/cashflow/*.test.ts src/books/*.test.ts",
     "test:cashflow": "node --test src/cashflow/*.test.ts"
   },
   "dependencies": {

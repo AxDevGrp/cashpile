@@ -61,6 +61,8 @@ export interface BooksAccount {
   plaid_item_id?: string | null;
   account_type: "checking" | "savings" | "credit_card" | "loan" | "investment" | "other";
   currency: string;
+  currency_code?: string | null;
+  balance_as_of?: string | null;
   current_balance?: number;
   is_active: boolean;
   created_at: string;

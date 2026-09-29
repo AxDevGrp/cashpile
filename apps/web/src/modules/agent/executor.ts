@@ -1,10 +1,17 @@
 import { getTaxTestingAccessForUser } from "@/lib/tax-access";
 import { createServiceRoleClient } from "@cashpile/db";
-import { checkAffordability, getCashflowSnapshot, detectRecurringItems } from "@cashpile/ai";
+import { checkAffordability, getCashflowSnapshot, getCashboardSnapshot, detectRecurringItems } from "@cashpile/ai";
 import { AGENT_CAPABILITIES, getAgentCapability } from "./capabilities";
 import { auditAgentCall } from "./audit";
 import { createConfirmationToken, verifyConfirmationToken } from "./confirmation";
 import { hasScopes } from "./auth";
+import {
+  explainMetric,
+  isConsumerAgentCapability,
+  toConsumerSummary,
+  validateMetricExplainInput,
+  validateSummaryInput,
+} from "./consumer-agent";
 import type { AgentCallResult, AgentPrincipal } from "./types";
 
 function limitNumber(value: unknown, fallback: number, max: number) {
@@ -169,6 +176,8 @@ async function runCapability(userId: string, name: string, input: Record<string,
     case "cashflow.snapshot.get": return getCashflowSnapshot(userId, limitNumber(input.horizonDays, 30, 90));
     case "cashflow.affordability.check": return checkAffordability(userId, { amount: Number(input.amount), description: input.description, date: input.date, horizonDays: limitNumber(input.horizonDays, 30, 90) });
     case "cashflow.recurring_items.list": return { recurringItems: await detectRecurringItems(userId) };
+    case "cashboard.summary.get": return toConsumerSummary(await getCashboardSnapshot(userId));
+    case "cashboard.metric.explain": return explainMetric(await getCashboardSnapshot(userId), input.metricId);
     case "books.transactions.list": return listBooksTransactions(userId, input);
     case "books.accounts.list": return listBooksAccounts(userId, input);
     case "books.categories.list": return listBooksCategories(userId);
@@ -176,6 +185,41 @@ async function runCapability(userId: string, name: string, input: Record<string,
     case "tax.report.generate": return generateTaxReport(userId, input);
     default: throw new Error(`Unknown capability: ${name}`);
   }
+}
+
+// ── Stage 08: consumer capability guards ──────────────────────────────────────
+
+const RATE_LIMIT_PER_MINUTE = 60;
+
+/** Returns retry-after seconds when the owner/capability minute budget is spent. */
+async function consumeAgentRate(userId: string, capability: string): Promise<number | null> {
+  const service = createServiceRoleClient() as any;
+  const { data, error } = await service.rpc("consume_agent_rate", {
+    p_user_id: userId,
+    p_capability: capability,
+    p_limit: RATE_LIMIT_PER_MINUTE,
+  });
+  if (error) throw new Error(error.message ?? "rate limit unavailable");
+  return (data as number | null) ?? null;
+}
+
+/** Metadata-only timestamp bump for an external agent connection. */
+async function touchConnectionLastUsed(agentId: string) {
+  try {
+    const service = createServiceRoleClient() as any;
+    await service
+      .from("agent_connections")
+      .update({ last_used_at: new Date().toISOString() })
+      .eq("id", agentId);
+  } catch {
+    // Never fail a successful call for a timestamp update.
+  }
+}
+
+function validateConsumerInput(name: string, input: Record<string, any>): Record<string, any> | null {
+  if (name === "cashboard.summary.get") return validateSummaryInput(input);
+  if (name === "cashboard.metric.explain") return validateMetricExplainInput(input);
+  return null;
 }
 
 export async function callAgentCapability(params: {
@@ -189,8 +233,38 @@ export async function callAgentCapability(params: {
   const input = params.input ?? {};
 
   if (!capability) return { ok: false, capability: params.name, error: "Unknown capability" };
+  const consumerCapability = isConsumerAgentCapability(capability.name);
   if (!hasScopes(params.principal, capability.requiredScopes)) {
-    return { ok: false, capability: capability.name, error: `Missing required scopes: ${capability.requiredScopes.join(", ")}` };
+    return {
+      ok: false,
+      capability: capability.name,
+      error: `Missing required scopes: ${capability.requiredScopes.join(", ")}`,
+      ...(consumerCapability ? { errorCode: "missing_scope" as const } : {}),
+    };
+  }
+
+  let effectiveInput = input;
+  if (consumerCapability) {
+    const validated = validateConsumerInput(capability.name, input);
+    if (!validated) {
+      return { ok: false, capability: capability.name, error: "Invalid input", errorCode: "invalid_input" };
+    }
+    effectiveInput = validated;
+    try {
+      const retryAfter = await consumeAgentRate(params.principal.userId, capability.name);
+      if (retryAfter != null) {
+        return {
+          ok: false,
+          capability: capability.name,
+          error: "Rate limit exceeded",
+          errorCode: "rate_limited",
+          retryAfterSeconds: retryAfter,
+        };
+      }
+    } catch {
+      // A rate-window outage must not become a success-shaped result.
+      return { ok: false, capability: capability.name, error: "Service unavailable", errorCode: "snapshot_unavailable" };
+    }
   }
 
   try {
@@ -211,12 +285,16 @@ export async function callAgentCapability(params: {
       }
     }
 
-    const result = await runCapability(params.principal.userId, capability.name, input);
-    await auditAgentCall({ principal: params.principal, capability: capability.name, kind: capability.kind, status: "success", input, result, requestId: params.requestId });
+    const result = await runCapability(params.principal.userId, capability.name, effectiveInput);
+    await auditAgentCall({ principal: params.principal, capability: capability.name, kind: capability.kind, status: "success", input: effectiveInput, result, requestId: params.requestId });
+    if (params.principal.agentId) await touchConnectionLastUsed(params.principal.agentId);
     return { ok: true, capability: capability.name, result };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Capability execution failed";
-    await auditAgentCall({ principal: params.principal, capability: capability.name, kind: capability.kind, status: "error", input, error: message, requestId: params.requestId });
+    await auditAgentCall({ principal: params.principal, capability: capability.name, kind: capability.kind, status: "error", input: effectiveInput, error: message, requestId: params.requestId });
+    if (consumerCapability) {
+      return { ok: false, capability: capability.name, error: "snapshot_unavailable", errorCode: "snapshot_unavailable" };
+    }
     return { ok: false, capability: capability.name, error: message };
   }
 }

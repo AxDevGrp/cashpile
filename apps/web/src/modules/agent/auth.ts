@@ -12,6 +12,7 @@ const ALL_SCOPES: AgentScope[] = [
   "tax:read",
   "tax:write",
   "billing:read",
+  "cashboard:read",
 ];
 
 function parseScopes(value: unknown): AgentScope[] {

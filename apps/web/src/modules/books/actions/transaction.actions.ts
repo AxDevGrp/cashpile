@@ -4,6 +4,7 @@ import { hasTaxTestingAccess, assertTaxTestingAccess } from "@/lib/tax-access";
 
 import { createServerSupabaseClient } from "@cashpile/db";
 import { revalidatePath } from "next/cache";
+import { revalidateConsumerPaths } from "@/lib/revalidate-consumer";
 import type { BooksTransaction } from "../types";
 import { buildTransactionFingerprint, isUniqueViolation } from "../services/duplicate-detection";
 import { autoAssignTaxEntities } from "../services/tax-rule-engine";
@@ -100,7 +101,8 @@ export async function listTransactions(params: {
     .from("books_transactions")
     .select("*", { count: "exact" })
     .eq("user_id", user.id)
-    .order("date", { ascending: false });
+    .order("date", { ascending: false })
+    .order("id", { ascending: true });
 
   if (accountIds) q = (q as any).in("financial_account_id", accountIds);
   if (params.accountId) q = (q as any).eq("financial_account_id", params.accountId);
@@ -225,6 +227,7 @@ export async function createTransaction(
     throw new Error(error.message);
   }
   revalidatePath("/books/transactions");
+  revalidateConsumerPaths();
   return data;
 }
 
@@ -280,6 +283,7 @@ export async function updateTransaction(id: string, input: Partial<BooksTransact
     }
   }
   revalidatePath("/books/transactions");
+  revalidateConsumerPaths();
   revalidatePath("/books/tax");
   return data;
 }
@@ -297,6 +301,7 @@ export async function deleteTransaction(id: string) {
 
   if (error) throw new Error(error.message);
   revalidatePath("/books/transactions");
+  revalidateConsumerPaths();
 }
 
 export async function bulkUpdateTransactions(
@@ -349,6 +354,7 @@ export async function bulkUpdateTransactions(
     await autoAssignTaxEntitiesForTransactions(supabase as any, user.id, ids, (input as any).category_id);
   }
   revalidatePath("/books/transactions");
+  revalidateConsumerPaths();
   revalidatePath("/books/tax");
 }
 
@@ -367,5 +373,6 @@ export async function bulkCategorizeUncategorizedTransactions(options?: {
 
   revalidatePath("/books");
   revalidatePath("/books/transactions");
+  revalidateConsumerPaths();
   return result;
 }

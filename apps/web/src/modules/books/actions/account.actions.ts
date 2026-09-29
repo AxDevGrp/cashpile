@@ -4,6 +4,7 @@ import { assertTaxTestingAccess } from "@/lib/tax-access";
 import { createServerSupabaseClient } from "@cashpile/db";
 import { requireTaxModuleAccess, getTaxModuleAccess } from "@/lib/tax-access";
 import { revalidatePath } from "next/cache";
+import { revalidateConsumerPaths } from "@/lib/revalidate-consumer";
 import type { BooksUda, BooksAccount, TaxEntity } from "../types";
 
 // ─── Tax Entity Account Management ─────────────────────────────────────────
@@ -112,6 +113,7 @@ export async function assignAccountToTaxEntity(
   }
 
   revalidatePath("/books/accounts");
+  revalidateConsumerPaths();
   revalidatePath("/books/tax");
   return {
     ...(data as BooksAccount),
@@ -191,6 +193,10 @@ export async function createAccount(
     last_four_digits: input.last_four_digits ?? null,
     account_identifier: (input as any).account_identifier ?? null,
     current_balance: input.current_balance ?? 0,
+    // Null currency stays unknown; a manual account may explicitly confirm USD.
+    currency_code: input.currency_code ?? null,
+    // A balance provided at creation is an explicit save; otherwise unknown.
+    balance_as_of: input.current_balance != null ? new Date().toISOString() : null,
     user_id: user.id,
     is_active: true,
   };
@@ -203,10 +209,19 @@ export async function createAccount(
 
   if (error) throw new Error(error.message);
   revalidatePath("/books/accounts");
+  revalidateConsumerPaths();
   return data as BooksAccount;
 }
 
-export async function updateAccount(id: string, input: Partial<BooksAccount>) {
+export async function updateAccount(
+  id: string,
+  input: Partial<BooksAccount> & {
+    cashflow_include?: boolean | null;
+    cashflow_role?: string | null;
+    is_emergency?: boolean;
+    currency_code?: string | null;
+  }
+) {
   const { canUseTax } = await getTaxModuleAccess();
   if (!canUseTax && input.tax_entity_id) throw new Error("Tax module is not available");
   const supabase = await createServerSupabaseClient();
@@ -214,9 +229,41 @@ export async function updateAccount(id: string, input: Partial<BooksAccount>) {
   if (!user) throw new Error("Unauthenticated");
   if (Object.prototype.hasOwnProperty.call(input, "tax_entity_id")) assertTaxTestingAccess(user);
 
+  // Strict field validation (step 4): no client-supplied shape is trusted.
+  if ("cashflow_include" in input && input.cashflow_include !== null && typeof input.cashflow_include !== "boolean") {
+    throw new Error("Invalid inclusion");
+  }
+  const ACCOUNT_ROLES = ["spending_source", "reserve", "credit_liability", "investment", "loan", "ignore"];
+  if ("cashflow_role" in input && input.cashflow_role !== null && !ACCOUNT_ROLES.includes(input.cashflow_role as string)) {
+    throw new Error("Invalid role");
+  }
+  if ("currency_code" in input && input.currency_code !== null && !/^[A-Z]{3}$/.test(String(input.currency_code))) {
+    throw new Error("Invalid currency");
+  }
+
+  // Emergency designation requires an explicitly persisted reserve role; a
+  // guessed default must never make a spending account an emergency reserve.
+  if ((input as { is_emergency?: boolean }).is_emergency === true) {
+    const { data: existing } = await (supabase as any)
+      .from("books_financial_accounts")
+      .select("cashflow_role")
+      .eq("id", id)
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (existing?.cashflow_role !== "reserve") {
+      throw new Error("Emergency reserve requires a reserve account");
+    }
+  }
+
+  const patch: Record<string, unknown> = { ...input, updated_at: new Date().toISOString() };
+  // balance_as_of only moves on an actual explicit balance save.
+  if (Object.prototype.hasOwnProperty.call(input, "current_balance")) {
+    patch.balance_as_of = new Date().toISOString();
+  }
+
   const { data, error } = await (supabase as any)
     .from("books_financial_accounts")
-    .update({ ...input, updated_at: new Date().toISOString() })
+    .update(patch)
     .eq("id", id)
     .eq("user_id", user.id)
     .select()
@@ -224,6 +271,7 @@ export async function updateAccount(id: string, input: Partial<BooksAccount>) {
 
   if (error) throw new Error(error.message);
   revalidatePath("/books/accounts");
+  revalidateConsumerPaths();
   return data as BooksAccount;
 }
 
@@ -240,6 +288,7 @@ export async function deleteAccount(id: string) {
 
   if (error) throw new Error(error.message);
   revalidatePath("/books/accounts");
+  revalidateConsumerPaths();
 }
 
 // ─── Backward Compatibility: UDA Functions ─────────────────────────────────
@@ -276,6 +325,7 @@ export async function createUda(input: { entityId: string; name: string; descrip
 
   if (error) throw new Error(error.message);
   revalidatePath("/books/accounts");
+  revalidateConsumerPaths();
   return data;
 }
 
@@ -287,6 +337,7 @@ export async function deleteUda(id: string) {
   const { error } = await supabase.from("books_udas").delete().eq("id", id).eq("user_id", user.id);
   if (error) throw new Error(error.message);
   revalidatePath("/books/accounts");
+  revalidateConsumerPaths();
 }
 
 export async function backfillAssignedAccountTaxViews(): Promise<{ accounts: number; transactions: number }> {
@@ -421,6 +472,7 @@ export async function mergeFinancialAccounts(params: {
   if (deleteError) throw new Error(deleteError.message);
 
   revalidatePath("/books/accounts");
+  revalidateConsumerPaths();
   revalidatePath("/books/transactions");
   revalidatePath("/books/tax");
 

@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
   for (const item of items ?? []) {
     try {
       const result = await syncPlaidItem(item.item_id, serviceClient);
-      results.push({ item_id: item.item_id, ...result });
+      results.push(result);
     } catch (err: any) {
       results.push({ item_id: item.item_id, error: err.message });
     }

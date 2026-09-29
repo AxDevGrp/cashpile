@@ -39,7 +39,7 @@ export function AppShell({
             onPin={handlePin}
             mobileOpen={mobileOpen}
             onMobileClose={() => setMobileOpen(false)}
-            taxEnabled={taxEnabled}
+            showTaxModule={taxEnabled}
           />
           <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
             <div className="lg:hidden flex items-center h-14 border-b bg-white/85 backdrop-blur-sm px-4 shrink-0">

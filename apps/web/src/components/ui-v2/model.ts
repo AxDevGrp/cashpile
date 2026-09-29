@@ -33,7 +33,11 @@ export function matchesNavigationPath(href: string, pathname: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-export function getAppNavigation(showTaxModule: boolean): UiV2AppNavigationItem[] {
+export function getAppNavigation(
+  showTaxModule: boolean,
+  consumerEnabled = false,
+): UiV2AppNavigationItem[] {
+  if (consumerEnabled) return getConsumerAppNavigation();
   return [
     { href: "/cashboard", label: "Home", mobile: true },
     { href: "/ai", label: "Ask Cash", mobile: true },
@@ -45,6 +49,29 @@ export function getAppNavigation(showTaxModule: boolean): UiV2AppNavigationItem[
     { href: "/settings", label: "Settings", mobile: true },
     { href: "/pulse/alerts", label: "Notifications", mobile: false },
   ];
+}
+
+/** Consumer shell navigation: exactly three primary/mobile entries. */
+export function getConsumerAppNavigation(): UiV2AppNavigationItem[] {
+  return [
+    { href: "/cashboard", label: "Cashboard", mobile: true },
+    { href: "/books/transactions", label: "Activity", mobile: true },
+    { href: "/books/accounts", label: "Accounts", mobile: true },
+  ];
+}
+
+/**
+ * Consumer primary selection. /cashflow and /cashboard both select Cashboard;
+ * Activity/Accounts match their nested routes; settings/advanced/ai have no
+ * primary. Query strings never change primary selection (pathname only).
+ */
+export function getConsumerActiveHref(pathname: string): string | undefined {
+  if (matchesNavigationPath("/cashboard", pathname) || matchesNavigationPath("/cashflow", pathname)) {
+    return "/cashboard";
+  }
+  if (matchesNavigationPath("/books/transactions", pathname)) return "/books/transactions";
+  if (matchesNavigationPath("/books/accounts", pathname)) return "/books/accounts";
+  return undefined;
 }
 
 export function selectActiveNavigationHref(

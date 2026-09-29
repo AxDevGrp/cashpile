@@ -373,8 +373,8 @@ function CashOverlayModal({
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder={noCredits ? "Top up to continue…" : "Ask Cash anything…"}
-                aria-label="Ask Cash"
+                placeholder={noCredits ? "Top up to continue…" : "Ask Gremmy anything…"}
+                aria-label="Ask Gremmy"
                 disabled={isLoading || noCredits}
                 className="flex-1 h-10 rounded-xl border bg-muted/50 px-4 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
               />
@@ -403,7 +403,13 @@ function CashOverlayModal({
 
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
-export function CashOverlayProvider({ children }: { children: React.ReactNode }) {
+export function CashOverlayProvider({
+  children,
+  consumerEnabled = false,
+}: {
+  children: React.ReactNode;
+  consumerEnabled?: boolean;
+}) {
   const [isOpen, setIsOpen] = useState(false);
   const [prefill, setPrefill] = useState("");
   const [submitImmediately, setSubmitImmediately] = useState(false);
@@ -436,13 +442,16 @@ export function CashOverlayProvider({ children }: { children: React.ReactNode })
   return (
     <CashOverlayContext.Provider value={{ open, close, isOpen }}>
       {children}
-      <CashOverlayModal
-        isOpen={isOpen}
-        prefill={prefill}
-        submitImmediately={submitImmediately}
-        submitRequestId={submitRequestId}
-        onClose={close}
-      />
+      {/* Keep token-dependent overlay content under a scoped consumer root. */}
+      <div className={consumerEnabled ? "cashpile-consumer" : undefined}>
+        <CashOverlayModal
+          isOpen={isOpen}
+          prefill={prefill}
+          submitImmediately={submitImmediately}
+          submitRequestId={submitRequestId}
+          onClose={close}
+        />
+      </div>
     </CashOverlayContext.Provider>
   );
 }

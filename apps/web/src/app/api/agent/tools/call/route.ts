@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateAgentRequest } from "@/modules/agent/auth";
 import { callAgentCapability } from "@/modules/agent/executor";
+import { httpStatusForErrorCode } from "@/modules/agent/consumer-agent";
 
 export const runtime = "nodejs";
 
@@ -25,6 +26,19 @@ export async function POST(req: NextRequest) {
     requestId: req.headers.get("x-request-id"),
   });
 
-  const status = result.ok ? 200 : result.requiresConfirmation ? 409 : 400;
-  return NextResponse.json(result, { status });
+  // Deterministic error codes win; legacy results keep the original mapping.
+  const status = result.ok
+    ? 200
+    : result.requiresConfirmation
+      ? 409
+      : result.errorCode
+        ? httpStatusForErrorCode(result.errorCode)
+        : 400;
+
+  const headers =
+    result.errorCode === "rate_limited" && result.retryAfterSeconds
+      ? { "Retry-After": String(result.retryAfterSeconds) }
+      : undefined;
+
+  return NextResponse.json(result, { status, headers });
 }

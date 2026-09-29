@@ -1,19 +1,22 @@
 import Link from "next/link";
 import { AlertTriangle, CalendarDays, ShieldCheck } from "lucide-react";
-import { createServerSupabaseClient } from "@cashpile/db";
 import { formatCurrency, PageHeader } from "@cashpile/ui";
 import { getCashflowSnapshot } from "@cashpile/ai";
+import { getConsumerExperience } from "@/lib/consumer-experience";
+import ConsumerSpendingDetail from "./_components/consumer-spending-detail";
 import { AffordabilityForm } from "@/components/cashflow/affordability-form";
 import { ModuleHomeV2 } from "../_components/module-home-v2";
 import { isUiV2Enabled } from "@/components/ui-v2";
 import { shouldRenderModuleEntrance } from "@/components/ui-v2/module-home-model";
 
 export default async function CashflowPage({ searchParams }: { searchParams?: Promise<{ view?: string }> }) {
-  const supabase = await createServerSupabaseClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
+  const { userId, enabled } = await getConsumerExperience();
+  if (!userId) return null;
 
-  const snapshot = await getCashflowSnapshot(user.id, 30).catch(() => null);
+  // Eligible consumers get the consumer detail regardless of the view query.
+  if (enabled) return <ConsumerSpendingDetail userId={userId} />;
+
+  const snapshot = await getCashflowSnapshot(userId, 30).catch(() => null);
   const resolvedSearchParams = await searchParams;
   const insight = !snapshot
     ? { id: "connect", severity: "info" as const, title: "Connect accounts", detail: "Sync transactions to start planning cash flow.", actionLabel: "Open detailed workspace" }

@@ -5,7 +5,8 @@ export type AgentScope =
   | "pulse:read"
   | "tax:read"
   | "tax:write"
-  | "billing:read";
+  | "billing:read"
+  | "cashboard:read";
 
 export type AgentCapabilityKind = "read" | "write" | "export";
 
@@ -38,4 +39,6 @@ export interface AgentCallResult {
   confirmationToken?: string;
   preview?: unknown;
   error?: string;
+  errorCode?: "invalid_input" | "missing_scope" | "rate_limited" | "snapshot_unavailable";
+  retryAfterSeconds?: number;
 }
