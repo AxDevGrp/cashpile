@@ -76,16 +76,16 @@ export function ConsumerReviewClient({
     }
   }, []);
 
-  useEffect(() => {
-    setKind(null);
-    setCategoryId(null);
-    setRemember(false);
-    setError(null);
-  }, [index]);
-
   const visible = useMemo(() => page.items.filter((item) => !loadSkipped().has(item.transactionId)), [page, loadSkipped]);
 
   const item = visible[index] ?? null;
+
+  useEffect(() => {
+    setKind(null);
+    setCategoryId(item?.categoryId ?? null);
+    setRemember(false);
+    setError(null);
+  }, [item?.transactionId]);
 
   function persistSkipped(id: string) {
     try {
@@ -206,7 +206,7 @@ export function ConsumerReviewClient({
             value={categoryId ?? ""}
             onChange={(e) => setCategoryId(e.target.value ? Number(e.target.value) : null)}
           >
-            <option value="">No category yet</option>
+            <option value="">{item.categoryId === null ? "Leave uncategorized" : "Keep current category"}</option>
             {categories.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
