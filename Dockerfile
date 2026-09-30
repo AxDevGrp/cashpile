@@ -1,5 +1,6 @@
 FROM node:20-alpine AS base
-RUN npm install -g pnpm turbo
+RUN npm install -g pnpm@10.30.3 turbo
+ENV npm_config_manage_package_manager_versions=false
 
 FROM base AS builder
 WORKDIR /app
