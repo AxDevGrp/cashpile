@@ -455,6 +455,43 @@ RESET ROLE;
 
 \echo 'ALL STAGE 04 CONSUMER REVIEW CHECKS PASSED'
 
+-- Review must preserve a saved category when no replacement is submitted.
+-- Runs last so these category edits do not change the eligibility fixtures above.
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claims = '{"sub":"11111111-1111-1111-1111-111111111111","role":"authenticated"}';
+DO $$
+DECLARE
+  tx UUID := 'a4010000-0000-0000-0000-000000000001';
+  rev INTEGER;
+  result JSONB;
+  review_kind TEXT;
+BEGIN
+  UPDATE public.books_transactions SET category_id = 900001 WHERE id = tx;
+  FOREACH review_kind IN ARRAY ARRAY['income','refund','passive_income','internal_transfer',
+                                     'card_payment','asset_sale','loan_proceeds','unknown'] LOOP
+    SELECT revision INTO rev FROM public.books_transaction_interpretations WHERE transaction_id = tx;
+    result := public.consumer_save_review(tx, rev, review_kind, NULL, review_kind = 'income');
+    IF (SELECT category_id FROM public.books_transactions WHERE id = tx) IS DISTINCT FROM 900001 THEN
+      RAISE EXCEPTION 'FAIL: review with no replacement erased category for %', review_kind;
+    END IF;
+    IF (result->>'reviewRequired')::boolean IS DISTINCT FROM (review_kind = 'unknown') THEN
+      RAISE EXCEPTION 'FAIL: review flag ignored preserved category for %', review_kind;
+    END IF;
+  END LOOP;
+  IF NOT EXISTS (SELECT 1 FROM public.books_consumer_rules WHERE category_id = 900001 AND kind = 'income') THEN
+    RAISE EXCEPTION 'FAIL: remembered rule lost preserved category';
+  END IF;
+  tx := 'a4010000-0000-0000-0000-000000000002';
+  SELECT revision INTO rev FROM public.books_transaction_interpretations WHERE transaction_id = tx;
+  result := public.consumer_save_review(tx, rev, 'spend', NULL, false);
+  IF (SELECT category_id FROM public.books_transactions WHERE id = tx) IS DISTINCT FROM 900001
+     OR (result->>'reviewRequired')::boolean IS DISTINCT FROM false THEN
+    RAISE EXCEPTION 'FAIL: spend review did not preserve category';
+  END IF;
+  RAISE NOTICE 'PASS: review preserves category, completion flag, and remembered rule for all kinds';
+END $$;
+RESET ROLE;
+
 \echo 'ALL STAGE 01 CONSUMER CONTRACT CHECKS PASSED'
 
 ROLLBACK;
