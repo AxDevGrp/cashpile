@@ -48,6 +48,9 @@ function isReviewed(tx: DuplicateTransactionRow) {
 
 function sortBestKeeperFirst(rows: DuplicateTransactionRow[]) {
   return [...rows].sort((a, b) => {
+    // Keep the provider identity on its original row so bank sync can find it.
+    const providerDiff = Number(b.plaid_transaction_id != null) - Number(a.plaid_transaction_id != null);
+    if (providerDiff !== 0) return providerDiff;
     const score = (tx: DuplicateTransactionRow) =>
       (tx.financial_account_id ? 4 : 0) +
       (tx.category_id ? 2 : 0) +
@@ -186,16 +189,39 @@ export async function listDuplicateReviewGroups(): Promise<DuplicateReviewGroup[
 
 export async function deleteDuplicateTransactions(transactionIds: string[]) {
   if (transactionIds.length === 0) return { deleted: 0 };
+  const ids = Array.from(new Set(transactionIds));
   const { supabase, user } = await getCurrentUserSupabase();
-  const { error } = await (supabase as any)
+  const { data: rows, error: loadError } = await (supabase as any)
     .from("books_transactions")
-    .delete()
+    .select("id, plaid_transaction_id")
     .eq("user_id", user.id)
-    .in("id", transactionIds);
-  if (error) throw new Error(error.message);
+    .in("id", ids);
+  if (loadError) throw new Error(loadError.message);
+  assertSafeDuplicateDeletion(rows ?? [], ids);
+  const deleted = await deleteUnlinkedDuplicates(supabase, user.id, ids);
   revalidatePath("/books/transactions");
   revalidatePath("/books/transactions/duplicates");
-  return { deleted: transactionIds.length };
+  return { deleted };
+}
+
+function assertSafeDuplicateDeletion(rows: { id: string; plaid_transaction_id?: string | null }[], ids: string[]) {
+  if (rows.length !== ids.length) throw new Error("Transactions not found. Refresh duplicate review and try again.");
+  if (rows.some((row) => row.plaid_transaction_id != null)) {
+    throw new Error("Keep the bank-linked transaction. Bank-linked rows cannot be deleted in duplicate review; groups with multiple bank links require separate review.");
+  }
+}
+
+async function deleteUnlinkedDuplicates(supabase: SupabaseClient, userId: string, ids: string[]) {
+  const { data, error } = await (supabase as any)
+    .from("books_transactions")
+    .delete()
+    .eq("user_id", userId)
+    .in("id", ids)
+    .is("plaid_transaction_id", null)
+    .select("id");
+  if (error) throw new Error(error.message);
+  if (data?.length !== ids.length) throw new Error("Transactions changed during duplicate review. Refresh and try again.");
+  return data.length;
 }
 
 export async function mergeDuplicateTransactions(keeperId: string, duplicateIds: string[]) {
@@ -216,9 +242,10 @@ async function mergeDuplicateTransactionsForUser(
   keeperId: string,
   ids: string[]
 ) {
+  ids = Array.from(new Set(ids.filter((id) => id !== keeperId)));
   const { data: rows, error: loadError } = await (supabase as any)
     .from("books_transactions")
-    .select("id, merchant, category_id, financial_account_id, metadata")
+    .select("id, merchant, category_id, financial_account_id, metadata, plaid_transaction_id")
     .eq("user_id", userId)
     .in("id", [keeperId, ...ids]);
   if (loadError) throw new Error(loadError.message);
@@ -227,6 +254,7 @@ async function mergeDuplicateTransactionsForUser(
   if (!keeper) throw new Error("Keeper transaction not found");
 
   const duplicates = (rows ?? []).filter((tx: any) => ids.includes(tx.id));
+  assertSafeDuplicateDeletion(duplicates, ids);
   const update: Record<string, any> = {
     metadata: {
       ...(keeper.metadata ?? {}),
@@ -250,14 +278,8 @@ async function mergeDuplicateTransactionsForUser(
     .eq("id", keeperId);
   if (updateError) throw new Error(updateError.message);
 
-  const { error: deleteError } = await (supabase as any)
-    .from("books_transactions")
-    .delete()
-    .eq("user_id", userId)
-    .in("id", ids);
-  if (deleteError) throw new Error(deleteError.message);
-
-  return { merged: ids.length };
+  const merged = await deleteUnlinkedDuplicates(supabase, userId, ids);
+  return { merged };
 }
 
 export async function markDuplicateGroupReviewed(transactionIds: string[]) {

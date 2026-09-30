@@ -239,7 +239,7 @@ export default function DuplicateReviewClient({ groups }: Props) {
         <CardHeader>
           <CardTitle className="text-lg">How to use this screen</CardTitle>
           <CardDescription>
-            Choose the transaction to keep, then merge/delete the duplicates. By default, Cashpile preselects the row with the most useful data to keep and selects the rest for deletion, so “Merge All Selected” applies those recommendations across every group.
+            Choose the transaction to keep, then merge/delete the duplicates. Cashpile prefers bank-linked rows, which cannot be deleted; groups with multiple bank-linked rows need separate review. “Merge All Selected” applies these recommendations across every group.
           </CardDescription>
         </CardHeader>
       </Card>
